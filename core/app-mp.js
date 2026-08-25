@@ -1,5 +1,5 @@
 // ============================================================
-// dc-app-mp.js — Multiplayer overlay for Daring Comics
+// core/app-mp.js — Multiplayer overlay (system-agnostic)
 // ============================================================
 // Loaded lazily, AFTER the inline app script. It never forks the app: it wraps
 // the app's own mutators and render functions, exactly as og-app-mp.js does for

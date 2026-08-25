@@ -188,9 +188,20 @@ those while the vocabulary is still soft, or they arrive as retrofits.
 
 ## 6. Repo strategy
 
-Do it **in-place on a long-lived branch** in `daringcomics`, then rename the repo
-once a second system runs. Forking to a new repo now means maintaining two copies of
-the multiplayer + Firebase rules while they're still changing.
+~~Do it in-place on a long-lived branch in `daringcomics`.~~ **Superseded.** The
+shell was staged into its own folder (`d:/claudecode/rpgshell`) after Phase 0, cloned
+from the `shell` branch so the history came with it, with the `origin` remote removed
+so nothing can push back to `daringcomics`.
+
+The original objection stands and is now a live cost: **the multiplayer layer and the
+Firebase rules exist in two places.** They are stable today, so the duplication is
+cheap — but any change to `core/mp.js`, `core/app-mp.js` or MULTIPLAYER.md has to be
+made twice, or deliberately abandoned in one copy. Decide which repo owns multiplayer
+before touching it again.
+
+One thing the fork forced, correctly: `firebase-config.js` is **not** carried into the
+shell. Committing it was right for one deployed app; a template that seeds many games
+must not hand each of them Daring Comics' database.
 
 Daring Comics stays the reference implementation and the regression test: **if the
 DC pack on the shell isn't identical to today's app, the shell is wrong.**

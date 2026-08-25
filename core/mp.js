@@ -1,5 +1,5 @@
 // ============================================================
-// dc-mp.js — Multiplayer layer for Daring Comics
+// core/mp.js — Multiplayer layer (system-agnostic)
 // ============================================================
 // Wraps Firebase Auth (Google) + Realtime Database and exposes everything on
 // the single global `MP`. The host page must load firebase-app-compat.js,
@@ -30,7 +30,7 @@ window.MP = (function(){
   // ---- Init ----------------------------------------------------------------
   function init(cfg){
     if(inited) return;
-    if(!window.firebase) throw new Error('Firebase SDK not loaded before dc-mp.js');
+    if(!window.firebase) throw new Error('Firebase SDK not loaded before core/mp.js');
     app  = firebase.initializeApp(cfg);
     auth = firebase.auth();
     db   = firebase.database();

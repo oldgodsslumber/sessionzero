@@ -1,0 +1,103 @@
+// core/system.js — the system-pack registry.
+//
+// This is the seam between the shell (engine) and a game's ruleset. A pack
+// calls registerSystem() at load; the shell reads the active manifest through
+// SYS and the lexicon through lex().
+//
+// PHASE 2 STATUS: the registry is live and inert. Nothing in core/ reads SYS
+// yet — the Daring Comics ruleset is still wired in directly. Routing the
+// existing constants and derive-formulas through here is Phase 2 proper; see
+// SHELL-PLAN.md §4. Loading this file changes no behaviour.
+//
+// Load-order rule (SHELL-PLAN.md §10): this file only DECLARES. A pack may call
+// registerSystem() at load time, but nothing here runs against the DOM or
+// against app state until the boot IIFE in core/mp-boot.js.
+
+// ─── lexicon ────────────────────────────────────────────────────────────────
+// User-facing vocabulary. The shell is deliberately neutral (decision 4); a
+// pack overrides only the words its game actually uses differently.
+//
+//   Daring Comics -> universe:'Universe',  hero:'Hero',     region:'Neighborhood'
+//   Dungeon Crawler Carl -> universe:'Crawl', hero:'Crawler', region:'Floor'
+const DEFAULT_LEXICON = {
+  universe: 'World',      universes: 'Worlds',
+  hero: 'Character',      heroes: 'Characters',
+  roster: 'Roster',       npc: 'NPC',            npcs: 'NPCs',
+  team: 'Party',          region: 'Region',      regions: 'Regions',
+  logBreak: 'Chapter',    log: 'Journal',        wiki: 'Codex',
+  save: 'Save',           saves: 'Saves',        sheet: 'Character Sheet',
+};
+
+const SYSTEMS = {};
+let SYS = null;
+
+// Register a system pack. Returns the stored manifest.
+//
+// Required: id, name. Everything else is optional — the shell must degrade to
+// a sane default for any key a pack omits, so that a half-finished pack still
+// boots. That is the property that makes a new game cheap to start.
+function registerSystem(def) {
+  if (!def || !def.id) throw new Error('registerSystem: a pack needs an id');
+  if (SYSTEMS[def.id]) throw new Error('registerSystem: duplicate id ' + def.id);
+  const pack = Object.assign({
+    name: def.id,
+    theme: null,          // data-theme value this pack's CSS defines
+    themes: [],           // [[value, label, 'cssGradient'], ...] for the swatch row
+    fonts: [],            // Google-Fonts hrefs this pack needs (shell ships none)
+    lexicon: {},
+    schema: { identity: [], blocks: [] },
+    creation: [],
+    derive: {},
+    dice: null,
+    catalogs: {},
+    npcTypes: [],
+    loreTypes: null,      // null = shell defaults
+    generators: {},
+    migrate: [],
+  }, def);
+  pack.lexicon = Object.assign({}, DEFAULT_LEXICON, def.lexicon || {});
+  SYSTEMS[pack.id] = pack;
+  if (!SYS) SYS = pack;   // first pack registered wins until sysActivate() says otherwise
+  return pack;
+}
+
+function listSystems() { return Object.keys(SYSTEMS).map(k => SYSTEMS[k]); }
+
+// Choose the active pack: explicit ?system=, then remembered choice, then the
+// only one loaded. Call from boot, not at load time.
+function sysActivate(id) {
+  const want = id
+    || new URLSearchParams(location.search).get('system')
+    || (function () { try { return localStorage.getItem('rpg:system'); } catch (e) { return null; } })();
+  if (want && SYSTEMS[want]) SYS = SYSTEMS[want];
+  else if (!SYS) SYS = listSystems()[0] || null;
+  if (SYS) { try { localStorage.setItem('rpg:system', SYS.id); } catch (e) {} }
+  return SYS;
+}
+
+// Word lookup. Falls back to the neutral default, then to the key itself, so a
+// missing entry shows something readable instead of "undefined".
+function lex(key) {
+  return (SYS && SYS.lexicon && SYS.lexicon[key]) || DEFAULT_LEXICON[key] || key;
+}
+
+// Capitalised / lower variants, for mid-sentence copy.
+function lexU(key) { const s = lex(key); return s.charAt(0).toUpperCase() + s.slice(1); }
+function lexL(key) { return lex(key).toLowerCase(); }
+
+// Per-system storage namespace, replacing the flat dc_* keys (Phase 5).
+function sysKey(name) { return 'rpg:' + (SYS ? SYS.id : 'default') + ':' + name; }
+
+// Look up a declared block by id, e.g. sysBlock('skills').
+function sysBlock(id) {
+  return (SYS && SYS.schema && SYS.schema.blocks || []).find(b => b.id === id) || null;
+}
+
+// Resolve a 'derive.foo' string reference (used in block declarations) to the
+// pack's function. Returns null when absent so callers can fall back.
+function sysDerive(ref) {
+  if (typeof ref === 'function') return ref;
+  if (typeof ref !== 'string') return null;
+  const name = ref.replace(/^derive\./, '');
+  return (SYS && SYS.derive && SYS.derive[name]) || null;
+}

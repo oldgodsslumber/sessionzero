@@ -1,6 +1,9 @@
-# firebase-config.js IS committed — see MULTIPLAYER.md §1. A public web app has
-# to ship its Firebase config to every visitor, so hiding it buys nothing; the
-# controls are the API-key restrictions and the Realtime Database rules.
-# Keep that key restricted (HTTP referrers + API allowlist) at all times.
+# firebase-config.js is NOT committed here. In the daringcomics app it was, and
+# that was correct for a single deployed app. The shell is a starting point for
+# many games: a pack copied from here must reach its OWN Firebase project, never
+# inherit another one. Copy firebase-config.example.js and fill in your own.
+# (The config still ships to every visitor of a built app — the controls are the
+# API-key restrictions and the Realtime Database rules. See MULTIPLAYER.md §1.)
+firebase-config.js
 
 node_modules/

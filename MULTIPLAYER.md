@@ -7,8 +7,8 @@ Everyone at the table binds to the same universe and sees the same world.
 | File            | What it is                                                        |
 | --------------- | ----------------------------------------------------------------- |
 | `index.html`    | The whole app. Works offline with no setup and no network calls.   |
-| `dc-mp.js`      | Firebase Auth + Realtime Database wrapper, exposed as `MP.*`.      |
-| `dc-app-mp.js`  | The overlay: lobby, sync, GM gating. Wraps the app, never forks it.|
+| `core/mp.js`    | Firebase Auth + Realtime Database wrapper, exposed as `MP.*`.      |
+| `core/app-mp.js` | The overlay: lobby, sync, GM gating. Wraps the app, never forks it.|
 
 Nothing loads until someone presses **🌐 Play With Your Table** in the universe
 manager. Until then the Firebase SDK is never fetched.

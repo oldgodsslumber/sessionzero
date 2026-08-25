@@ -9,8 +9,8 @@ const { makeBackend, makeFirebase } = require('./fakefb');
 
 const { loadAppHTML } = require('./loadapp');
 const HTML = loadAppHTML();
-const MPJS = fs.readFileSync(path.join(ROOT, 'dc-mp.js'), 'utf8');
-const APPJS = fs.readFileSync(path.join(ROOT, 'dc-app-mp.js'), 'utf8');
+const MPJS = fs.readFileSync(path.join(ROOT, 'core/mp.js'), 'utf8');
+const APPJS = fs.readFileSync(path.join(ROOT, 'core/app-mp.js'), 'utf8');
 
 const fails = [], ok = [];
 function check(name, fn) {
