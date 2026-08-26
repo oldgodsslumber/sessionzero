@@ -252,6 +252,16 @@ block layer as it is being written* (Phases 3–4 concurrently, as §4 says). If
 block vocabulary is finalised on Fate alone, `progression`, `inventory` and
 `statusEffects` will all arrive as retrofits.
 
+> **Updated after reading the rulebook** (2026-08-25). All three predicted blocks
+> are confirmed, and two of them are richer than described above: `inventory` is
+> three containers with different rules (Inventory / Hotlist / Gear Slots), and
+> `statusEffects` needs durations, a stackable flag, an active-cap and escalation.
+> Two further gaps were **not** predicted and change existing block contracts:
+> **dual-layer traits** (Unenhanced/Enhanced with a derived Mod) and a
+> **non-uniform track** (Health Bar slots hold values, fill right-to-left, and
+> consume damage slot-by-slot). Both must land before the Daring Comics port is
+> finished. See `systems/dungeon-crawler-carl/PLAN.md` for the full build plan.
+
 ---
 
 ## 9. Neutral shell — what that actually costs
