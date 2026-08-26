@@ -1,0 +1,105 @@
+// core/chrome.js — the shell's chrome: nav, page containers, modal shells.
+//
+// This markup used to live in index.html. With one entry file per game it would
+// have been duplicated once PER GAME, so it lives here instead and is injected
+// as the first step of boot. A game's .html file is now just a title, a
+// stylesheet link and its script tags.
+//
+// Load-order rule (SHELL-PLAN.md §10): this file only DECLARES. buildShellChrome()
+// touches the DOM and is called by the boot IIFE in core/mp-boot.js, never at
+// load time.
+
+const SHELL_CHROME = `<nav id="nav">
+  <button class="nb active" onclick="showTab('hero')" id="nb-hero">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Hero
+  </button>
+  <button class="nb" onclick="showTab('npcs')" id="nb-npcs">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 2.7-5 6-5m4 0c3.3 0 6 2 6 5"/></svg>NPCs
+  </button>
+  <button class="nb" onclick="showTab('map')" id="nb-map">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Map
+  </button>
+  <button class="nb" onclick="showTab('dice')" id="nb-dice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="16" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>Dice
+  </button>
+  <button class="nb" onclick="showTab('conflict')" id="nb-conflict">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Conflict
+  </button>
+  <button class="nb" onclick="showTab('notes')" id="nb-notes">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Notes
+  </button>
+  <button class="nb" onclick="openHUD()" id="nb-hud">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>HUD
+  </button>
+  <button class="nb" onclick="showTab('print')" id="nb-print">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print
+  </button>
+  <button class="nb" onclick="showTab('wiki')" id="nb-wiki">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="16" y2="7"/><line x1="9" y1="11" x2="16" y2="11"/></svg>Wiki
+  </button>
+  <div id="theme-wrap"></div>
+</nav>
+<div class="page active" id="page-hero"><div id="hero-main"><div id="hero-creation"></div><div id="hero-sheet" style="display:none"></div></div><div id="hero-dice-sidebar"></div></div>
+<div class="page" id="page-npcs"><div id="npcs-content"></div></div>
+<div class="page" id="page-map"><div id="map-content"></div></div>
+<div class="page" id="page-dice"><div id="dice-content"></div></div>
+<div class="page" id="page-conflict"><div id="conflict-content"></div></div>
+<div class="page" id="page-notes"><div id="notes-content"></div></div>
+<div class="page" id="page-print"><div id="print-content"></div></div>
+<div class="page" id="page-wiki"><div id="wiki-content"></div></div>
+<div class="modal-overlay" id="slot-modal"><div class="modal-inner"><div class="card" id="slot-modal-body"></div></div></div>
+<div class="modal-overlay" id="power-modal"><div class="modal-inner"><div id="power-modal-body"></div></div></div>
+<div class="modal-overlay" id="gear-modal"><div class="modal-inner"><div id="gear-modal-body"></div></div></div>
+<div class="modal-overlay" id="npc-modal"><div class="modal-inner"><div class="card" id="npc-modal-body"></div></div></div>
+<div class="modal-overlay" id="universe-modal"><div class="modal-inner"><div id="universe-modal-body"></div></div></div>
+<div class="modal-overlay" id="lore-modal"><div class="modal-inner"><div class="card" id="lore-modal-body"></div></div></div>
+<div class="modal-overlay" id="ai-modal"><div class="modal-inner"><div class="card" id="ai-modal-body"></div></div></div>
+<div class="modal-overlay" id="npc-export-modal"><div class="modal-inner"><div class="card" id="npc-export-modal-body"></div></div></div>`;
+
+// Inject the chrome, then let the active pack supply its fonts and themes.
+function buildShellChrome() {
+  if (document.getElementById('nav')) return;          // already built
+  const host = document.createElement('div');
+  host.innerHTML = SHELL_CHROME;
+  while (host.firstChild) document.body.appendChild(host.firstChild);
+  applySysFonts();
+  renderThemeSwatches();
+}
+
+// A pack asks for the web fonts its theme uses. The shell ships none, so a pack
+// that declares no fonts simply renders in the system stack.
+function applySysFonts() {
+  const fonts = (SYS && SYS.fonts) || [];
+  fonts.forEach(function (href) {
+    if (document.querySelector('link[href="' + href + '"]')) return;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    document.head.appendChild(l);
+  });
+}
+
+// The swatch row was hardcoded comic-book colours in the markup. Each pack now
+// declares its own [value, label, gradientStops] triples; a pack with none gets
+// no swatch row at all, rather than another game's palette.
+function renderThemeSwatches() {
+  const wrap = document.getElementById('theme-wrap');
+  if (!wrap) return;
+  const themes = (SYS && SYS.themes) || [];
+  if (!themes.length) { wrap.style.display = 'none'; return; }
+  let active = '';
+  try { active = localStorage.getItem('dc_theme') || ''; } catch (e) {}
+  wrap.style.padding = '8px 10px';
+  wrap.style.borderTop = '1px solid var(--border)';
+  let h = '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;'
+        + 'color:var(--muted);margin-bottom:6px;text-align:center">Theme</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center">';
+  themes.forEach(function (t) {
+    h += '<button class="theme-swatch' + (t[0] === active ? ' active' : '') + '"'
+       + ' data-theme="' + t[0] + '" title="' + t[1] + '"'
+       + ' onclick="setTheme(' + String.fromCharCode(39) + t[0] + String.fromCharCode(39) + ')"'
+       + ' style="background:linear-gradient(135deg,' + t[2] + ')"></button>';
+  });
+  wrap.innerHTML = h + '</div>';
+  if (active) document.documentElement.setAttribute('data-theme', active);
+}

@@ -47,7 +47,10 @@ function openMultiplayer(){
 (function boot(){
   // Pick the active system first: every render below reads SYS and the lexicon.
   // Defaults to Daring Comics, so existing installs are untouched.
-  sysActivate(null)||sysActivate('daring-comics');
+  sysActivate(null);
+  // The nav, pages and modals live in core/chrome.js now that each game has
+  // its own entry file. Build them before any render touches the DOM.
+  buildShellChrome();
   loadUniverses();
   if(U.universes.length===0){openUniverseSetup(true);return;}
   migrateSlotsToSaves();

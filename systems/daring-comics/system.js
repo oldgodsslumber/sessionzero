@@ -12,7 +12,19 @@
 registerSystem({
   id: 'daring-comics',
   name: 'Daring Comics',
-  theme: '',                 // the shipped comic themes are this pack's
+  theme: '',                 // '' is this pack's default data-theme
+
+  // The comic look is the PACK's, not the shell's. These were hardcoded in
+  // index.html's markup and <head>; moving them here is decision 4 landing:
+  // a pack that declares neither renders neutral, in the system font stack.
+  fonts: ['https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&family=Comic+Neue:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap'],
+  themes: [
+    ['', 'Classic Comics', '#0a0e1a,#e63946'],
+    ['dark', 'Dark &amp; Gritty', '#0c0c0c,#d4a020'],
+    ['cosmic', 'Cosmic', '#0a0020,#ff2d78'],
+    ['street', 'Street Level', '#111510,#e8a020'],
+    ['golden', 'Golden Age', '#1a140e,#cc3333'],
+  ],
 
   // The comic vocabulary that is currently hard-coded in the markup. Declaring
   // it here changes nothing yet — the lexicon sweep is Phase 4b — but it records

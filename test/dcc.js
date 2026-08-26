@@ -21,29 +21,36 @@ function eq(a, b, name) {
   else fails.push(name + ' -> got ' + JSON.stringify(a) + ', expected ' + JSON.stringify(b));
 }
 
-function boot(search) {
+function boot(entry) {
   const errs = [];
   const vc = new VirtualConsole().on('jsdomError', e => errs.push(e.message));
-  const dom = new JSDOM(loadAppHTML(), {
+  const dom = new JSDOM(loadAppHTML(entry), {
     runScripts: 'dangerously', pretendToBeVisual: true,
-    url: 'http://localhost/' + (search || ''), virtualConsole: vc,
+    url: 'http://localhost/', virtualConsole: vc,
   });
   dom.window.alert = () => {}; dom.window.confirm = () => true;
   return new Promise(res => setTimeout(() => res({ w: dom.window, errs }), 500));
 }
 
 (async function () {
-  // ── selection defaults to Daring Comics; ?system= switches ────────────────
-  const dc = await boot('');
-  eq(dc.errs.length, 0, '[boot] no uncaught errors with the packs loaded');
-  eq(dc.w.eval('SYS.id'), 'daring-comics', '[select] default stays Daring Comics');
-  eq(dc.w.eval('sysUsesBlocks()'), false, '[select] Daring Comics has no blocks -> legacy sheet');
+  // ── one entry file per game: each registers exactly its own pack ──────────
+  const dc = await boot('daring-comics.html');
+  eq(dc.errs.length, 0, '[boot] no uncaught errors in the Daring Comics app');
+  eq(dc.w.eval('SYS.id'), 'daring-comics', '[entry] daring-comics.html selects Daring Comics');
+  eq(dc.w.eval('listSystems().length'), 1, '[entry] ...and ships only its own pack');
+  eq(dc.w.eval('sysUsesBlocks()'), false, '[entry] Daring Comics has no blocks -> legacy sheet');
   eq(dc.w.eval("lex('universe')"), 'Universe', '[lexicon] DC keeps its comic words');
+  eq(dc.w.eval('SYS.themes.length'), 5, '[theme] the comic themes belong to the pack, not the shell');
+  eq(dc.w.eval("!!document.querySelector('#theme-wrap .theme-swatch')"), true, '[theme] swatches rendered from the pack');
+  eq(dc.w.eval("!!document.getElementById('nav')"), true, '[chrome] the nav was built at boot, not shipped in the html');
 
-  const g = await boot('?system=dungeon-crawler-carl');
-  eq(g.errs.length, 0, '[boot] no uncaught errors on the DCC pack');
+  const g = await boot('dungeon-crawler-carl.html');
+  eq(g.errs.length, 0, '[boot] no uncaught errors in the DCC app');
   const w = g.w, ev = s => w.eval(s);
-  eq(ev('SYS.id'), 'dungeon-crawler-carl', '[select] ?system= selects DCC');
+  eq(ev('SYS.id'), 'dungeon-crawler-carl', '[entry] dungeon-crawler-carl.html selects DCC');
+  eq(ev('listSystems().length'), 1, '[entry] ...and does not ship the Daring Comics rules');
+  eq(ev("typeof POWERS"), 'undefined', '[entry] no Daring Comics data leaked into the DCC app');
+  eq(ev("document.getElementById('theme-wrap').style.display"), 'none', '[theme] a pack with no themes gets no swatch row');
   eq(ev('sysUsesBlocks()'), true, '[select] DCC declares blocks -> block sheet');
   eq(ev("lex('hero')"), 'Crawler', '[lexicon] hero -> Crawler');
   eq(ev("lex('region')"), 'Neighborhood', '[lexicon] region -> Neighborhood');
@@ -177,23 +184,21 @@ function boot(search) {
   check('[data] gear slots: only Accessories takes more than one, at 10', () =>
     ev(`SYS.catalogs.gearSlots.filter(s=>s.max>1).map(s=>s.id+':'+s.max).join(',')`) === 'hands:3,accessories:10');
 
-  // ── a block pack must never write into a Daring Comics save file ─────────
-  // save() persists the whole state object, so if a DCC crawler sat in S.char
-  // while a DC save was loaded, saving would overwrite that character.
-  check('[isolation] a block pack does not touch the loaded save file', () => {
-    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');");
-    ev("SYS=SYSTEMS['daring-comics'];");
-    ev("S=defaultState();S.universeId=U.universes[0].id;S.char={costumedName:'Captain Valor',skills:{}};");
-    ev("var id=createSave(S);currentSaveId=id;window.__probeId=id;save();");
+  // ── a block pack must never write into a save file ───────────────────────
+  // save() persists the WHOLE state object, so a crawler sitting in S.char while
+  // any save file was loaded would overwrite that save's character on the next
+  // keystroke. One entry file per game makes the cross-game version of this
+  // impossible, but the guard still has to hold within a single app.
+  check('[isolation] save() leaves an existing save file untouched', () => {
+    ev("loadUniverses();if(!U.universes.length)createUniverse('T');");
+    ev("var keep={costumedName:'Captain Valor',skills:{}};" +
+       "var prev=S.char;S.char=keep;var id=createSave(S);S.char=prev;" +
+       "window.__probeId=id;currentSaveId=id;");
     const before = ev("JSON.stringify(getSaveData(window.__probeId).char.costumedName)");
     if (before !== '"Captain Valor"') return 'setup failed, got ' + before;
-    // switch to the block pack and mutate the crawler hard
-    ev("SYS=SYSTEMS['dungeon-crawler-carl'];renderHero();");
-    ev("S.char.blocks.stats={STR:{base:9,bonus:0}};save();");
-    ev("poolAdj('aiFavor',1);");
-    const after = ev("JSON.stringify(getSaveData(window.__probeId).char.costumedName)");
-    if (after !== '"Captain Valor"') return 'the DC save was clobbered: ' + after;
-    return true;
+    ev("S.char.blocks.stats={STR:{base:9,bonus:0}};save();poolAdj('aiFavor',1);");
+    const after = ev("JSON.stringify((getSaveData(window.__probeId).char||{}).costumedName)");
+    return after === '"Captain Valor"' || 'the save was clobbered: ' + after;
   });
   check('[isolation] the crawler persists to its own namespaced scratch key', () => {
     const raw = ev("localStorage.getItem(sysKey('scratch'))");

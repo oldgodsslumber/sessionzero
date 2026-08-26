@@ -129,3 +129,22 @@ function sysCharName(char) {
   }
   return String(char.costumedName || char.name || '').trim();
 }
+
+// ─── ruleset-constant fallbacks ─────────────────────────────────────────────
+// Phase 2 is not done: ~97 references to Daring Comics constants (SERIES_TONES,
+// SKILLS, POWERS, LADDER...) are still hard-wired into core/. That was invisible
+// while every page loaded the Daring Comics data; one entry file per game
+// exposed it immediately. Routing them all through SYS is Phase 2. Until then
+// these helpers let the shell degrade instead of throwing for a pack that has
+// no such data.
+function sysList(globalName, packKey) {
+  if (packKey && SYS && SYS.catalogs && Array.isArray(SYS.catalogs[packKey])) return SYS.catalogs[packKey];
+  try {
+    const v = eval(globalName);            // eslint-disable-line no-eval
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+// True when the active pack uses Daring Comics' series model (tone/level/exp).
+function sysHasSeries() {
+  return sysList('SERIES_TONES').length > 0;
+}

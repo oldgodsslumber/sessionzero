@@ -65,7 +65,7 @@ function seriesIdsFor(st){
 }
 function getSeriesConfig(){
   const ids=seriesIdsFor(typeof S!=='undefined'?S:null);
-  return{tone:SERIES_TONES.find(t=>t.id===ids.tone),level:SERIES_LEVELS.find(l=>l.id===ids.level),exp:EXP_LEVELS.find(e=>e.id===ids.experience)};
+  return{tone:sysList('SERIES_TONES').find(t=>t.id===ids.tone),level:sysList('SERIES_LEVELS').find(l=>l.id===ids.level),exp:sysList('EXP_LEVELS').find(e=>e.id===ids.experience)};
 }
 function getTotalHP(){const{level,exp}=getSeriesConfig();return(level?.baseHP||0)+(exp?.bonusHP||0)+(S.creation.roguesGallery?.length||0);}
 function getSkillBudget(){const{exp}=getSeriesConfig();return(exp?.skillPts||0)+(S.creation.supportingCast?.length||0);}

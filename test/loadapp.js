@@ -12,8 +12,9 @@ const ROOT = path.join(__dirname, '..');
 
 const TAG = /<script src="([^"]+)"><\/script>/g;
 
-function loadAppHTML() {
-  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+// entryFile defaults to the Daring Comics app; the DCC suite passes its own.
+function loadAppHTML(entryFile) {
+  const html = fs.readFileSync(path.join(ROOT, entryFile || 'daring-comics.html'), 'utf8');
   return html.replace(TAG, (m, src) => {
     const file = path.join(ROOT, src);
     if (!fs.existsSync(file)) throw new Error('index.html references a missing script: ' + src);

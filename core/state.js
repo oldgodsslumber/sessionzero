@@ -56,7 +56,7 @@ function getSaveData(id){try{const d=localStorage.getItem(saveKey(id));return d?
 
 function _stateHP(st){
   const ids=seriesIdsFor(st);
-  const lv=SERIES_LEVELS.find(l=>l.id===ids.level),ex=EXP_LEVELS.find(e=>e.id===ids.experience);
+  const lv=sysList('SERIES_LEVELS').find(l=>l.id===ids.level),ex=sysList('EXP_LEVELS').find(e=>e.id===ids.experience);
   return (lv?.baseHP||0)+(ex?.bonusHP||0)+((st?.creation?.roguesGallery||[]).length);
 }
 function _statePowerCount(st){
@@ -303,9 +303,9 @@ function saveEmblem(sm,active){
   return `<div style="width:42px;height:42px;flex:0 0 42px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:var(--font-title);color:${fg}">${inner}</div>`;
 }
 function saveStatLine(sm){
-  const tn=sm.tone?SERIES_TONES.find(t=>t.id===sm.tone)?.name:'';
-  const lv=sm.level?SERIES_LEVELS.find(l=>l.id===sm.level)?.name:'';
-  const ex=sm.experience?EXP_LEVELS.find(e=>e.id===sm.experience)?.name:'';
+  const tn=sm.tone?sysList('SERIES_TONES').find(t=>t.id===sm.tone)?.name:'';
+  const lv=sm.level?sysList('SERIES_LEVELS').find(l=>l.id===sm.level)?.name:'';
+  const ex=sm.experience?sysList('EXP_LEVELS').find(e=>e.id===sm.experience)?.name:'';
   return [sm.civilianName,tn,lv||ex].filter(Boolean).join(' · ');
 }
 function saveCardHTML(sm,active){
@@ -409,9 +409,9 @@ function openUniverseSetup(required,editId){
   h+=`<div style="font-size:12px;color:var(--muted);margin:6px 0 12px">A universe is your shared game world (like "Marvel"). Every hero, NPC, villain and wiki entry in it is shared. Its tone and power level apply to every hero here.</div>`;
   h+=`<div class="form-group"><label>Universe Name</label><input id="uni-name" value="${esc(ed?ed.name:'')}" placeholder="e.g. Marvel, My City, Earth-27" onkeydown="if(event.key==='Enter')submitUniverseSetup('${editId||''}')"><\/div>`;
   h+=`<div class="label">Series Tone</div><div class="grid-3 mb-3">`;
-  SERIES_TONES.forEach(function(t){h+=`<div class="game-opt ${cur.tone===t.id?'selected':''}" onclick="_uniPick('tone','${t.id}','${editId||''}')"><div class="opt-title">${t.name}<\/div><div class="opt-desc">${t.desc}<\/div><div class="opt-stats">Refresh ${t.refresh} | ${2+t.stressBonus} Stress Boxes<\/div><\/div>`;});
+  sysList('SERIES_TONES').forEach(function(t){h+=`<div class="game-opt ${cur.tone===t.id?'selected':''}" onclick="_uniPick('tone','${t.id}','${editId||''}')"><div class="opt-title">${t.name}<\/div><div class="opt-desc">${t.desc}<\/div><div class="opt-stats">Refresh ${t.refresh} | ${2+t.stressBonus} Stress Boxes<\/div><\/div>`;});
   h+=`<\/div><div class="label">Series Level (Base Hero Points)</div><div class="grid-2 mb-3">`;
-  SERIES_LEVELS.forEach(function(l){h+=`<div class="game-opt ${cur.level===l.id?'selected':''}" onclick="_uniPick('level','${l.id}','${editId||''}')"><div class="opt-title">${l.name}<\/div><div class="opt-desc">${l.desc}<\/div><div class="opt-stats">${l.baseHP} HP<\/div><\/div>`;});
+  sysList('SERIES_LEVELS').forEach(function(l){h+=`<div class="game-opt ${cur.level===l.id?'selected':''}" onclick="_uniPick('level','${l.id}','${editId||''}')"><div class="opt-title">${l.name}<\/div><div class="opt-desc">${l.desc}<\/div><div class="opt-stats">${l.baseHP} HP<\/div><\/div>`;});
   h+=`<\/div>`;
   h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Each hero still picks their own Experience Level during character creation.<\/div>`;
   h+=`<div style="display:flex;gap:8px;margin-top:8px">`;
@@ -491,7 +491,7 @@ function foldLegacySlots(u){
 }
 function _uniSeriesLabel(u){
   const s=(u&&u.series)||{};
-  const t=SERIES_TONES.find(x=>x.id===s.tone),l=SERIES_LEVELS.find(x=>x.id===s.level);
+  const t=sysList('SERIES_TONES').find(x=>x.id===s.tone),l=sysList('SERIES_LEVELS').find(x=>x.id===s.level);
   if(!t&&!l)return `<div style="font-size:10px;color:var(--accent)">No tone or power level set<\/div>`;
   return `<div style="font-size:10px;color:var(--gold)">${esc([t&&t.name,l&&l.name].filter(Boolean).join(' · '))}<\/div>`;
 }
