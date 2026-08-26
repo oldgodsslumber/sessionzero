@@ -45,6 +45,9 @@ function openMultiplayer(){
 }
 
 (function boot(){
+  // Pick the active system first: every render below reads SYS and the lexicon.
+  // Defaults to Daring Comics, so existing installs are untouched.
+  sysActivate(null)||sysActivate('daring-comics');
   loadUniverses();
   if(U.universes.length===0){openUniverseSetup(true);return;}
   migrateSlotsToSaves();

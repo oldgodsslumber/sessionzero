@@ -101,3 +101,31 @@ function sysDerive(ref) {
   const name = ref.replace(/^derive\./, '');
   return (SYS && SYS.derive && SYS.derive[name]) || null;
 }
+
+// ─── scratch storage for block-rendered packs ───────────────────────────────
+// Packs that render through core/blocks.js are NOT wired into the save-file
+// system yet (that is phase 5, which namespaces storage and stamps saves with a
+// systemId). Until then they persist to their own key. This is what keeps a
+// half-built pack from writing its character into whatever save file happens to
+// be loaded — which, since save() writes all of S, would clobber it.
+function sysScratchLoad() {
+  try { const d = localStorage.getItem(sysKey('scratch')); return d ? JSON.parse(d) : null; }
+  catch (e) { return null; }
+}
+function sysScratchSave(char) {
+  try { localStorage.setItem(sysKey('scratch'), JSON.stringify(char)); return true; }
+  catch (e) { return false; }
+}
+
+// The character's display name, whatever the pack calls that field. Reads the
+// first non-empty identity field the manifest declares, so the shared tabs (map,
+// log, HUD) stop reaching for Daring Comics' `costumedName` directly.
+function sysCharName(char) {
+  if (!char) return '';
+  const ids = (SYS && SYS.schema && SYS.schema.identity) || [];
+  for (const f of ids) {
+    const v = char[f];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return String(char.costumedName || char.name || '').trim();
+}

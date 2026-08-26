@@ -127,7 +127,7 @@ function logDD(e,t){e.preventDefault();e.currentTarget.classList.remove('log-dra
 function exportLog(){
   const episodes=parseIssues(S.notes||[]);
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const heroName=e(S.char?.costumedName||'Hero');
+  const heroName=e(sysCharName(S.char)||lexU('hero'));
   // NPC cards
   const npcHTML=(S.npcs||[]).map((n,i)=>`<div class="src-card" draggable="true" ondragstart="srcDS(event,'npc',${i})"><div style="font-size:13px;font-weight:700">${e(n.name)}</div><div style="font-size:10px;color:var(--muted)">${e(n.type)} ${n.desc?'\u2014 '+e(n.desc):''}</div>${n.powers?`<div style="font-size:10px;color:var(--purple);margin-top:2px">${e(n.powers)}</div>`:''}</div>`).join('')||'<div style="font-size:11px;color:var(--muted);padding:10px">No NPCs.</div>';
   // Region maps

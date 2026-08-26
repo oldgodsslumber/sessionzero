@@ -1,6 +1,52 @@
+// A pack that declares schema.blocks renders through core/blocks.js; one that
+// doesn't (Daring Comics, until Phase 3) keeps its hand-written renderer. This
+// is the (a)-escape-hatch of SHELL-PLAN §2, used in the other direction.
+function sysUsesBlocks(){return !!(SYS&&SYS.schema&&SYS.schema.blocks&&SYS.schema.blocks.length);}
+
 function renderHero(){
-  if(S.char){document.getElementById('hero-creation').style.display='none';document.getElementById('hero-sheet').style.display='block';renderSheet();}
-  else{document.getElementById('hero-creation').style.display='block';document.getElementById('hero-sheet').style.display='none';renderCreationStep();}
+  const creation=document.getElementById('hero-creation'),sheet=document.getElementById('hero-sheet');
+  if(sysUsesBlocks()){
+    // No block-based creation wizard yet (that is phase D5), so a pack with
+    // blocks starts you straight on a blank sheet.
+    if(!S.char||S.char.systemId!==SYS.id){
+      const scratch=sysScratchLoad();
+      S.char=(scratch&&scratch.systemId===SYS.id)?scratch
+            :(SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}});
+    }
+    creation.style.display='none';sheet.style.display='block';
+    renderSysSheet();
+    return;
+  }
+  if(S.char){creation.style.display='none';sheet.style.display='block';renderSheet();}
+  else{creation.style.display='block';sheet.style.display='none';renderCreationStep();}
+}
+
+// The block-driven sheet: an identity header the pack declares, then its blocks.
+function renderSysSheet(){
+  const el=document.getElementById('hero-sheet');if(!el)return;
+  const ch=S.char,ids=(SYS.schema&&SYS.schema.identity)||[];
+  const LABELS={name:'Name',crawlerNumber:'Crawler Number',race:'Race',class:'Class',level:'Level'};
+  let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
+  h+=`<div class="pg-title">${esc(lexU('sheet'))}</div>`;
+  h+=`<div style="font-size:11px;color:var(--muted)">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${S.floor||3}</div></div>`;
+  h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
+  ids.forEach(f=>{
+    h+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;
+    h+=`<input value="${esc(String(ch[f]===undefined?'':ch[f]))}" oninput="sysIdentitySet('${esc(f)}',this.value)"></div>`;
+  });
+  h+=`</div></div>`;
+  h+=`<div class="card-sm" style="border-color:var(--accent);font-size:11px;color:var(--muted);margin-bottom:8px">
+      <strong style="color:var(--accent)">Preview.</strong> ${esc(SYS.name)} is not on the save-file system yet
+      &mdash; this sheet autosaves to its own scratch slot and never touches your ${esc(lex('saves'))}.</div>`;
+  h+=`<div id="sys-blocks"></div>`;
+  el.innerHTML=h;
+  renderBlockSheet(ch,'sys-blocks');
+}
+function sysIdentitySet(field,v){
+  if(!S.char)return;
+  const n=Number(v);
+  S.char[field]=(v!==''&&!isNaN(n)&&/^[0-9]+$/.test(v))?n:v;
+  save();
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -28,7 +28,7 @@ function defaultRegion(name){
 function defaultState(){
   return{series:{tone:null,level:null,experience:null},char:null,
     creation:{step:0,costumedName:'',civilianName:'',aspects:{concept:'',motivation:'',contingent:[{cat:'',text:''},{cat:'',text:''},{cat:'',text:''}]},supportingCast:[],roguesGallery:[],skills:{},powerSets:[],stunts:[]},
-    team:null,universeId:null,npcs:[],regions:[defaultRegion()],activeRegion:0,conflict:{active:false,zones:[],turnOrder:[],currentTurn:0,round:1,log:[]},dice:null,notes:[]};
+    team:null,universeId:null,floor:3,npcs:[],regions:[defaultRegion()],activeRegion:0,conflict:{active:false,zones:[],turnOrder:[],currentTurn:0,round:1,log:[]},dice:null,notes:[]};
 }
 let S=defaultState(),currentSaveId=null;
 
@@ -210,6 +210,13 @@ function cleanupLegacySlots(){
 }
 
 function save(){
+  // A block-rendering pack is not on the save-file system yet (phase 5). Send it
+  // to its own scratch key and return: writing S here would overwrite whichever
+  // save file is loaded, because save() persists the whole state object.
+  if(typeof sysUsesBlocks==='function'&&sysUsesBlocks()){
+    if(sysScratchSave(S.char))flashSaved();else flashSaveError('Not saved');
+    return;
+  }
   if(currentSaveId===null)return;
   const _bound=currentUniverse()&&S.npcs===currentUniverse().roster;
   if(_bound&&S.char)syncHeroToRoster();

@@ -1,5 +1,5 @@
 window._mapZoom=null;window._selMapCell=null;
-function heroMarker(){return S.char?esc(S.char.costumedName.charAt(0)):'H';}
+function heroMarker(){const n=sysCharName(S.char);return n?esc(n.charAt(0)):'H';}
 function isAdj(a,b){const ar=Math.floor(a/5),ac=a%5,br=Math.floor(b/5),bc=b%5;return Math.abs(ar-br)+Math.abs(ac-bc)===1;}
 // A game-icons id ("game-icons:city") or bare slug ("city", "fire-ray"). Emoji/free
 // text won't match, so legacy emoji icons still render as text.

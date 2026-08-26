@@ -1,0 +1,149 @@
+// systems/dungeon-crawler-carl/system.js — the DCC pack manifest.
+//
+// Phases D0–D2: identity, lexicon, the dice engine, and the crawler sheet's
+// core blocks. Skills (D3), inventory (D4), creation (D5) and Races/Classes (D6)
+// are not here yet — the shell degrades to a default for anything omitted, so
+// the pack boots in this half-written state on purpose.
+
+// Local helpers. These must NOT go through SYS: another pack may be the active
+// system when these run (the sheet renderer passes the character explicitly), and
+// SYS points at whichever pack is selected, not at this one.
+function dccStatOf(char, id) {
+  const c = char && char.blocks && char.blocks.stats && char.blocks.stats[id];
+  return c ? (c.base || 0) + (c.bonus || 0) : 0;   // Enhanced = Unenhanced + bonus
+}
+function dccModOf(char, id) { return dccStatMod(dccStatOf(char, id)); }
+
+// One d20, with Advantage (+1) / Disadvantage (-1) / neither (0).
+function dccRollD20(adv) {
+  const d = () => 1 + Math.floor(Math.random() * 20);
+  const a = d();
+  if (!adv) return { dice: [a], nat: a };
+  const b = d();
+  return { dice: [a, b], nat: adv > 0 ? Math.max(a, b) : Math.min(a, b) };
+}
+
+// The full resolution of one Check.
+function dccResolveCheck(opts) {
+  const o = opts || {};
+  const r = dccRollD20(o.adv || 0);
+  const total = r.nat + (o.rank || 0) + (o.statMod || 0) + (o.bonus || 0);
+  const difficulty = o.difficulty !== undefined
+    ? o.difficulty
+    : dccDifficulty(o.kind || 'unopposed', o.floor, o.antagonistMod);
+  const degreeId = dccDegree(total, difficulty, r.nat);
+  return {
+    dice: r.dice, nat: r.nat, total, difficulty,
+    degree: DCC_DEGREES.find(x => x.id === degreeId),
+    margin: total - difficulty,
+  };
+}
+
+registerSystem({
+  id: 'dungeon-crawler-carl',
+  name: 'Dungeon Crawler Carl',
+
+  // The app is the Crawler Interface, so the words are the System AI's.
+  lexicon: {
+    universe: 'Crawl',        universes: 'Crawls',
+    hero: 'Crawler',          heroes: 'Crawlers',
+    roster: 'Bestiary',       npc: 'Mob',           npcs: 'Mobs',
+    team: 'Party',            region: 'Neighborhood', regions: 'Neighborhoods',
+    logBreak: 'Floor',        log: 'Crawl Log',     wiki: 'Codex',
+    save: 'Crawler File',     saves: 'Crawler Files', sheet: 'Crawler Sheet',
+  },
+
+  // ─── the crawler sheet ────────────────────────────────────────────────────
+  schema: {
+    identity: ['name', 'crawlerNumber', 'race', 'class', 'level'],
+    blocks: [
+      {
+        id: 'stats', type: 'traitGrid', label: 'The Five Core Stats',
+        hint: 'Unenhanced is you. Enhanced adds gear, Spells and Buffs. Everything rolls off the Mod.',
+        layers: ['Unenhanced', 'Enhanced'],
+        mod: 'derive.statMod',
+        traits: DCC_STATS.map(s => ({ id: s.id, name: s.name, desc: s.desc })),
+        // editing a Stat changes Health, Mana and Evade, so repaint those too
+        affects: ['health', 'mana', 'defence'],
+      },
+      {
+        id: 'health', type: 'track', label: 'Health Bar',
+        slots: DCC_HB_SLOTS,
+        slotValue: 'derive.hbSlotValue',      // = CON Mod
+        fill: 'rtl', percent: true, damageInput: true,
+        emptyWarning: 'Dying — you have CON Mod rounds. Heal to at least 10% or you are off the show.',
+      },
+      {
+        id: 'mana', type: 'pool', label: 'Mana',
+        hint: 'Max Mana equals your Enhanced Intelligence — the score, not the Mod.',
+        max: 'derive.maxMana',
+      },
+      {
+        id: 'defence', type: 'readout',
+        items: [
+          { label: 'Evade',  value: 'derive.evade', hint: 'd20 + DEX Mod' },
+          { label: 'DR',     value: 'derive.dr',    hint: 'damage resistance' },
+          { label: 'Move',   value: 'derive.move',  hint: 'feet' },
+          { label: 'Step',   value: 'derive.step',  hint: 'feet, free per Action' },
+          { label: 'Size',   value: 'derive.size' },
+        ],
+      },
+      { id: 'aiFavor',    type: 'pool', label: 'AI Favor',   hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
+      { id: 'popularity', type: 'pool', label: 'Popularity', hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
+      { id: 'gold',       type: 'pool', label: 'Gold',       hint: 'All of it fits in one Inventory slot.' },
+    ],
+  },
+
+  // ─── formulas ─────────────────────────────────────────────────────────────
+  // Pure: take the character, return a number. Called on every render.
+  derive: {
+    statMod: enhancedValue => dccStatMod(enhancedValue),
+    hbSlotValue: char => dccModOf(char, 'CON'),
+    maxMana:     char => dccStatOf(char, 'INT'),
+    evade:       char => '+' + dccModOf(char, 'DEX'),
+    dr:          char => (char && char.dr) || 0,
+    move:        char => (char && char.move) || DCC_BASE_MOVE,
+    step:        char => (char && char.step) || DCC_BASE_STEP,
+    size:        char => {
+      const n = (char && char.size) || 4;
+      const s = DCC_SIZES.find(x => x.n === n);
+      return s ? s.name + ' (' + n + ')' : String(n);
+    },
+    // exposed for the sheet, the dice tab and the tests
+    stat: dccStatOf,
+    mod:  dccModOf,
+  },
+
+  // ─── dice ─────────────────────────────────────────────────────────────────
+  // The d20 is the whole game. The GM never rolls one: a Mob's quality is a
+  // Difficulty the player rolls against.
+  dice: {
+    formula: '1d20',
+    checkKinds: DCC_CHECK_KINDS,
+    roll: dccRollD20,
+    resolve: dccResolveCheck,
+    difficulty: dccDifficulty,
+    degrees: DCC_DEGREES,
+  },
+
+  // ─── content the shell can already use ────────────────────────────────────
+  catalogs: {
+    debuffs: DCC_DEBUFFS,
+    damageTypes: DCC_DAMAGE_TYPES,
+    gearSlots: DCC_GEAR_SLOTS,
+    sizes: DCC_SIZES,
+    bossTiers: DCC_BOSS_TIERS,
+    popularityTriggers: DCC_POPULARITY_TRIGGERS,
+  },
+
+  // A crawler's starting shape. The blocks fill themselves in on first render.
+  newCharacter() {
+    return {
+      systemId: 'dungeon-crawler-carl',
+      name: '', crawlerNumber: 500000 + Math.floor(Math.random() * 12400000),
+      race: '', class: '', level: 10,
+      dr: 0, move: DCC_BASE_MOVE, step: DCC_BASE_STEP, size: 4,
+      blocks: {},
+    };
+  },
+});

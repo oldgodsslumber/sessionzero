@@ -8,7 +8,8 @@ const SUITES = [
   ['wiki',   'Wiki: parser, upsert, universe scoping, cross-links, intake'],
   ['saves',  'Save files: migration, index repair, quota, CRUD'],
   ['series', 'Universe series + first-run gate'],
-  ['mp',     'Multiplayer: sync, GM secret isolation, collaboration']
+  ['mp',     'Multiplayer: sync, GM secret isolation, collaboration'],
+  ['dcc',    'Dungeon Crawler Carl: rules maths, blocks, system selection']
 ];
 
 let total = 0, failed = 0;
