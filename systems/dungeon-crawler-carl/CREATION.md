@@ -299,6 +299,48 @@ truncation.
 
 ---
 
+## 7a. Where the build has got to
+
+| Screen | State |
+|---|---|
+| 1 Who are you | **done** |
+| 2 Background | **done** |
+| 3 How you fight | **done** |
+| 4 Stats | **done** |
+| 5 Scars | **done** |
+| 6 What you brought | **done** |
+| 7 The tutorial floors | not started — needs Tables 25–34 extracted |
+| 8 Race & Class | **blocked on extraction**, see below |
+| 9 Review | not started |
+
+### Why Race & Class is not done yet
+
+The Skills pipeline does not transfer to this chapter. Three problems, two solved:
+
+1. **A second, clipped copy of the body text.** Some pages carry the same
+   paragraph twice, the second with its left side cut off — "aces ca c oose" for
+   "Races can choose". **Solved:** the copy shares the real block's baseline and
+   right edge but starts further right, which is specific enough to filter on.
+   `drop_overlays()` in the extraction script does this, and it improves every
+   future extraction from this book.
+2. **Entry names are Title Case, not ALL CAPS.** Shape heuristics cannot tell
+   "Health Bar" (a bullet continuation) from "Pocket Kuma" (a Race). **Solved:**
+   the book sets every entry name in CitrusGothic at 13pt and nothing else on the
+   page uses it, so the font is a reliable signal where shape is not.
+3. **The display font drops doubled letters, and names are proper nouns.**
+   "Dwarf, Clasic", "Obsidian Buterfly", "Rat Holigan", "Dopelgänger". In the
+   Skills chapter this affected two names and the body text gave the right
+   spelling. Here it affects many, and they are names — so guessing is not
+   acceptable. **Not solved.** Each needs checking against a body-text mention.
+
+The current pass yields 46 races and 53 classes against the book's stated 30 and
+49, so entries are still being split or duplicated. Shipping that would be exactly
+the plausible-but-wrong catalogue §11 warns about. It needs a dedicated pass:
+resolve the count against the book's own totals first, then repair the names
+against body text, then parse the benefit lists.
+
+---
+
 ## 8. Build order
 
 1. Skills catalogue (**D3** — blocking).

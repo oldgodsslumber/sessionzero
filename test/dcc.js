@@ -429,7 +429,7 @@ function boot(entry) {
   check('[wizard] a fresh crawler starts in the wizard, not on the sheet', () =>
     ev("!!document.getElementById('wiz-body')") &&
     ev("document.getElementById('hero-sheet').style.display") === 'none');
-  eq(ev('SYS.creation.length'), 4, '[wizard] four screens implemented so far');
+  eq(ev('SYS.creation.length'), 6, '[wizard] six screens implemented so far');
 
   // screen 1
   check('[wizard] screen 1 blocks until species, name and number are set', () =>
@@ -496,6 +496,59 @@ function boot(entry) {
     ev("(S.char.blocks.stats.STR||{}).base") === 0 || 'STR still holds 6');
   ev("dccAssignStat('STR',2)");
   eq(ev('wizValidate(S.char,3)'), true, '[wizard] screen 4 satisfied once INT is high enough');
+
+  // screens 5-6, then finish
+  ev('wizNext()');
+  eq(ev('S.char.creation.step'), 4, '[wizard] advanced to Scars');
+
+  // ── screens 5-6: scars and gear ──────────────────────────────────────────
+  check('[scars] the screen blocks until all three are filled in', () => {
+    ev("S.char.story={};");
+    const v = ev('wizValidate(S.char,4)');
+    return (v !== true && /Past Trauma/.test(String(v))) || 'got ' + v;
+  });
+  check('[scars] picking from the table fills the field', () => {
+    ev("dccSetStory('pastTrauma',3)");
+    const t = ev('S.char.story.pastTrauma');
+    return (t && t === ev('DCC_STORY_TABLES.pastTrauma.find(r=>r.roll===3).text')) || 'got ' + t;
+  });
+  check('[scars] picking the same row again clears it', () => {
+    ev("dccSetStory('pastTrauma',3)");
+    return ev('S.char.story.pastTrauma') === '' || 'still set';
+  });
+  check('[scars] rolling lands on a real row', () => {
+    for (let i = 0; i < 40; i++) {
+      ev("dccRollStory('regret')");
+      const t = ev('S.char.story.regret');
+      if (!ev('DCC_STORY_TABLES.regret.some(r=>r.text===' + JSON.stringify(t) + ')')) return 'off-table: ' + t;
+    }
+    return true;
+  });
+  check('[scars] your own words are accepted instead of a table row', () => {
+    ev("dccStoreStory('pastTrauma','Something I would rather not write down.')");
+    ev("dccStoreStory('looseEnd','An unanswered letter.')");
+    ev("dccStoreStory('regret','I never said goodbye.')");
+    return ev('wizValidate(S.char,4)') === true || 'still blocked';
+  });
+  check('[scars] the lines-not-to-cross note is optional and stored', () => {
+    ev("dccStoreStory('linesNotToCross','Nothing involving harm to animals.')");
+    return ev('wizValidate(S.char,4)') === true &&
+           /animals/.test(ev('S.char.story.linesNotToCross'));
+  });
+  check('[gear] the gear screen never blocks you', () =>
+    ev('wizValidate(S.char,5)') === true || 'gear screen gated');
+  check('[gear] gear notes are stored', () => {
+    ev("dccStoreGear('weird','A pack of googly eyes.')");
+    return /googly/.test(ev('S.char.gearNotes.weird'));
+  });
+  check('[gear] the screen shows the weapon chosen back on screen 3', () => {
+    const html = ev('SYS.creation[5].render({char:S.char,floor:3})');
+    return /Fire Fingers/.test(html) || 'weapon/spell not carried forward';
+  });
+
+  ev('wizNext()');
+  eq(ev('S.char.creation.step'), 5, '[wizard] advanced to What you brought');
+  ev("dccStoreGear('clothes','Jeans and a hoodie');dccStoreGear('item','A crowbar')");
 
   // finishing turns the choices into a real sheet
   ev('wizNext()');

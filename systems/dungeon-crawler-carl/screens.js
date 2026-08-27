@@ -391,6 +391,22 @@ const DCC_SCREENS = [
       return true;
     },
   },
+  {
+    id: 'story', label: 'Scars',
+    render: dccScreenStory,
+    validate(c) {
+      const st = dccStory(c);
+      const missing = DCC_STORY_FIELDS.filter(f => !String(st[f.key] || '').trim());
+      return missing.length ? 'Still to fill in: ' + missing.map(f => f.label).join(', ') : true;
+    },
+  },
+  {
+    id: 'gear', label: 'What you brought',
+    render: dccScreenGear,
+    // Deliberately always satisfied: what you carried is a conversation with the
+    // GM, not a rule the app should gate on.
+    validate() { return true; },
+  },
 ];
 
 // Called by the wizard when the last screen is finished: turn the choices into
@@ -402,3 +418,113 @@ function dccFinishCreation(char) {
   char.blocks.aiFavor = { current: char.species === 'animal' ? 0 : 1 };
   char.blocks.health = { marked: 0 };
 }
+
+// ─── screen 5: scars ────────────────────────────────────────────────────────
+// Past Trauma, Loose End, Regret (Tables 22-24). The book is explicit that this
+// is where you tell the GM what you want in the story AND what you do not want
+// at the table, so it gets that framing and a free-text field of its own rather
+// than being three more random tables.
+const DCC_STORY_FIELDS = [
+  { key: 'pastTrauma', label: 'Past Trauma',
+    prompt: 'Other than the world ending, what is the worst thing that ever happened to you?' },
+  { key: 'looseEnd', label: 'Loose End',
+    prompt: 'What did you leave unfinished that still haunts you?' },
+  { key: 'regret', label: 'Regret',
+    prompt: 'What did you do, or fail to do, that left a scar?' },
+];
+
+function dccStory(char) {
+  if (!char.story) char.story = {};
+  return char.story;
+}
+
+function dccScreenStory(ctx) {
+  const c = ctx.char, st = dccStory(c);
+  let h = `<div class="card-sm" style="font-size:11px;color:var(--muted)">
+    The System AI mines your worst memories because flaws make better television. Mechanically this
+    is how you tell your GM which stories you want. It is also where you say which ones you
+    <strong>don't</strong> want — that part is not on any table, and it counts just as much.</div>`;
+
+  DCC_STORY_FIELDS.forEach(f => {
+    const val = st[f.key] || '';
+    const rows = DCC_STORY_TABLES[f.key] || [];
+    h += `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
+      <div class="pg-title" style="font-size:16px">${f.label}</div>
+      <button class="btn btn-gold btn-xs" onclick="dccRollStory('${f.key}')">Roll 1d12</button></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${esc(f.prompt)}</div>
+      <div class="form-group" style="margin-bottom:6px">
+        <input value="${esc(val)}" oninput="dccStoreStory('${f.key}',this.value)"
+          placeholder="Write your own, or pick one below"></div>
+      <div style="max-height:132px;overflow-y:auto">`;
+    rows.forEach(r => {
+      const on = val === r.text;
+      h += `<div onclick="dccSetStory('${f.key}',${r.roll})"
+        style="font-size:12px;padding:4px 6px;border-radius:5px;cursor:pointer;margin-bottom:2px;
+        background:${on ? 'var(--surface3)' : 'transparent'};
+        border:1px solid ${on ? 'var(--accent)' : 'transparent'}">
+        <span style="color:var(--muted);font-size:10px">${r.roll}</span> ${esc(r.text)}</div>`;
+    });
+    h += `</div></div>`;
+  });
+
+  h += `<div class="card" style="border-color:var(--accent)">
+    <div class="pg-title" style="font-size:16px">Lines I'd rather not cross</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
+      Anything you do not want turning up at the table. Optional, always editable, and worth
+      saying out loud in session zero as well as writing here.</div>
+    <textarea rows="3" oninput="dccStoreStory('linesNotToCross',this.value)"
+      placeholder="e.g. nothing involving harm to animals">${esc(st.linesNotToCross || '')}</textarea></div>`;
+  return h;
+}
+
+function dccStoreStory(k, v) { dccStory(S.char)[k] = v; save(); }   // store only
+function dccSetStory(k, roll) {
+  const rows = DCC_STORY_TABLES[k] || [];
+  const r = rows.find(x => x.roll === roll);
+  if (!r) return;
+  const st = dccStory(S.char);
+  st[k] = (st[k] === r.text) ? '' : r.text;
+  save(); wizRepaint();
+}
+function dccRollStory(k) {
+  const rows = DCC_STORY_TABLES[k] || [];
+  const r = rows[Math.floor(Math.random() * rows.length)];
+  if (r) { dccStory(S.char)[k] = r.text; save(); wizRepaint(); }
+}
+
+// ─── screen 6: what you brought ─────────────────────────────────────────────
+// Whatever was on you when the world ended. Free-form and negotiated with the
+// GM, so the app prefills what it can infer and otherwise stays out of the way.
+function dccGear(char) {
+  if (!char.gearNotes) char.gearNotes = {};
+  return char.gearNotes;
+}
+
+function dccScreenGear(ctx) {
+  const c = ctx.char, g = dccGear(c), cm = dccCre(c).combat;
+  const weapon = cm.route === 'weapon' ? (cm.weaponName || cm.weaponSkill)
+               : cm.route === 'spell' ? cm.spell + ' (a Spell, not a thing you carry)'
+               : 'Nothing — you came in swinging';
+  let h = `<div class="card-sm" style="font-size:11px;color:var(--muted)">
+    No sirens, no countdown, no helpful flyer about what to pack. You brought whatever happened to
+    be on you. Your GM may want a word about the weird stuff.</div>`;
+
+  h += `<div class="card"><div class="label">From what you already chose</div>
+    <div style="font-size:13px">${esc(weapon)}</div>
+    ${cm.route === 'spell' ? `<div style="font-size:11px;color:var(--muted)">Plus ${DCC_STARTING_SPELL_POTIONS} Standard Mana Potions in one Hotlist slot.</div>` : ''}
+    ${cm.route === 'handtohand' ? `<div style="font-size:11px;color:var(--muted)">Plus an achievement and a Bronze Weapon Box, containing the weapon you should have brought.</div>` : ''}
+    </div>`;
+
+  const field = (k, label, ph, rows) => `<div class="card"><div class="form-group" style="margin-bottom:0">
+    <label>${label}</label>
+    ${rows ? `<textarea rows="${rows}" oninput="dccStoreGear('${k}',this.value)" placeholder="${esc(ph)}">${esc(g[k] || '')}</textarea>`
+           : `<input value="${esc(g[k] || '')}" oninput="dccStoreGear('${k}',this.value)" placeholder="${esc(ph)}">`}
+    </div></div>`;
+
+  h += field('clothes', 'What you are wearing', 'e.g. jeans, a t-shirt and a hoodie');
+  h += field('item', 'One interesting or useful item',
+             'A second weapon counts, if a background gave you the Skill for it');
+  h += field('weird', 'Weird stuff', 'Be creative. This is the part the AI enjoys.', 3);
+  return h;
+}
+function dccStoreGear(k, v) { dccGear(S.char)[k] = v; save(); }     // store only
