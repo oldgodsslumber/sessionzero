@@ -9,7 +9,8 @@ const SUITES = [
   ['saves',  'Save files: migration, index repair, quota, CRUD'],
   ['series', 'Universe series + first-run gate'],
   ['mp',     'Multiplayer: sync, GM secret isolation, collaboration'],
-  ['dcc',    'Dungeon Crawler Carl: rules maths, blocks, system selection']
+  ['dcc',    'Dungeon Crawler Carl: rules maths, blocks, system selection'],
+  ['rules',  'Database rules: GM boundary invariants, doc/file agreement']
 ];
 
 let total = 0, failed = 0;

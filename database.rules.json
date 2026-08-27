@@ -1,0 +1,98 @@
+// Realtime Database security rules for Session Zero.
+//
+// CANONICAL COPY. MULTIPLAYER.md quotes this file; test/rules.js fails if the
+// two drift apart. Edit here.
+//
+// Deploy either way:
+//   • Console  -> Realtime Database -> Rules -> paste -> Publish
+//   • CLI      -> firebase deploy --only database
+//
+// Verify after publishing, in the Rules Playground:
+//   /universes/1234/meta    auth on, any uid              -> ALLOWED
+//   /universes/1234/loreGM  auth on, a non-GM uid         -> DENIED   <- the important one
+//   /universes/1234/loreGM  auth on, uid = meta/gmUid     -> ALLOWED
+//   /universes/1234         auth on, any uid              -> DENIED   (by design)
+//
+// A default playground run (location "/", unauthenticated) is DENIED, and must
+// be: there is no .read at the root and every rule requires auth != null.
+
+{
+  "rules": {
+    "universes": {
+      "$code": {
+        // NOTE: no ".read" here, on purpose. Read is granted per subtree below
+        // so that loreGM can be withheld. Adding a ".read" at this level would
+        // override every restriction underneath it.
+        //
+        // ".write" here covers exactly two whole-node operations: creating the
+        // universe (it does not exist yet) and the GM deleting it. Players get
+        // their write access from the per-subtree rules instead.
+        ".write": "auth != null && (!data.exists() || data.child('meta/gmUid').val() === auth.uid)",
+
+        "meta": {
+          // Readable before you are a member — the join flow has to read it to
+          // find the world. Writable by the GM, or by anyone when it does
+          // not exist yet, which is how a world gets created.
+          ".read":  "auth != null",
+          ".write": "auth != null && (!data.exists() || data.child('gmUid').val() === auth.uid)",
+
+          // Which game this world belongs to ('daring-comics',
+          // 'dungeon-crawler-carl', ...). Write-once: the client refuses a
+          // cross-game join, and this stops a GM changing the stamp underneath a
+          // table that has already joined. Worlds created before this field
+          // existed have no stamp and stay joinable by anyone.
+          "systemId": {
+            ".validate": "!data.exists() || data.val() === newData.val()"
+          }
+        },
+
+        "members": {
+          ".read": "auth != null && data.child(auth.uid).exists()",
+          "$uid": {
+            // You may always write your OWN member row. Without this, joining
+            // is impossible: every other rule requires you to already be a
+            // member before you can become one.
+            ".write": "auth != null && (auth.uid === $uid || data.parent().parent().child('meta/gmUid').val() === auth.uid)"
+          }
+        },
+
+        "heroes": {
+          ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+          "$uid": {
+            // The world is collaborative; your character sheet is not.
+            ".write": "auth != null && (auth.uid === $uid || data.parent().parent().child('meta/gmUid').val() === auth.uid)"
+          }
+        },
+
+        // ---- collaborative world content: any member reads and writes ----
+        "roster":   { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+        "lore":     { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+        "conflict": { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+        "regions":  { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+        "rolls":    { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+        "notes":    { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+
+        "loreGM": {
+          // ── THE GM BOUNDARY ──
+          // Wiki entries flagged hidden, and the `secret` field of otherwise
+          // public entries, live here and ONLY here. Players cannot read this
+          // subtree, so their client never receives the bytes. If you relax
+          // this rule — or grant .read at the $code level above — "hidden"
+          // becomes a lie any player can see through with devtools or a
+          // REST call.
+          ".read":  "auth != null && data.parent().child('meta/gmUid').val() === auth.uid",
+          ".write": "auth != null && data.parent().child('meta/gmUid').val() === auth.uid"
+        }
+      }
+    },
+    "codes": { ".read": "auth != null", "$code": { ".write": "auth != null" } },
+    "users": { "$uid": { ".read":  "auth != null && auth.uid === $uid",
+                          ".write": "auth != null && auth.uid === $uid" } }
+  }
+}

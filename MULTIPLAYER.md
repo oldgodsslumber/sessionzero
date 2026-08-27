@@ -110,7 +110,10 @@ work for multiplayer. The offline app is unaffected.
 
 ## 2. Security rules
 
-Paste these into **Realtime Database → Rules**. They are not optional decoration:
+The canonical copy is [`database.rules.json`](database.rules.json); the block below
+quotes it, and `test/rules.js` fails if the two drift apart. Paste it into
+**Realtime Database → Rules** and click **Publish** — running the playground does
+not deploy anything. They are not optional decoration:
 `loreGM` is the only thing keeping your hidden entries and secrets off your
 players' machines.
 
