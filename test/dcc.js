@@ -1081,6 +1081,89 @@ function boot(entry) {
     if (!/Smush/.test(ev("String(dccRace('sasquatch').prerequisites)"))) return 'wrong entry chosen';
     return JSON.parse(r).ok === false || 'a crawler with no Smush was allowed: ' + r;
   });
+  // ── the real prerequisite text, recovered from the PDF ───────────────────
+  // Five entries shipped with prose damaged by the extraction: cut mid-phrase,
+  // or with a clipped duplicate text layer spliced through them. A gate whose
+  // text is truncated cannot be enforced, so those Races and Classes were free
+  // picks. Each expected value below is the sentence as printed in the book.
+  check('[rc] no prerequisite was shipped truncated', () => {
+    // Five entries shipped with prose the extraction had damaged: cut
+    // mid-phrase ("...Popularity 3+, receiving the"), or with a clipped
+    // duplicate text layer spliced through them ("...Explosives Handling
+    // ilable to ank 5+ in the Explosives Handling any Trap-based Skill").
+    // A gate whose text is truncated cannot be enforced, so those Races and
+    // Classes were free picks.
+    const all = JSON.parse(ev("JSON.stringify([].concat(DCC_RACES,DCC_CLASSES)" +
+      ".filter(function(e){return e.prerequisites})" +
+      ".map(function(e){return [e.name,e.prerequisites]}))"));
+    const DANGLING = /\b(with|the|an|and|or|in|to|of|who|have|at)$/i;
+    // The overlay damage spliced a clipped copy of the line through itself,
+    // leaving fragments of words: "...Handling ilable to ank 5+ in the...".
+    // Match that, not the ordinary "available to" every entry contains.
+    const SPLICED = / ank | ilable /;
+    const bad = all.filter(([n, t]) => DANGLING.test(String(t).trim()) || SPLICED.test(t));
+    return bad.length ? 'still truncated: ' + bad.map(b => b[0]).join(', ') : true;
+  });
+  check('[rc] a two-clause gate needs BOTH halves', () => {
+    // Hobgoblin: Rank 5+ in Explosives Handling AND any Trap-based Skill.
+    // The old matcher stopped at the first clause it recognised.
+    const set = n => ev("S.char=SYS.newCharacter();S.char.blocks={skills:{skills:" + n + "}};");
+    const hob = "dccRace('hobgoblin')";
+    set("[{name:'Explosives Handling',stat:'INT',rank:6}]");
+    if (ev("dccMeetsPrereq(S.char," + hob + ").ok") !== false) return 'explosives alone was enough';
+    set("[{name:'Find Trap',stat:'INT',rank:6}]");
+    if (ev("dccMeetsPrereq(S.char," + hob + ").ok") !== false) return 'a trap Skill alone was enough';
+    set("[{name:'Explosives Handling',stat:'INT',rank:6},{name:'Find Trap',stat:'INT',rank:6}]");
+    return ev("dccMeetsPrereq(S.char," + hob + ").ok") === true || 'both together were still refused';
+  });
+  check('[rc] a Popularity-and-Skill gate needs both', () => {
+    // Compensated Anarchist: Popularity 3+ AND Rank 5+ Explosives Handling.
+    const e = "[].concat(DCC_RACES,DCC_CLASSES).filter(function(x){return x.name==='Compensated Anarchist'})[0]";
+    ev("S.char=SYS.newCharacter();S.char.blocks={popularity:{current:6}};");
+    if (ev("dccMeetsPrereq(S.char," + e + ").ok") !== false) return 'Popularity alone was enough';
+    ev("S.char.blocks.skills={skills:[{name:'Explosives Handling',stat:'INT',rank:6}]};");
+    return ev("dccMeetsPrereq(S.char," + e + ").ok") === true || 'both together were still refused';
+  });
+  check('[rc] a weapon-category gate reads the catalogue category', () => {
+    // Obsidian Butterfly: Rank 5+ with any Edged Weapon. Axe is Edged; Smush
+    // is not, and neither is named in the requirement.
+    const e = "[].concat(DCC_RACES,DCC_CLASSES).filter(function(x){return /Obsidian/.test(x.name)})[0]";
+    ev("S.char=SYS.newCharacter();S.char.blocks={skills:{skills:[{name:'Smush',stat:'STR',rank:6}]}};");
+    if (ev("dccMeetsPrereq(S.char," + e + ").ok") !== false) return 'a non-Edged weapon qualified';
+    ev("S.char.blocks.skills.skills=[{name:'Axe',stat:'STR',rank:6}];");
+    return ev("dccMeetsPrereq(S.char," + e + ").ok") === true || 'an Axe was refused';
+  });
+  check('[rc] a gate with a checkable half fails on that half', () => {
+    // Former Child Actor: Popularity 3+ AND the Cut! achievement. The
+    // achievement cannot be verified, but the Popularity can, and a crawler
+    // with none must not be waved through on the strength of the other clause.
+    const e = "[].concat(DCC_RACES,DCC_CLASSES).filter(function(x){return x.name==='Former Child Actor'})[0]";
+    ev("S.char=SYS.newCharacter();S.char.blocks={popularity:{current:0}};");
+    if (ev("dccMeetsPrereq(S.char," + e + ").ok") !== false) return 'Popularity 0 was allowed';
+    ev("S.char.blocks.popularity.current=6;");
+    const r = JSON.parse(ev("JSON.stringify(dccMeetsPrereq(S.char," + e + "))"));
+    return (r.ok === true && !!r.note) || 'with Popularity met it should pass with a note: ' + JSON.stringify(r);
+  });
+  check('[rc] only genuinely uncheckable gates are notes', () => {
+    // Gender and achievements. Everything else must be enforced, or the screen
+    // is claiming to lock things it never looks at.
+    ev("S.char=SYS.newCharacter();S.char.blocks={};");
+    const soft = JSON.parse(ev(`JSON.stringify([].concat(DCC_RACES,DCC_CLASSES)
+      .filter(function(e){return e.prerequisites&&dccMeetsPrereq(S.char,e).note})
+      .map(function(e){return e.name}))`));
+    const expected = ['Shieldmaiden', 'Bomb Squad Tech'];
+    const extra = soft.filter(n => expected.indexOf(n) < 0);
+    return extra.length ? 'not enforced: ' + extra.join(', ') : true;
+  });
+  check('[rc] the finished Skill block outranks the creation-derived list', () => {
+    // After creation the sheet's list is the truth — Skills advance from use,
+    // so it drifts above whatever creation produced.
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("S.char.blocks.skills={skills:[{name:'Smush',stat:'STR',rank:9}]};");
+    return ev("dccMeetsPrereq(S.char,dccRace('sasquatch')).ok") === true
+      || 'a Rank 9 Smush on the sheet was ignored';
+  });
+
   check('[rc] a gate the app cannot check is a note, not a lock', () => {
     // Gender, achievements and two entries whose source text is truncated. The
     // app must not pretend to have verified these.

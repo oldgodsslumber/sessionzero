@@ -53,7 +53,7 @@ const DCC_RACES = [
     benefits: ['2 Intelligence and Charisma', 'Once per day, double your Move for 20 seconds', 'As an Action, make a CON Stat Check. On Success, deal 1d8+F Fire damage, 5ft Burst radius', 'No Survival Checks needed in harsh heat conditions and can breathe underwater', 'Immunity to Fire damage, and vulnerable to Ice damage', 'Ability to burrow', 'Disadvantage on Checks to conceal your presence or nature (such as Stealth)'] },
   { id: 'lajables', name: 'Lajables', size: { name: 'Medium', n: 4 }, page: 136, needsReview: true,
     benefits: ['+5 Intelligence during the day, +5 Strength during the night', '+2 in two Spells of your choice', '+3 in one Weapon Skill of your choice', 'During the day, Strength is halved, but Spells cost half the Mana to cast', 'During the night, Strength is doubled, but Spells cost double the Mana to cast'] },
-  { id: 'obsidian-butterfly', name: 'Obsidian Butterfly', size: { name: 'Medium', n: 4 }, stats: { DEX: 3, INT: 2 }, skills: [{ skill: 'Intimidate', rank: 2 }, { skill: 'Slice Attack', rank: 2 }], prerequisites: 'This limited R who earn Rank 5+ with an', page: 136, needsReview: true,
+  { id: 'obsidian-butterfly', name: 'Obsidian Butterfly', size: { name: 'Medium', n: 4 }, stats: { DEX: 3, INT: 2 }, skills: [{ skill: 'Intimidate', rank: 2 }, { skill: 'Slice Attack', rank: 2 }], prerequisites: 'This limited Race is only available to crawlers who earn Rank 5+ with any Edged Weapon', page: 136, needsReview: true,
     benefits: ['4 Constitution', '+2 in a Spell of your choice', 'Has four translucent b up to 15 feet and deliv', 'Has four translucent butterfly wings that can reach up to 15 feet and deliver touch- or melee-range', 'Add 1d4 to your Evade Checks'] },
   { id: 'primal', name: 'Primal', rank20: ['All Skills can be raised to Rank 20 universe. After, they seemingly disappeared and have since become “the boogeymen of the cosmos.” crawler was a Primal, but since then, they\'ve been relegated to the back catalog, behind all of the shiny and popular Race choices. on hard mode—you\'re declining the many significant bonuses of choosing another Race (even plain old humans have more benefits) and accepting a penalty to all of your stats in exchange for the opportunity to raise any Skill above the World Dungeon\'s soft cap of 15 Ranks. concentration to reach that degree of mastery. as they careen into maximizing as many of their you—but don\'t say we didn\'t warn you.'], page: 137,
     benefits: ['Size: Unchanged', '1 to all Stats'] },
@@ -69,9 +69,9 @@ const DCC_RACES = [
     benefits: ['2 Constitution', 'At Level 50, +2 Dexterity and gain wings capable of flying up to 500ft per scene', '+1 Popularity each time you roll a Critical Hit in combat'] },
   { id: 'caprid', name: 'Caprid', size: { name: 'Large', n: 5 }, stats: { CHA: 3, INT: 3 }, skills: [{ skill: 'Find Crawler', rank: 3 }, { skill: 'Investigation', rank: 3 }, { skill: 'Leadership', rank: 3 }], page: 139, needsReview: true,
     benefits: ['2 Strength', '+1 Popularity each time you roll a Critical Hit on a Charisma Skill Check or on a Spell Skill Check outside of combat'] },
-  { id: 'grulke', name: 'Grulke', size: { name: 'Medium', n: 4 }, stats: { DEX: 3, STR: 2 }, prerequisites: 'This limited Race is only available to crawlers who have Rank 5+ in the Jumping or Light on', page: 139, needsReview: true,
+  { id: 'grulke', name: 'Grulke', size: { name: 'Medium', n: 4 }, stats: { DEX: 3, STR: 2 }, prerequisites: 'This limited Race is only available to crawlers who have Rank 5+ in the Jumping or Light on Your Feet Skill', page: 139, needsReview: true,
     benefits: ['2 Charisma', '+3 in either Jumping or Light on Your Feet Skills', '+2 Zone of Control and a Reach Weapon Skill of your choice', 'Tongue Lashing: Ranged attack; [Rank = Floor always equal to the Floor Number and cannot be raised by other means', 'Gain a +2 DR breastplate (Torso) with your Grulke', '+1 Popularity when a troll-type enemy licks you or when you achieve an Amazing Success or better on an Attack against a troll-type enemy', '+1 Popularity when you score a Critical Hit on a larger foe in combat'] },
-  { id: 'hobgoblin', name: 'Hobgoblin', size: { name: 'Medium', n: 4 }, stats: { DEX: 1 }, skills: [{ skill: 'Regeneration', rank: 1 }], prerequisites: 'This limited Race is only available to crawlers who have Rank 5+ in the Explosives Handling ilable to ank 5+ in the Explosives Handling any Trap-based Skill', rank20: ['At the end of each floor, roll one Explosive or Trap-based s and trap-making Skills d to Rank 20', 'All explosives and trap-making Skills can be raised to Rank 20'], page: 140, needsReview: true,
+  { id: 'hobgoblin', name: 'Hobgoblin', size: { name: 'Medium', n: 4 }, stats: { DEX: 1 }, skills: [{ skill: 'Regeneration', rank: 1 }], prerequisites: 'This limited Race is only available to crawlers who have Rank 5+ in the Explosives Handling Skill and any Trap-based Skill', rank20: ['At the end of each floor, roll one Explosive or Trap-based s and trap-making Skills d to Rank 20', 'All explosives and trap-making Skills can be raised to Rank 20'], page: 140, needsReview: true,
     benefits: ['+3 in all Trap-based and Explosive-based Skills', 'Free access to all Hobgoblin Sapper', '+1 Popularity when you kill an enemy with a trap or explosive once per scene'] },
   { id: 'pocket-kuma', name: 'Pocket Kuma', size: { name: 'Small', n: 2 }, stats: { CHA: 5, DEX: 5 }, skills: [{ skill: 'Bite', rank: 2 }, { skill: 'Dodge', rank: 2 }, { skill: 'Slice Attack', rank: 2 }, { skill: 'Ambush', rank: 1 }], rank20: ['Light on Your Feet Skill can be raised to Rank 20'], page: 140, needsReview: true,
     benefits: ['4 Constitution', 'You roll with Advantage on all', 'Can see in total darkness', 'Take no damage from falling', 'You deal half damage with Strength-based melee weapons', '+1 Popularity whe in the Surprise Ro', '+1 Popularity when you act in the Surprise Round of a combat or roll a Critical Fail on an Evade Check combat or roll a C on an Evade Che'] },
@@ -106,7 +106,7 @@ const DCC_CLASSES = [
     benefits: ['+1 in a Weapon Skill of your choice', '+2 in a Spell of your choice', 'Access to all membership-based clubs, regardless of current memberships', 'Membership in the Dungeon Book of the Floor', 'Free room at all saferooms', 'You may gain access to a Patron', 'You pay +1 Mana to cast Spells that are not'] },
   { id: 'artist-alley-mogul', name: 'Artist Alley Mogul', classType: 'Bard, Merchant', stats: { CHA: 5, DEX: 5 }, skills: [{ skill: 'Dodge', rank: 2 }, { skill: 'Negotiation', rank: 2 }, { skill: 'Pathfinder', rank: 2 }], rank20: ['Dodge Skill can be raised to Rank 20'], page: 145,
     benefits: ['+2 Shield Spell', 'A 25% discount at all stores plus a 15% bonus to money earned from sales', '10% interest earned on all coins upon descent to the next floor', 'Silver Earth Box, with guaranteed Earth Hobby'] },
-  { id: 'former-child-actor', name: 'Former Child Actor', classType: 'Bard', stats: { CHA: 10 }, skills: [{ skill: 'Character Actor', rank: 3 }, { skill: 'Cockroach', rank: 2 }], prerequisites: 'Must have Popularity 3+, receiving the', page: 145, needsReview: true,
+  { id: 'former-child-actor', name: 'Former Child Actor', classType: 'Bard', stats: { CHA: 10 }, skills: [{ skill: 'Character Actor', rank: 3 }, { skill: 'Cockroach', rank: 2 }], prerequisites: 'Must have Popularity 3+, receiving the Cut! achievement, to take this Class', page: 145, needsReview: true,
     benefits: ['Immunity to Poison and all diseases', 'The Manager Benefit', 'Silver Earth Box, with guaranteed Earth Hobby Potion'] },
   { id: 'necrobard', name: 'NecroBard', classType: 'Bard, Necromancer', stats: { CHA: 3, CON: 3, INT: 3 }, skills: [{ skill: 'Performance', rank: 4 }], page: 146,
     benefits: ['2 Strength', '+3 Turn Undead and Panty Dropper Spells', 'Access to all membership-based clubs, regardless of current memberships', 'Free room at all saferooms', 'You pay +1 Mana to cast Spells that are not'] },
@@ -178,7 +178,7 @@ const DCC_CLASSES = [
     benefits: ['Can see in total darkness', '1 x Floor Number gold for every Mob killed with a melee weapon', 'Access to the Desperado Club', 'Cannot choose this Class if you have access to Club'] },
   { id: 'bomb-squad-tech', name: 'Bomb Squad Tech', classType: 'Rogue', stats: { CON: 1, DEX: 2 }, skills: [{ skill: 'Bomb Surgeon', rank: 3 }, { skill: 'Find Trap', rank: 3 }], prerequisites: 'This limited Class is only available to crawlers who\'ve earned the Boom! Achievement', page: 156, needsReview: true,
     benefits: ['2 Intelligence (After all, only dumbasses would choose to do this for a living.)', '+2 in all Explosive-based Skills', '+1 DR Buff', 'Silver Earth Box, with guaranteed Earth Hobby Potion'] },
-  { id: 'compensated-anarchist', name: 'Compensated Anarchist', classType: 'Monk, Rogue', stats: { CHA: 5, INT: 1 }, skills: [{ skill: 'Backfire', rank: 2 }, { skill: 'Escape Plan', rank: 2 }, { skill: 'Find Trap', rank: 2 }, { skill: 'Bomb Surgeon', rank: 1 }, { skill: 'Hide in Shadows', rank: 1 }, { skill: 'Trap Engineer', rank: 1 }, { skill: 'Unarmed Combat', rank: 1 }], prerequisites: 'This limited Class is only available to crawlers who have Popularity 3 or higher and have', page: 157,
+  { id: 'compensated-anarchist', name: 'Compensated Anarchist', classType: 'Monk, Rogue', stats: { CHA: 5, INT: 1 }, skills: [{ skill: 'Backfire', rank: 2 }, { skill: 'Escape Plan', rank: 2 }, { skill: 'Find Trap', rank: 2 }, { skill: 'Bomb Surgeon', rank: 1 }, { skill: 'Hide in Shadows', rank: 1 }, { skill: 'Trap Engineer', rank: 1 }, { skill: 'Unarmed Combat', rank: 1 }], prerequisites: 'This limited Class is only available to crawlers who have Popularity 3 or higher and have Rank 5+ in the Explosives Handling Skill', page: 157,
     benefits: ['+1 Fear Spell', 'Add no Stat Mod bonus damage when using Edged', 'You pay +3 Mana to cast damage-dealing Spells', 'At the end of each floor, add 1 to one of your trap-related Skill Advancement Checks', 'At the end of each floor, add 1 to one of your bomb-related Skill Advancement Checks', 'Access to the Desperado Club', 'Access to the Naughty Boys Employment Agency', 'Silver Earth Box, with guaranteed Earth Hobby Potion'] },
   { id: 'high-rise-grifter', name: 'High Rise Grifter', classType: 'Rogue', stats: { CHA: 1, INT: 1 }, skills: [{ skill: 'Deception', rank: 4 }, { skill: 'Stealth', rank: 4 }, { skill: 'Dagger', rank: 2 }, { skill: 'Escape Plan', rank: 2 }, { skill: 'Determine Value', rank: 1 }, { skill: 'Negotiation', rank: 1 }], page: 157,
     benefits: ['Access to the Desperado Club', 'Cannot choose this Class if you have access to Club', 'Silver Earth Box, with guaranteed Earth Hobby Potion'] },
@@ -193,20 +193,28 @@ function dccClass(id) { return DCC_CLASSES.find(c => c.id === id) || null; }
 
 // Does a crawler meet an entry's Stat and Skill prerequisites?
 //
-// The Skill list has to come from dccFinalSkills(), which is live throughout
-// creation. Reading char.blocks.skills instead — which dccFinishCreation does
-// not write until the wizard has already ended — meant that during creation
-// this saw an empty list: the one gate it could parse was unsatisfiable, and
-// the other thirteen fell through to "no opinion" and were free picks.
+// The requirement is one English sentence that may carry several clauses joined
+// by "and", so every matcher below scans the WHOLE text and collects what it
+// finds, rather than the old chain of regexes where the first one to match won
+// and the rest of the sentence was ignored. A clause the app cannot check —
+// an achievement, the crawler's gender — is reported as a note instead of a
+// lock, so the card shows the requirement without pretending to have verified
+// it.
 //
-// The book also gates some entries on things the app cannot see (achievements,
-// story events, the crawler's gender). Those come back ok:true with a note, so
-// the card can show the requirement without pretending to have checked it.
+// The Skill list must come from dccFinalSkills(), which is live throughout
+// creation. char.blocks.skills is not written until the wizard has already
+// ended, so anything reading it sees nothing while you are choosing.
 function dccPrereqSkills(char) {
+  // Once creation has finished, blocks.skills is the truth: it is what the
+  // sheet shows and what the player advances from use, so it drifts above the
+  // creation-derived list. Before that it does not exist at all, and the live
+  // list is the only thing there is.
+  const block = (char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+  if (block.length) return block;
   if (typeof dccFinalSkills === 'function') {
     try { const l = dccFinalSkills(char); if (l && l.length) return l; } catch (e) {}
   }
-  return (char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+  return [];
 }
 function dccPrereqPopularity(char) {
   if (char.blocks && char.blocks.popularity && typeof char.blocks.popularity.current === 'number') {
@@ -215,6 +223,12 @@ function dccPrereqPopularity(char) {
   // Before the finish step lands the block, Popularity is CHA Mod x2 (p. 111).
   return (typeof dccModOf === 'function' ? dccModOf(char, 'CHA') : 0) * 2;
 }
+// A Skill's catalogue category ("Edged Weapon"), for the "any X Weapon" and
+// "any X-based Skill" forms. A crawler's own Skill entries do not carry it.
+function dccPrereqCategory(name) {
+  const cat = typeof dccSkillByName === 'function' ? dccSkillByName(name) : null;
+  return (cat && cat.category) || '';
+}
 const DCC_STAT_WORDS = { Strength: 'STR', Intelligence: 'INT', Constitution: 'CON',
                          Dexterity: 'DEX', Charisma: 'CHA' };
 
@@ -222,51 +236,83 @@ function dccMeetsPrereq(char, entry) {
   const text = entry.prerequisites;
   if (!text) return { ok: true };
   const list = dccPrereqSkills(char);
+  const has = (rank, pred) => list.some(s => (s.rank || 0) >= rank && pred(s));
+  const fails = [];
+  const notes = [];
+  let checked = 0;
+  let m;
 
   // "at least one Strength or Dexterity-based Skill at Rank 5+"
-  const byStat = text.match(/at least one (\w+)[ -]?(?:or (\w+)[ -]?)?based Skill at Rank (\d+)/i);
-  if (byStat) {
-    const want = [byStat[1], byStat[2]].filter(Boolean)
-      .map(w => DCC_STAT_WORDS[w]).filter(Boolean);
-    const rank = parseInt(byStat[3], 10) || 0;
-    const hit = list.some(s => (s.rank || 0) >= rank && want.indexOf(s.stat) >= 0);
-    return hit ? { ok: true } : { ok: false, why: text };
+  const byStat = /at least one (\w+)[ -]?(?:or (\w+)[ -]?)?based Skill at Rank (\d+)/gi;
+  while ((m = byStat.exec(text))) {
+    const want = [m[1], m[2]].filter(Boolean).map(w => DCC_STAT_WORDS[w]).filter(Boolean);
+    const rank = parseInt(m[3], 10) || 0;
+    checked++;
+    if (!has(rank, s => want.indexOf(s.stat) >= 0)) fails.push(text);
   }
 
-  // "Rank 5+ in the Smush Skill", "Rank 5+ in the Jumping or Light on Your Feet"
-  const byName = text.match(/Rank (\d+)\+?\s*(?:with|in)\s+(?:the\s+)?([A-Za-z' ]+?)(?:\s+Skill|\s*$|,)/i);
-  if (byName) {
-    const rank = parseInt(byName[1], 10) || 0;
-    const names = byName[2].split(/\s+or\s+/i).map(n => n.trim().toLowerCase()).filter(Boolean);
-    // The source text for a few entries is truncated mid-sentence, so a name
-    // that matches nothing in the catalogue is not evidence the crawler fails.
+  // "Rank 5+ in the Smush Skill", "Rank 5+ in the Jumping or Light on Your Feet Skill"
+  const byName = /Rank (\d+)\+?\s*(?:in|with)\s+the\s+([A-Za-z' ]+?)\s+Skill/gi;
+  while ((m = byName.exec(text))) {
+    const rank = parseInt(m[1], 10) || 0;
+    const names = m[2].split(/\s+or\s+/i).map(n => n.trim().toLowerCase()).filter(Boolean);
     const known = names.filter(n => typeof dccSkillByName === 'function' && dccSkillByName(n));
-    if (!known.length) return { ok: true, note: text };
-    const hit = list.some(s => (s.rank || 0) >= rank && known.indexOf(String(s.name).toLowerCase()) >= 0);
-    return hit ? { ok: true } : { ok: false, why: text };
+    // A name that matches nothing in the catalogue is a gap in our data, not
+    // evidence the crawler fails.
+    if (!known.length) { notes.push(text); continue; }
+    checked++;
+    if (!has(rank, s => known.indexOf(String(s.name).toLowerCase()) >= 0)) fails.push(text);
+  }
+
+  // "Rank 5+ with any Edged Weapon"
+  const byCat = /Rank (\d+)\+?\s*(?:in|with)\s+any\s+([A-Za-z -]+?)\s*(?:$|,|\.)/gi;
+  while ((m = byCat.exec(text))) {
+    const rank = parseInt(m[1], 10) || 0;
+    const want = m[2].trim().toLowerCase();
+    checked++;
+    if (!has(rank, s => dccPrereqCategory(s.name).toLowerCase().indexOf(want) >= 0)) fails.push(text);
+  }
+
+  // "any Trap-based Skill" — a family named by keyword rather than by category.
+  const byKeyword = /any\s+([A-Za-z]+)-based Skill/gi;
+  while ((m = byKeyword.exec(text))) {
+    const want = m[1].trim().toLowerCase();
+    if (DCC_STAT_WORDS[m[1]]) continue;                 // that is the Stat form above
+    // Ranks are stated once for the whole sentence, so reuse the last one seen.
+    const r = /Rank (\d+)/i.exec(text);
+    const rank = r ? parseInt(r[1], 10) : 0;
+    checked++;
+    if (!has(rank, s => (String(s.name) + ' ' + dccPrereqCategory(s.name)).toLowerCase().indexOf(want) >= 0)) {
+      fails.push(text);
+    }
   }
 
   // "3 or more Popularity", "Popularity 3+", "Popularity 3 or higher"
-  const pop = text.match(/(\d+)\s+or more Popularity/i)
-           || text.match(/Popularity\s+(\d+)\s*(?:\+|or higher)/i);
+  const pop = /(\d+)\s+or more Popularity/i.exec(text)
+           || /Popularity\s+(\d+)\s*(?:\+|or higher)/i.exec(text);
   if (pop) {
     const need = parseInt(pop[1], 10) || 0;
     const have = dccPrereqPopularity(char);
-    return have >= need ? { ok: true }
-      : { ok: false, why: text + ' (you have ' + have + ')' };
+    checked++;
+    if (have < need) fails.push(text + ' (you have ' + have + ')');
   }
 
   // "only available to crawlers who are already a Cat" / "to cat-based Races"
-  const family = text.match(/already an? ([A-Za-z ]+?)(?:\s*$|,|\.)/i)
-              || text.match(/only available to ([a-z]+)-based Races/i);
-  if (family) {
-    const want = family[1].trim().toLowerCase();
-    const mine = String((char.race || '')).toLowerCase();
+  const fam = /already an? ([A-Za-z ]+?)(?:\s*$|,|\.)/i.exec(text)
+           || /only available to ([a-z]+)-based Races/i.exec(text);
+  if (fam) {
+    const want = fam[1].trim().toLowerCase();
     const picked = char.dcc && char.dcc.picks && char.dcc.picks.race;
     const pickedName = picked ? String((dccRace(picked) || {}).name || '').toLowerCase() : '';
-    const hit = (mine + ' ' + pickedName).indexOf(want) >= 0;
-    return hit ? { ok: true } : { ok: false, why: text };
+    checked++;
+    if ((String(char.race || '').toLowerCase() + ' ' + pickedName).indexOf(want) < 0) fails.push(text);
   }
 
-  return { ok: true, note: text };
+  // Clauses the app has no way to verify.
+  if (/achievement/i.test(text)) notes.push('Requires an achievement the app cannot check.');
+  if (/female crawlers/i.test(text)) notes.push('Limited to female crawlers.');
+
+  if (fails.length) return { ok: false, why: fails[0] };
+  if (notes.length || !checked) return { ok: true, note: text };
+  return { ok: true };
 }
