@@ -13,6 +13,12 @@ function renderHero(){
       S.char=(scratch&&scratch.systemId===SYS.id)?scratch
             :(SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}});
     }
+    // A pack with creation screens starts there and stays until it is finished.
+    if((SYS.creation||[]).length&&!(S.char.creation&&S.char.creation.complete)){
+      creation.style.display='block';sheet.style.display='none';
+      renderWizard('hero-creation');
+      return;
+    }
     creation.style.display='none';sheet.style.display='block';
     renderSysSheet();
     return;

@@ -103,6 +103,9 @@ registerSystem({
     ],
   },
 
+  creation: DCC_SCREENS,
+  finishCreation: dccFinishCreation,
+
   // ─── formulas ─────────────────────────────────────────────────────────────
   // Pure: take the character, return a number. Called on every render.
   derive: {

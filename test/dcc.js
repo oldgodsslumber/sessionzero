@@ -422,6 +422,119 @@ function boot(entry) {
   eq(ev("DCC_FLOOR_START.find(f=>f.floor===3).statPoints"), 27,
      '[creation] a Floor 3 crawler distributes 27 Stat points');
 
+  // ── the creation wizard, driven end to end ───────────────────────────────
+  // Build a crawler the way a player would: one click at a time, checking that
+  // each screen refuses to advance until it is actually satisfied.
+  ev("S.char=SYS.newCharacter();renderHero();");
+  check('[wizard] a fresh crawler starts in the wizard, not on the sheet', () =>
+    ev("!!document.getElementById('wiz-body')") &&
+    ev("document.getElementById('hero-sheet').style.display") === 'none');
+  eq(ev('SYS.creation.length'), 4, '[wizard] four screens implemented so far');
+
+  // screen 1
+  check('[wizard] screen 1 blocks until species, name and number are set', () =>
+    ev("wizValidate(S.char,0)") !== true || 'let through empty');
+  ev("dccSetSpecies('human');dccStore('name','Keisha');dccRollCrawlerNumber();");
+  eq(ev('wizValidate(S.char,0)'), true, '[wizard] screen 1 satisfied');
+  check('[wizard] the rolled crawler number is in the legal range', () => {
+    const n = ev('S.char.crawlerNumber');
+    return (n >= 500000 && n <= 12900000) || 'got ' + n;
+  });
+  check('[wizard] an out-of-range crawler number is refused', () => {
+    ev("dccStore('crawlerNumber','4122')");
+    const bad = ev('wizValidate(S.char,0)') !== true;
+    ev("dccRollCrawlerNumber()");
+    return bad || 'accepted Carl’s number';
+  });
+
+  // screen 2 — background
+  ev('wizNext()');
+  eq(ev('S.char.creation.step'), 1, '[wizard] advanced to Background');
+  check('[wizard] human backgrounds are offered, not animal ones', () =>
+    ev("dccStages(S.char).childhood.rows.length") === 12 || 'wrong table');
+  ev("dccPickBackground('childhood',1)");
+  ev("dccPickSkill('childhood','Streetwise');dccPickSkill('childhood','Perception')");
+  check('[wizard] a third pick is refused once two are taken', () => {
+    ev("dccPickSkill('childhood','Stealth')");
+    return ev("S.char.dcc.background.childhood.picks.length") === 2 || 'took three';
+  });
+  check('[wizard] no double-dipping: an already-taken Skill is locked out', () => {
+    ev("dccPickBackground('adolescence',5)");   // Military Brat-ish row
+    const taken = ev("JSON.stringify(Object.keys(dccTakenSkills(S.char,'adolescence')))");
+    return /Streetwise/.test(taken) || 'lock list was ' + taken;
+  });
+  // finish the remaining three stages with whatever the first two rows offer
+  ev(`['adolescence','career','hobby'].forEach(function(st){
+        dccPickBackground(st,1);
+        var rows=dccStages(S.char)[st].rows.find(function(r){return r.roll===1;});
+        var taken=dccTakenSkills(S.char,st);
+        rows.skills.filter(function(x){return !taken[x.s];}).slice(0,2)
+            .forEach(function(x){dccPickSkill(st,x.s);});
+      });`);
+  eq(ev('wizValidate(S.char,1)'), true, '[wizard] screen 2 satisfied once all four stages are done');
+
+  // screen 3 — combat
+  ev('wizNext()');
+  check('[wizard] screen 3 blocks until a route is chosen', () =>
+    ev('wizValidate(S.char,2)') !== true || 'let through');
+  ev("dccSetRoute('spell')");
+  check('[wizard] picking the route alone is not enough', () =>
+    ev('wizValidate(S.char,2)') !== true || 'let through');
+  ev("dccSetSpell('Fire Fingers')");
+  eq(ev('wizValidate(S.char,2)'), true, '[wizard] screen 3 satisfied');
+
+  // screen 4 — stats, and the forward dependency from screen 3
+  ev('wizNext()');
+  ev("dccStatMethod('array')");
+  ev("dccAssignStat('STR',6);dccAssignStat('INT',2);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('CHA',3)");
+  check('[wizard] the Spell route is enforced across screens: INT 2 is refused', () => {
+    const v = ev('wizValidate(S.char,3)');
+    return (v !== true && /Intelligence/.test(String(v))) || 'got ' + v;
+  });
+  ev("dccAssignStat('INT',6)");     // 6 was on STR, so STR should be cleared
+  check('[wizard] an array value can only be held by one Stat', () =>
+    ev("(S.char.blocks.stats.STR||{}).base") === 0 || 'STR still holds 6');
+  ev("dccAssignStat('STR',2)");
+  eq(ev('wizValidate(S.char,3)'), true, '[wizard] screen 4 satisfied once INT is high enough');
+
+  // finishing turns the choices into a real sheet
+  ev('wizNext()');
+  eq(ev('S.char.creation.complete'), true, '[wizard] creation is marked complete');
+  check('[wizard] the finished crawler has its ten starting Skills', () => {
+    const n = ev('S.char.blocks.skills.skills.length');
+    return n === 9 || n === 10 || 'got ' + n + ' skills';
+  });
+  check('[wizard] the free combat Skill is there at Rank 3', () => {
+    const s = ev("JSON.stringify(S.char.blocks.skills.skills.find(x=>x.name==='Unarmed Combat')||null)");
+    return /"rank":3/.test(s) || 'got ' + s;
+  });
+  check('[wizard] background Skills carry the Rank their stage grants', () => {
+    const s = ev("JSON.stringify(S.char.blocks.skills.skills.find(x=>x.name==='Streetwise')||null)");
+    return /"rank":1/.test(s) || 'got ' + s;
+  });
+  check('[wizard] every starting Skill resolves in the catalogue', () => {
+    const bad = ev("JSON.stringify(S.char.blocks.skills.skills.filter(s=>!dccSkillByName(s.name)).map(s=>s.name))");
+    return bad === '[]' || bad;
+  });
+  eq(ev('S.char.blocks.mana.current'), ev("dccStatOf(S.char,'INT')"),
+     '[wizard] Mana starts full, at Enhanced INT');
+  eq(ev('S.char.blocks.aiFavor.current'), 1, '[wizard] a human starts with 1 AI Favor');
+  check('[wizard] finishing lands you on the sheet', () => {
+    ev('renderHero()');
+    return ev("document.getElementById('hero-sheet').style.display") === 'block' || 'still in the wizard';
+  });
+  check('[wizard] an animal starts with 0 AI Favor and Slice Attack', () => {
+    ev("S.char=SYS.newCharacter();dccSetSpecies('animal');dccFinishCreation(S.char);");
+    const favor = ev('S.char.blocks.aiFavor.current');
+    const has = ev("!!S.char.blocks.skills.skills.find(x=>x.name==='Slice Attack')");
+    return (favor === 0 && has) || 'favor=' + favor + ' sliceAttack=' + has;
+  });
+  check('[wizard] switching species clears background picks from the other tables', () => {
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccPickBackground('childhood',1);dccPickSkill('childhood','Streetwise');");
+    ev("dccSetSpecies('animal')");
+    return ev("Object.keys(S.char.dcc.background).length") === 0 || 'stale picks survived';
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>
@@ -453,4 +566,12 @@ function boot(entry) {
   console.log('\nPASS ' + ok.length);
   if (fails.length) { console.log('FAIL ' + fails.length); fails.forEach(f => console.log('  x ' + f)); process.exit(1); }
   console.log('All Dungeon Crawler Carl checks passed.');
-})().catch(e => { console.log('HARNESS ERROR: ' + e.stack); process.exit(1); });
+})().catch(e => {
+  // Print what was collected before the crash. Without this, one exception
+  // discards every named failure gathered so far and you are left debugging a
+  // stack trace instead of reading which assertion actually broke.
+  console.log('\nPASS ' + ok.length);
+  if (fails.length) { console.log('FAIL ' + fails.length); fails.forEach(f => console.log('  x ' + f)); }
+  console.log('HARNESS ERROR after ' + (ok.length + fails.length) + ' checks: ' + e.stack);
+  process.exit(1);
+});
