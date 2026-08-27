@@ -26,7 +26,9 @@ function boot(entry) {
   const vc = new VirtualConsole().on('jsdomError', e => errs.push(e.message));
   const dom = new JSDOM(loadAppHTML(entry), {
     runScripts: 'dangerously', pretendToBeVisual: true,
-    url: 'http://localhost/', virtualConsole: vc,
+    // Mirror the deployed shape: a game is served from its own folder, so
+    // document.currentScript.src (and therefore SHELL_BASE) has that depth.
+    url: 'http://localhost/' + entry, virtualConsole: vc,
   });
   dom.window.alert = () => {}; dom.window.confirm = () => true;
   return new Promise(res => setTimeout(() => res({ w: dom.window, errs }), 500));
@@ -34,9 +36,9 @@ function boot(entry) {
 
 (async function () {
   // ── one entry file per game: each registers exactly its own pack ──────────
-  const dc = await boot('daring-comics.html');
+  const dc = await boot('daring-comics/index.html');
   eq(dc.errs.length, 0, '[boot] no uncaught errors in the Daring Comics app');
-  eq(dc.w.eval('SYS.id'), 'daring-comics', '[entry] daring-comics.html selects Daring Comics');
+  eq(dc.w.eval('SYS.id'), 'daring-comics', '[entry] daring-comics/ selects Daring Comics');
   eq(dc.w.eval('listSystems().length'), 1, '[entry] ...and ships only its own pack');
   eq(dc.w.eval('sysUsesBlocks()'), false, '[entry] Daring Comics has no blocks -> legacy sheet');
   eq(dc.w.eval("lex('universe')"), 'Universe', '[lexicon] DC keeps its comic words');
@@ -44,10 +46,10 @@ function boot(entry) {
   eq(dc.w.eval("!!document.querySelector('#theme-wrap .theme-swatch')"), true, '[theme] swatches rendered from the pack');
   eq(dc.w.eval("!!document.getElementById('nav')"), true, '[chrome] the nav was built at boot, not shipped in the html');
 
-  const g = await boot('dungeon-crawler-carl.html');
+  const g = await boot('dcc/index.html');
   eq(g.errs.length, 0, '[boot] no uncaught errors in the DCC app');
   const w = g.w, ev = s => w.eval(s);
-  eq(ev('SYS.id'), 'dungeon-crawler-carl', '[entry] dungeon-crawler-carl.html selects DCC');
+  eq(ev('SYS.id'), 'dungeon-crawler-carl', '[entry] dcc/ selects DCC');
   eq(ev('listSystems().length'), 1, '[entry] ...and does not ship the Daring Comics rules');
   eq(ev("typeof POWERS"), 'undefined', '[entry] no Daring Comics data leaked into the DCC app');
   eq(ev("document.getElementById('theme-wrap').style.display"), 'none', '[theme] a pack with no themes gets no swatch row');
@@ -55,6 +57,29 @@ function boot(entry) {
   eq(ev("lex('hero')"), 'Crawler', '[lexicon] hero -> Crawler');
   eq(ev("lex('region')"), 'Neighborhood', '[lexicon] region -> Neighborhood');
   eq(ev("sysKey('saves')"), 'rpg:dungeon-crawler-carl:saves', '[storage] keys namespace per system');
+
+  // ── SHELL_BASE: runtime paths must survive a game living in a subfolder ──
+  // A game is served from /dcc/, so anything resolved at runtime against the
+  // document (the lazy firebase-config and multiplayer loads) would otherwise
+  // look for /dcc/core/mp.js. Script tags in the entry file are fine; these are
+  // not. The harness inlines scripts, so currentScript is null here and the
+  // derivation is checked directly.
+  eq(ev("shellBaseFrom('https://x.github.io/sessionzero/core/system.js')"),
+     'https://x.github.io/sessionzero/', '[base] strips core/system.js from a project-site URL');
+  eq(ev("shellBaseFrom('https://x.github.io/core/system.js')"),
+     'https://x.github.io/', '[base] works on a user site with no repo path');
+  eq(ev("shellBaseFrom('https://x.github.io/sessionzero/core/system.js?v=3')"),
+     'https://x.github.io/sessionzero/', '[base] tolerates a cache-busting query');
+  eq(ev("shellBaseFrom('file:///D:/rpg/core/system.js')"),
+     'file:///D:/rpg/', '[base] works from the filesystem');
+  eq(ev("shellBaseFrom('')"), '', '[base] degrades to a relative path when unknown');
+  eq(ev("shellBaseFrom(null)"), '', '[base] tolerates a null src');
+  check('[base] a game in a subfolder resolves core/ at the shell root, not under itself', () => {
+    const b = ev("shellBaseFrom('https://x.github.io/sessionzero/core/system.js')");
+    const p = b + 'core/mp.js';
+    if (/\/dcc\//.test(p)) return 'resolved under the game folder: ' + p;
+    return p === 'https://x.github.io/sessionzero/core/mp.js' || 'got ' + p;
+  });
 
   // ── Stat Mods, Table 2 / Table 20 (pp. 57, 110) ──────────────────────────
   const modCases = [[1,1],[2,1],[3,2],[5,2],[6,3],[9,3],[10,4],[19,4],[20,5],[49,5],

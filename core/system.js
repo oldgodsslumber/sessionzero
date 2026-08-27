@@ -13,6 +13,28 @@
 // registerSystem() at load time, but nothing here runs against the DOM or
 // against app state until the boot IIFE in core/mp-boot.js.
 
+// ─── where the shell lives ──────────────────────────────────────────────────
+// Each game sits in its own folder (dcc/, daring-comics/, ...) so its Pages URL
+// is a clean /dcc/ rather than /dungeon-crawler-carl.html. That puts the entry
+// file one level below core/, which breaks any path resolved at RUNTIME against
+// the document — the lazy multiplayer and firebase-config loads. Script tags in
+// the entry file are fine because they are written relative to it.
+//
+// So derive the shell root from this file's own <script src> once, at load, and
+// build runtime paths from it. Works at any folder depth, and on a user site or
+// a project site alike.
+// Split out so it is testable: the jsdom harness inlines scripts, which leaves
+// document.currentScript null, so the derivation itself has to be checked directly.
+function shellBaseFrom(src) {
+  if (!src) return '';
+  return String(src).replace(/core\/system\.js(\?.*)?$/, '');
+}
+const SHELL_BASE = (function () {
+  try { return shellBaseFrom(document.currentScript && document.currentScript.src); }
+  catch (e) { return ''; }
+})();
+function shellPath(rel) { return SHELL_BASE + rel; }
+
 // ─── lexicon ────────────────────────────────────────────────────────────────
 // User-facing vocabulary. The shell is deliberately neutral (decision 4); a
 // pack overrides only the words its game actually uses differently.

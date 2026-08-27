@@ -18,7 +18,7 @@ let _cfgTried=false;
 async function _loadLocalConfig(){
   if(_cfgTried)return;
   _cfgTried=true;
-  try{await _loadScript('firebase-config.js');}catch(e){}
+  try{await _loadScript(shellPath('firebase-config.js'));}catch(e){}
 }
 function openMultiplayer(){
   if(window.MP&&window.DC_BOOT_MP){DC_MP.openLobby();return;}
@@ -34,8 +34,8 @@ function openMultiplayer(){
       await _loadScript(FIREBASE_SDK+'firebase-app-compat.js');
       await _loadScript(FIREBASE_SDK+'firebase-auth-compat.js');
       await _loadScript(FIREBASE_SDK+'firebase-database-compat.js');
-      await _loadScript('core/mp.js');
-      await _loadScript('core/app-mp.js');
+      await _loadScript(shellPath('core/mp.js'));
+      await _loadScript(shellPath('core/app-mp.js'));
       DC_BOOT_MP(window.FIREBASE_CONFIG);
     }catch(e){
       _mpLoading=null;

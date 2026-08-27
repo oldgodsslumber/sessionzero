@@ -1,30 +1,50 @@
-// Loads index.html for JSDOM with its external <script src> files inlined.
+// Loads a game's entry file for JSDOM with its external assets inlined.
 //
-// The app is split across core/*.js and systems/<id>/*.js, but JSDOM is
-// constructed from an HTML *string* with no `resources:'usable'`, so it never
-// fetches those files. Rather than turn on network/file loading (slow, and it
-// would make test runs depend on fetch ordering), we substitute each tag with
-// its file contents in place. Order and semantics are identical to the browser:
-// same files, same sequence, all still classic scripts sharing one global.
+// Each game lives in its own folder (dcc/index.html, daring-comics/index.html)
+// so its Pages URL is a clean /dcc/. JSDOM is constructed from an HTML *string*
+// with no `resources:'usable'`, so it never fetches the linked files. Rather
+// than turn on network/file loading (slow, and it would make runs depend on
+// fetch ordering), substitute each tag with its file contents in place. Order
+// and semantics match the browser: same files, same sequence, all still classic
+// scripts sharing one global.
+//
+// Paths in an entry file are relative to that file (../core/system.js), so they
+// are resolved against its directory, not the repo root.
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 
-const TAG = /<script src="([^"]+)"><\/script>/g;
+const SCRIPT_TAG = /<script src="([^"]+)"><\/script>/g;
+const STYLE_TAG = /<link rel="stylesheet" href="([^"]+)">/g;
 
-// entryFile defaults to the Daring Comics app; the DCC suite passes its own.
+const DEFAULT_ENTRY = 'daring-comics/index.html';
+
 function loadAppHTML(entryFile) {
-  const html = fs.readFileSync(path.join(ROOT, entryFile || 'daring-comics.html'), 'utf8');
-  return html.replace(TAG, (m, src) => {
-    const file = path.join(ROOT, src);
-    if (!fs.existsSync(file)) throw new Error('index.html references a missing script: ' + src);
-    // A literal </script> inside the source would close the tag early. None of
-    // the app files contain one (template literals escape it as <\/script>),
-    // so guard rather than silently produce a broken document.
-    const js = fs.readFileSync(file, 'utf8');
-    if (js.includes('</scr' + 'ipt>')) throw new Error('cannot inline ' + src + ': contains a literal </script>');
-    return '<script>' + js + '</script>';
-  });
+  const entry = entryFile || DEFAULT_ENTRY;
+  const entryDir = path.dirname(path.join(ROOT, entry));
+  const html = fs.readFileSync(path.join(ROOT, entry), 'utf8');
+
+  const read = (rel, what) => {
+    const file = path.resolve(entryDir, rel);
+    if (!fs.existsSync(file)) {
+      throw new Error(entry + ' references a missing ' + what + ': ' + rel +
+                      ' (resolved to ' + file + ')');
+    }
+    return fs.readFileSync(file, 'utf8');
+  };
+
+  return html
+    .replace(STYLE_TAG, (m, href) => '<style>' + read(href, 'stylesheet') + '</style>')
+    .replace(SCRIPT_TAG, (m, src) => {
+      const js = read(src, 'script');
+      // A literal </script> inside the source would close the tag early. None of
+      // the app files contain one (template literals escape it as <\/script>),
+      // so guard rather than silently produce a broken document.
+      if (js.includes('</scr' + 'ipt>')) {
+        throw new Error('cannot inline ' + src + ': contains a literal </script>');
+      }
+      return '<script>' + js + '</script>';
+    });
 }
 
-module.exports = { loadAppHTML };
+module.exports = { loadAppHTML, DEFAULT_ENTRY };

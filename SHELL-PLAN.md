@@ -189,7 +189,7 @@ those while the vocabulary is still soft, or they arrive as retrofits.
 ## 6. Repo strategy
 
 ~~Do it in-place on a long-lived branch in `daringcomics`.~~ **Superseded.** The
-shell was staged into its own folder (`d:/claudecode/rpgshell`) after Phase 0, cloned
+shell was staged into its own folder (`d:/claudecode/sessionzero`, published as `oldgodsslumber/sessionzero`) after Phase 0, cloned
 from the `shell` branch so the history came with it, with the `origin` remote removed
 so nothing can push back to `daringcomics`.
 

@@ -1,6 +1,9 @@
-# rpgshell
+# Session Zero
 
-A generic tabletop-RPG app shell: character sheets, NPC roster, hex-ish region
+A generic tabletop-RPG app shell. Live at
+**[oldgodsslumber.github.io/sessionzero](https://oldgodsslumber.github.io/sessionzero/)**.
+
+It gives you: character sheets, NPC roster, hex-ish region
 map with sub-zones, dice, conflict tracker, campaign log, print centre, an
 AI-assisted wiki/lore codex, multi-world saves, and Firebase multiplayer —
 with the **ruleset removed from the engine** and moved into a swappable system

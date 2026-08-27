@@ -1,8 +1,8 @@
 {
-  "name": "rpgshell",
+  "name": "sessionzero",
   "version": "1.0.0",
   "private": true,
-  "description": "Generic tabletop RPG shell \u2014 a static single-page app whose ruleset lives in a swappable system pack under systems/. This manifest exists only for the test suites; the app itself has no build step and no runtime dependencies.",
+  "description": "Session Zero \u2014 a generic tabletop RPG shell. One engine, one folder per game; the ruleset lives in a swappable system pack under systems/. This manifest exists only for the test suites; the app has no build step and no runtime dependencies.",
   "scripts": {
     "test": "node test/run.js"
   },
