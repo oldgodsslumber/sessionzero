@@ -136,6 +136,9 @@ them to the floor you're actually starting on. The shell's existing wizard maps
 cleanly; almost every step has a "roll or choose" table, so the generator hooks
 get heavy use.
 
+Full screen-by-screen design, including the animal-crawler branch and the
+cross-screen constraints, is in [CREATION.md](CREATION.md).
+
 **Base crawler (Floor 1)**
 
 | Step | Content |
@@ -292,7 +295,7 @@ several headings are mis-levelled. Consequences:
 | **D2** | Crawler sheet: Stats, Health Bar, Mana, Evade, DR, Move/Step. |
 | **D3** | Skills catalogue + the advancement checkbox loop. |
 | **D4** | Inventory / Hotlist / Gear Slots. |
-| **D5** | Creation wizard, steps 1–10 with all roll tables. |
+| **D5** | Creation wizard — nine screens, both phases. See [CREATION.md](CREATION.md). **Depends on D3.** |
 | **D6** | Races & Classes as a transactional diff, with prerequisite gating. |
 | **D7** | Spells, loot, crafting, pets/mounts/minions. |
 | **D8** | Combat tracker (5-step round) + Debuff durations. |
