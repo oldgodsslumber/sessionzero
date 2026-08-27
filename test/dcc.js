@@ -236,10 +236,31 @@ function boot(entry) {
   check('[isolation] the crawler persists to its own namespaced scratch key', () => {
     const raw = ev("localStorage.getItem(sysKey('scratch'))");
     if (!raw) return 'nothing written to ' + ev("sysKey('scratch')");
-    const c = JSON.parse(raw);
+    // The scratch key holds {char, session} since save() started persisting the
+    // table state too; sysScratchLoad() unwraps it and still reads a v1 key.
+    const env = JSON.parse(raw);
+    const c = env.v === 2 ? env.char : env;
     if (c.systemId !== 'dungeon-crawler-carl') return 'wrong systemId ' + c.systemId;
     if (!c.blocks || !c.blocks.stats || c.blocks.stats.STR.base !== 9) return 'stats not persisted';
     return true;
+  });
+  check('[isolation] the table state is saved alongside the crawler', () => {
+    // save() used to flash "Saved" while writing only the character, so the
+    // journal, the floor and a fight in progress were dropped on reload.
+    ev("S.floor=7;S.notes=[{id:'n1',type:'main',text:'floor 3 was bad',ts:1}];dccCombatStart();save();");
+    const sess = JSON.parse(ev("JSON.stringify(sysScratchSession())") || 'null');
+    if (!sess) return 'no session written';
+    if (sess.floor !== 7) return 'floor not saved: ' + sess.floor;
+    if (!sess.notes || sess.notes.length !== 1) return 'journal not saved';
+    return (sess.conflict && sess.conflict.active === true) || 'the fight was not saved';
+  });
+  check('[isolation] a v1 scratch key (bare character) still loads', () => {
+    // Put the real key back afterwards — the next check reads it.
+    const keep = ev("localStorage.getItem(sysKey('scratch'))");
+    ev("localStorage.setItem(sysKey('scratch'),JSON.stringify({systemId:'dungeon-crawler-carl',blocks:{stats:{STR:{base:4,bonus:0}}}}));");
+    const c = JSON.parse(ev("JSON.stringify(sysScratchLoad())"));
+    ev("localStorage.setItem(sysKey('scratch')," + JSON.stringify(keep) + ");");
+    return (c && c.blocks.stats.STR.base === 4) || 'old scratch key no longer readable';
   });
   check('[isolation] the scratch crawler is restored, not regenerated', () => {
     ev("S.char=null;renderHero();");

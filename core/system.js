@@ -138,13 +138,36 @@ function sysDerive(ref) {
 // systemId). Until then they persist to their own key. This is what keeps a
 // half-built pack from writing its character into whatever save file happens to
 // be loaded — which, since save() writes all of S, would clobber it.
-function sysScratchLoad() {
-  try { const d = localStorage.getItem(sysKey('scratch')); return d ? JSON.parse(d) : null; }
+// Returns the character. Pass raw=true for the whole envelope. A v1 scratch key
+// held the bare character, so unwrap only what is actually wrapped.
+function sysScratchLoad(raw) {
+  try {
+    const d = localStorage.getItem(sysKey('scratch'));
+    if (!d) return null;
+    const p = JSON.parse(d);
+    if (raw) return p;
+    return (p && p.v === 2) ? (p.char || null) : p;
+  }
   catch (e) { return null; }
 }
-function sysScratchSave(char) {
-  try { localStorage.setItem(sysKey('scratch'), JSON.stringify(char)); return true; }
-  catch (e) { return false; }
+// The session keys that belong to the table rather than to the character sheet.
+// save() used to write only the character while flashing "Saved", so the Crawl
+// Log, the floor, the map and an entire in-progress fight were silently dropped
+// on reload.
+const SYS_SESSION_KEYS = ['notes', 'floor', 'conflict', 'regions', 'activeRegion', 'npcs', 'universeId'];
+
+function sysScratchSave(char, session) {
+  try {
+    const payload = { char: char, session: session || null, v: 2 };
+    localStorage.setItem(sysKey('scratch'), JSON.stringify(payload));
+    return true;
+  } catch (e) { return false; }
+}
+
+// Pull the session half back out, or null if this scratch key predates it.
+function sysScratchSession() {
+  const d = sysScratchLoad(true);
+  return (d && d.v === 2) ? (d.session || null) : null;
 }
 
 // The character's display name, whatever the pack calls that field. Reads the

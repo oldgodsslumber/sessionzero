@@ -62,6 +62,12 @@ function openMultiplayer(){
     const first=listSaves().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))[0];
     if(first)loadSave(first.id);
   }
+  // A block pack has no save files yet (it lives on its own scratch key), so
+  // loadSave() never runs and nothing ever bound the universe. That left
+  // S.universeId null: the wiki refused to open, the universe bar read "No
+  // universe", and anything added to the bestiary was written nowhere.
+  if(typeof sysUsesBlocks==='function'&&sysUsesBlocks())bindUniverse();
   renderHero();
-  if(currentSaveId===null)openSlotModal();
+  // Only a pack that uses save files can be missing one.
+  if(currentSaveId===null&&!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))openSlotModal();
 })();

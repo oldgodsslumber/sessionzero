@@ -20,8 +20,13 @@ function randConcept(){return randFrom(ASPECT_PARTS.concept_a)+' '+randFrom(ASPE
 function randMotivation(){return randFrom(ASPECT_PARTS.motivation);}
 function randContingent(cat){const key=ASPECT_CAT_MAP[cat];return key?randFrom(ASPECT_PARTS[key]):randFrom(ASPECT_PARTS.core_value);}
 function exportJSON(){
-  const data=JSON.stringify(S,null,2);
-  const name=S.char?.costumedName||S.creation?.costumedName||'slot';
+  // Stamp the export with the game that produced it. Without this an export
+  // from one game imports cleanly into the other and then throws on every
+  // render, which bricked the app on the next launch.
+  const payload=Object.assign({},S,{systemId:(typeof SYS!=='undefined'&&SYS)?SYS.id:S.systemId||null});
+  const data=JSON.stringify(payload,null,2);
+  const name=(typeof sysCharName==='function'?sysCharName(S.char):null)
+    ||S.char?.costumedName||S.creation?.costumedName||'character';
   const blob=new Blob([data],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -37,6 +42,23 @@ function importJSON(){
       try{
         const data=JSON.parse(e.target.result);
         if(!data.series&&!data.char&&!data.creation){alert('Invalid save file.');return;}
+        // A save from another game has a different shape entirely. Importing it
+        // used to succeed, become the active save, and then throw on every
+        // render — including inside boot, which left the app blank with no way
+        // back to the save list.
+        const here=(typeof SYS!=='undefined'&&SYS)?SYS.id:null;
+        const from=data.systemId||null;
+        if(here&&from&&from!==here){
+          alert('That save is from a different game ('+from+'). Open it in that game instead.');
+          return;
+        }
+        if(here&&!from&&typeof sysUsesBlocks==='function'&&sysUsesBlocks()!==!!(data.blocks)){
+          // Older saves carry no stamp, so fall back to the one structural
+          // difference that always holds: a block pack stores char.blocks.
+          alert('That save does not match this game. Open it in the game that made it.');
+          return;
+        }
+        data.systemId=here||from;
         // Imports always land in a NEW save file — never overwrite whatever
         // happens to be open.
         if(!data.universeId&&currentUniverse())data.universeId=currentUniverse().id;

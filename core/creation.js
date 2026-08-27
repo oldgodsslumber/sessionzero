@@ -12,6 +12,10 @@ function renderHero(){
       const scratch=sysScratchLoad();
       S.char=(scratch&&scratch.systemId===SYS.id)?scratch
             :(SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}});
+      // Restore the table state saved alongside the character — the journal,
+      // the floor, the map and any fight that was in progress.
+      const sess=(typeof sysScratchSession==='function')?sysScratchSession():null;
+      if(sess)SYS_SESSION_KEYS.forEach(function(k){if(sess[k]!==undefined&&sess[k]!==null)S[k]=sess[k];});
     }
     // A pack with creation screens starts there and stays until it is finished.
     if((SYS.creation||[]).length&&!(S.char.creation&&S.char.creation.complete)){

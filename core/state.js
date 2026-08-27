@@ -39,19 +39,35 @@ let S=defaultState(),currentSaveId=null;
 // from the sheet, so a single all-saves blob would re-serialize every character
 // on every letter typed. dc_saves is a small manifest of summaries so the save
 // list renders from one parse instead of one per character.
-//   dc_saves        {version, activeId, order:[id], saves:{id:summary}}
-//   dc_save_<id>    the full state blob — the source of truth
+//   <ns>saves        {version, activeId, order:[id], saves:{id:summary}}
+//   <ns>save_<id>    the full state blob — the source of truth
+// where <ns> is dc_ for Daring Comics and rpg:<system>: for every other pack.
+// Both games run from the same origin, so they share localStorage. Until now
+// they also shared these keys, and Dungeon Crawler Carl would list, load and
+// overwrite Daring Comics characters — a crawler booted onto a DC save, and a
+// new crawler wrote a blank DC save over the active one.
+//
+// Daring Comics shipped first and owns the flat dc_* keys. Migrating a live
+// browser's saves carries real risk and buys nothing, so it keeps them, and
+// every other pack gets its own namespace. sysKey() already does this for the
+// scratch key; the save store simply never got the same treatment.
+function storeKey(name){
+  return (typeof SYS!=='undefined'&&SYS&&SYS.id&&SYS.id!=='daring-comics')
+    ? sysKey(name) : 'dc_'+name;
+}
+function savePrefix(){return storeKey('save_');}
+
 let SV=null;
 function loadSaves(){
   if(SV)return SV;
-  try{SV=JSON.parse(localStorage.getItem('dc_saves'))||null;}catch(e){SV=null;}
+  try{SV=JSON.parse(localStorage.getItem(storeKey('saves')))||null;}catch(e){SV=null;}
   if(!SV||typeof SV!=='object')SV={version:3,activeId:null,order:[],saves:{}};
   if(!Array.isArray(SV.order))SV.order=[];
   if(!SV.saves||typeof SV.saves!=='object')SV.saves={};
   return SV;
 }
-function persistSaves(){try{localStorage.setItem('dc_saves',JSON.stringify(SV));return true;}catch(e){reportQuota(e);return false;}}
-function saveKey(id){return'dc_save_'+id;}
+function persistSaves(){try{localStorage.setItem(storeKey('saves'),JSON.stringify(SV));return true;}catch(e){reportQuota(e);return false;}}
+function saveKey(id){return savePrefix()+id;}
 function getSaveData(id){try{const d=localStorage.getItem(saveKey(id));return d?JSON.parse(d):null;}catch(e){return null;}}
 
 function _stateHP(st){
@@ -145,10 +161,11 @@ function renameSave(id){
 // an import, a second tab, hand-edited storage — is repaired from the blobs.
 function rebuildSaveIndex(){
   loadSaves();
+  const pfx=savePrefix();
   const found=[];
   for(let i=0;i<localStorage.length;i++){
     const k=localStorage.key(i);
-    if(k&&k.indexOf('dc_save_')===0)found.push(k.slice(8));
+    if(k&&k.indexOf(pfx)===0)found.push(k.slice(pfx.length));
   }
   const kept=SV.order.filter(id=>found.indexOf(id)>=0);
   found.forEach(function(id){if(kept.indexOf(id)<0)kept.push(id);});
@@ -169,7 +186,8 @@ function rebuildSaveIndex(){
 function saveIndexHealthy(){
   loadSaves();
   let n=0;
-  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf('dc_save_')===0)n++;}
+  const pfx=savePrefix();
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(pfx)===0)n++;}
   return n===SV.order.length;
 }
 
@@ -181,10 +199,10 @@ function legacySlotCount(){let c=0;for(let i=0;i<10;i++)if(legacySlotData(i))c++
 // presses "Clean up old slots" in the save manager.
 function migrateSlotsToSaves(){
   loadSaves();
-  let v=null;try{v=localStorage.getItem('dc_schema_version');}catch(e){}
+  let v=null;try{v=localStorage.getItem(storeKey('schema_version'));}catch(e){}
   if(v==='3')return 0;
   let moved=0;
-  const legacyActive=(function(){try{const a=localStorage.getItem('dc_active_slot');return a===null||a===''?null:parseInt(a);}catch(e){return null;}})();
+  const legacyActive=(function(){try{const a=localStorage.getItem(storeKey('active_slot'));return a===null||a===''?null:parseInt(a);}catch(e){return null;}})();
   for(let i=0;i<10;i++){
     const d=legacySlotData(i);
     if(!d)continue;
@@ -196,7 +214,7 @@ function migrateSlotsToSaves(){
     if(legacyActive===i)SV.activeId=id;
     moved++;
   }
-  try{localStorage.setItem('dc_schema_version','3');}catch(e){}
+  try{localStorage.setItem(storeKey('schema_version'),'3');}catch(e){}
   persistSaves();
   return moved;
 }
@@ -205,7 +223,7 @@ function cleanupLegacySlots(){
   if(!n){alert('No old slot data left to clean up.');return;}
   if(!confirm('Delete the '+n+' original slot backup'+(n===1?'':'s')+' from before the save-file update?\n\nYour current save files are not touched. This only removes the old copies, and cannot be undone.'))return;
   for(let i=0;i<10;i++){try{localStorage.removeItem(legacySlotKey(i));}catch(e){}}
-  try{localStorage.removeItem('dc_active_slot');}catch(e){}
+  try{localStorage.removeItem(storeKey('active_slot'));}catch(e){}
   renderSaveModal();
 }
 
@@ -214,7 +232,12 @@ function save(){
   // to its own scratch key and return: writing S here would overwrite whichever
   // save file is loaded, because save() persists the whole state object.
   if(typeof sysUsesBlocks==='function'&&sysUsesBlocks()){
-    if(sysScratchSave(S.char))flashSaved();else flashSaveError('Not saved');
+    // Write the table state alongside the character. Reporting "Saved" while
+    // dropping the journal, the floor, the map and the live combat tracker was
+    // worse than not saving at all.
+    const sess={};
+    SYS_SESSION_KEYS.forEach(function(k){sess[k]=S[k];});
+    if(sysScratchSave(S.char,sess))flashSaved();else flashSaveError('Not saved');
     return;
   }
   if(currentSaveId===null)return;
@@ -242,8 +265,8 @@ function loadSave(id){
 function uid(p){return (p||'e')+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function ensureId(e){if(e&&!e.id)e.id=uid();return e;}
 let U=null;
-function loadUniverses(){if(U)return U;try{U=JSON.parse(localStorage.getItem('dc_universes'))||null;}catch(e){U=null;}if(!U)U={version:2,activeUniverseId:null,universes:[]};return U;}
-function saveUniverses(){try{localStorage.setItem('dc_universes',JSON.stringify(U));}catch(e){}}
+function loadUniverses(){if(U)return U;try{U=JSON.parse(localStorage.getItem(storeKey('universes')))||null;}catch(e){U=null;}if(!U)U={version:2,activeUniverseId:null,universes:[]};return U;}
+function saveUniverses(){try{localStorage.setItem(storeKey('universes'),JSON.stringify(U));}catch(e){}}
 function getUniverse(id){loadUniverses();return U.universes.find(u=>u.id===id)||null;}
 function currentUniverse(){return (typeof S!=='undefined'&&S)?getUniverse(S.universeId):null;}
 // Tone and level belong to the world, not the hero — every hero in a universe
@@ -484,8 +507,12 @@ function finishUniverseGate(){
   const first=listSaves().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))[0];
   if(SV.activeId&&getSaveData(SV.activeId))loadSave(SV.activeId);
   else if(first)loadSave(first.id);
+  // Same reasoning as the boot path: a block pack never calls loadSave(), which
+  // is the only other place the universe gets bound.
+  const blocks=typeof sysUsesBlocks==='function'&&sysUsesBlocks();
+  if(blocks)bindUniverse();
   try{renderHero();}catch(e){}
-  if(currentSaveId===null)openSlotModal();
+  if(currentSaveId===null&&!blocks)openSlotModal();
 }
 function foldLegacySlots(u){
   for(let i=0;i<10;i++){const d=legacySlotData(i);if(!d)continue;if(d.universeId)continue;
