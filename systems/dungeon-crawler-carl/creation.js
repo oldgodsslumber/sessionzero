@@ -189,12 +189,29 @@ const DCC_HAND_TO_HAND = [
   { skill: 'Wrasslin\'', damageEffect: 'Toss' },
 ];
 
-// Phase 2 (pp. 115-118): advancing a finished Floor-1 crawler to the floor
-// you actually start on. Stat points = (Level - 1) x 3, and they must be spent
-// BEFORE Race and Class, which have Stat prerequisites.
+// Where you start. Phase 1 of creation builds a First Floor crawler; Phase 2
+// (pp. 115-118) advances that crawler to the floor you actually begin on.
+// Stat points = (Level - 1) x 3.
+//
+// Floor 1 IS the finished Phase 1 crawler, so it adds nothing: you have not
+// been through the Tutorial Floors, so there are no Skill bumps, no Acquired
+// Loot, no Tutorial Floor Experiences and no AI Favor roll. The core rulebook
+// does not cover it -- "If you'd rather start out at Level 1, look for the
+// Dungeon Crawler Carl Roleplaying Game Starter Set" (p. 101) -- and the
+// Starter Set's Atlas is explicit about the rest: "You are assigned the Race
+// of Human... probably. You are currently Level 1. You may choose a new race
+// and class as soon as you descend to the Third Floor." Popularity does not
+// exist yet either: viewers only tune in AFTER the First Floor.
 const DCC_FLOOR_START = [
-  { floor: 3, level: 10, statPoints: 27, primaryBump: '2d4', otherBump: '1d4', rankCap: 10 },
-  { floor: 4, level: 20, statPoints: 57, primaryBump: '2d4', otherBump: '1d4', rankCap: 10 },
+  { floor: 1, level: 1, statPoints: 0, primaryBump: null, otherBump: null, rankCap: 10,
+    tutorial: false, raceClass: false, popularity: false,
+    note: 'You are standing on the First Floor with whatever you had on you. '
+        + 'No Tutorial Floors behind you, so no Skill bumps, no loot and no Experiences. '
+        + 'You are Human, Level 1, and you pick a Race and Class when you reach the Third Floor.' },
+  { floor: 3, level: 10, statPoints: 27, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
+    tutorial: true, raceClass: true, popularity: true },
+  { floor: 4, level: 20, statPoints: 57, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
+    tutorial: true, raceClass: true, popularity: true },
 ];
 const DCC_CREATION_STEPS = [
   { id: 'identity', label: 'Who are you' },

@@ -479,6 +479,9 @@ const DCC_SCREENS = [
     render: dccScreenTutorial,
     validate(c) {
       const fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+      // A First Floor crawler has nothing to roll here: no Tutorial Floors
+      // behind them, and (Level - 1) x 3 = 0 Stat points to spend.
+      if (cfg.tutorial === false) return true;
       // Same order as the screen, so the message names the first thing you
       // still have to do rather than something further down.
       if (!fs.bumps) return 'Roll your tutorial-floor Skill Ranks.';
@@ -504,6 +507,9 @@ const DCC_SCREENS = [
     render: dccScreenRaceClass,
     validate(c) {
       const p = dccPick(c);
+      // A First Floor crawler does not choose: they are assigned Human, and
+      // pick a Race and Class on reaching the Third Floor.
+      if (dccFloorCfg(c).raceClass === false) return true;
       if (!p.race) return 'Choose a Race, or build your own.';
       if (!p.cls) return 'Choose a Class, or build your own.';
       if (p.race === 'custom-race' && !dccCustomEntry(c, 'race')) return 'Name your custom Race.';
@@ -536,6 +542,7 @@ function dccFinishCreation(char) {
   if (!char.blocks) char.blocks = {};
   const diff = dccRcDiff(char);
   const fs = dccFloorStart(char);
+  const fs2cfg = dccFloorCfg(char);
 
   // Apply the Race/Class Stat deltas onto the Enhanced layer, on top of the
   // tutorial-floor points already there. This is the only moment the shopping
@@ -559,6 +566,10 @@ function dccFinishCreation(char) {
     if (diff.race && diff.race.size) char.size = diff.race.size.n;
   }
 
+  if (fs2cfg.raceClass === false) {
+    char.race = 'Human';
+    char.class = '';
+  }
   char.blocks.skills = { skills: dccFinalSkills(char) };
   char.blocks.spells = { skills: dccStartingSpells(char) };
   char.blocks.gear = char.blocks.gear || blockCtx(sysBlock('gear'), char) && char.blocks.gear;
@@ -567,7 +578,10 @@ function dccFinishCreation(char) {
   char.blocks.health = { marked: 0 };
   char.level = dccFloorCfg(char).level;
   char.floor = fs.floor;
-  char.blocks.popularity = { current: dccModOf(char, 'CHA') * 2 };
+  // Popularity starts at CHA Mod x2 (p. 115) -- but only for a crawler who has
+  // been through the Tutorial Floors. Viewers cannot tune in until after the
+  // First Floor, so a Floor 1 crawler has no audience yet.
+  char.blocks.popularity = { current: fs2cfg.popularity === false ? 0 : dccModOf(char, 'CHA') * 2 };
   char.blocks.aiFavor = {
     current: (char.species === 'animal' ? 0 : 1) + (fs.favor || 0),
   };
@@ -715,8 +729,16 @@ function dccScreenTutorial(ctx) {
   let h = '<div class="card"><div class="label">Which floor are you starting on?</div>';
   h += DCC_FLOOR_START.map(f => '<button class="btn btn-xs ' + (fs.floor === f.floor ? 'btn-primary' : 'btn-secondary') +
     '" style="margin:0 4px 4px 0" onclick="dccSetFloor(' + f.floor + ')">Floor ' + f.floor + ' &middot; Level ' + f.level + '</button>').join('');
-  h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">You did not appear here from nowhere. ' +
-       'Everything below is what the Tutorial Floors did to you.</div></div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">' +
+       (cfg.tutorial === false
+         ? esc(cfg.note || '')
+         : 'You did not appear here from nowhere. Everything below is what the Tutorial Floors did to you.') +
+       '</div></div>';
+
+  // A First Floor crawler has no Tutorial Floors behind them, so none of the
+  // rolls below apply. Showing them anyway would invite a player to roll for
+  // history they have not lived.
+  if (cfg.tutorial === false) return h;
 
   h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">' +
        '<div class="pg-title" style="font-size:16px">Skill Ranks</div>' +
@@ -907,6 +929,19 @@ function dccRcFilter(pool, q) {
 }
 
 function dccScreenRaceClass(ctx) {
+  // "You are assigned the Race of Human... probably. You are currently Level 1.
+  // You may choose a new race and class as soon as you descend to the Third
+  // Floor." -- Atlas: Tutorial Floors, the First Floor. So there is nothing to
+  // choose here yet, and offering the lists would be wrong rather than merely
+  // premature.
+  if (dccFloorCfg(ctx.char).raceClass === false) {
+    return '<div class="card"><div class="pg-title" style="font-size:16px">Human, for now</div>' +
+      '<div style="font-size:12px;color:var(--muted)">You walked in as you were. The System assigned you ' +
+      'the Race of Human &mdash; probably &mdash; and you are Level 1.</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-top:6px">You choose a Race and a Class when you ' +
+      'reach the Third Floor. Until then this screen has nothing for you, which is rather the point.</div>' +
+      '</div>';
+  }
   const c = ctx.char, p = dccPick(c);
   let h = '<div class="card-sm" style="font-size:11px;color:var(--muted)">The AI offers you three of each. ' +
     'This shows all of them, with anything you do not qualify for locked and the reason given. ' +

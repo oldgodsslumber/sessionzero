@@ -1012,6 +1012,87 @@ function boot(entry) {
     return !cm.weaponName || 'an Axe is still called ' + JSON.stringify(cm.weaponName);
   });
 
+  // ── starting on the First Floor at Level 1 ───────────────────────────────
+  // The core rulebook only builds Third and Fourth Floor crawlers: "If you'd
+  // rather start out at Level 1, look for the Dungeon Crawler Carl Roleplaying
+  // Game Starter Set" (p. 101). Floor 1 is Phase 1 of creation on its own --
+  // the crawler every other starting floor is built by advancing.
+  check('[floor1] Floor 1 at Level 1 is offered', () => {
+    const f = JSON.parse(ev('JSON.stringify(DCC_FLOOR_START.map(function(x){return [x.floor,x.level]}))'));
+    const one = f.filter(x => x[0] === 1)[0];
+    if (!one) return 'only floors ' + f.map(x => x[0]).join(', ') + ' can be chosen';
+    return one[1] === 1 || 'Floor 1 is Level ' + one[1];
+  });
+  check('[floor1] it grants no Stat points, because (Level - 1) x 3 is zero', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);");
+    return ev('dccFloorCfg(S.char).statPoints') === 0
+      || 'grants ' + ev('dccFloorCfg(S.char).statPoints');
+  });
+  check('[floor1] the Tutorial Floors screen asks for nothing', () => {
+    // You have not been through them, so there are no Skill bumps to roll, no
+    // Acquired Loot, no Experiences and no AI Favor roll.
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    const v = ev('wizValidate(S.char,6)');
+    return v === true || 'still demanding: ' + v;
+  });
+  check('[floor1] ...and does not offer rolls for history you have not lived', () => {
+    ev("S.char.creation={step:6,complete:false};renderHero();");
+    const h = ev("(document.getElementById('wiz-body')||{}).innerHTML||''");
+    if (/dccRollBumps|dccRollSpread|dccRollExperiences/.test(h)) return 'the tutorial rolls are still on screen';
+    return /First Floor/.test(h) || 'no explanation of why the screen is empty';
+  });
+  check('[floor1] Race and Class are not chosen yet', () => {
+    // "You are assigned the Race of Human... probably. You are currently Level
+    // 1. You may choose a new race and class as soon as you descend to the
+    // Third Floor." -- Atlas: Tutorial Floors.
+    const v = ev('wizValidate(S.char,7)');
+    return v === true || 'the screen still demands a pick: ' + v;
+  });
+  check('[floor1] a finished crawler is Human, Level 1, with no Class', () => {
+    ev("dccFinishCreation(S.char);");
+    const got = [ev('S.char.level'), ev('S.char.race'), ev('S.char.class')];
+    return (got[0] === 1 && got[1] === 'Human' && got[2] === '')
+      || 'got level ' + got[0] + ', race ' + JSON.stringify(got[1]) + ', class ' + JSON.stringify(got[2]);
+  });
+  check('[floor1] Popularity is zero — viewers tune in after the First Floor', () => {
+    return ev('S.char.blocks.popularity.current') === 0
+      || 'starts with ' + ev('S.char.blocks.popularity.current') + ' Popularity';
+  });
+  check('[floor1] no Skill carries a tutorial-floor bump', () => {
+    const ranks = JSON.parse(ev('JSON.stringify(S.char.blocks.skills.skills.map(function(x){return x.rank}))'));
+    const cap = ev('DCC_SKILL_RANK_SOFT_CAP');
+    const high = ranks.filter(r => r > 3);
+    return high.length === 0 || 'ranks above the untrained 3 without a bump: ' + high.join(', ') + ' (cap ' + cap + ')';
+  });
+  check('[floor1] the whole wizard can be completed without a Race or Class', () => {
+    ev("S.char=SYS.newCharacter();dccStore('name','F');dccStore('crawlerNumber','600000');");
+    ev("dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccStatMethod('array');dccAssignStat('STR',6);dccAssignStat('CON',5);" +
+       "dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("['childhood','adolescence','career','hobby'].forEach(function(x){dccRollBackground(x)});");
+    ev("S.char.creation={step:1,complete:false};renderHero();");
+    for (let pass = 0; pass < 3; pass++) {
+      ev("wizRepaint();");
+      ev("[].slice.call(document.querySelectorAll('#wiz-body button'))" +
+         ".filter(function(b){return /dccPickSkill/.test(b.getAttribute('onclick')||'')})" +
+         ".forEach(function(b){try{b.click()}catch(e){}});");
+    }
+    ev("DCC_STORY_FIELDS.forEach(function(f){dccStory(S.char)[f.key]='x'});");
+    const blocked = [];
+    const n = ev('SYS.creation.length');
+    for (let i = 0; i < n; i++) {
+      const v = ev('wizValidate(S.char,' + i + ')');
+      if (v !== true) blocked.push(i + ': ' + String(v).slice(0, 40));
+    }
+    return blocked.length ? 'still blocked at ' + blocked.join(' | ') : true;
+  });
+  check('[floor1] Floor 3 is untouched by any of this', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(3);");
+    if (ev('dccFloorCfg(S.char).statPoints') !== 27) return 'Floor 3 grants ' + ev('dccFloorCfg(S.char).statPoints');
+    if (ev('wizValidate(S.char,6)') === true) return 'Floor 3 stopped asking for its tutorial rolls';
+    return ev('wizValidate(S.char,7)') !== true || 'Floor 3 stopped asking for a Race and Class';
+  });
+
   check('[floor] dropping to a lower floor gives back the points it does not grant', () => {
     ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');");
     ev("dccSetFloor(4);for(var i=0;i<57;i++)dccStatPoint('CON',1);");
