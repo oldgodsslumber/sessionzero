@@ -113,9 +113,10 @@ registerBlockType('traitGrid', {
         const mod = modOf ? modOf(enhanced) : 0;
         h += `<div style="font-size:13px;font-weight:600" title="${esc(t.desc || '')}">${esc(t.name || id)}</div>
               <input type="number" value="${cell.base || 0}" style="width:64px;text-align:center;padding:5px"
-                oninput="traitSet('${esc(b.id)}','${esc(id)}','base',this.value)">
-              <div style="width:64px;text-align:center;font-weight:700">${enhanced}</div>
-              <div style="width:52px;text-align:center;color:var(--accent);font-weight:700">${mod >= 0 ? '+' : ''}${mod}</div>`;
+                oninput="traitSet('${esc(b.id)}','${esc(id)}','base',this.value)"
+                onchange="traitCommit('${esc(b.id)}')">
+              <div id="tg-${esc(b.id)}-${esc(id)}-tot" style="width:64px;text-align:center;font-weight:700">${enhanced}</div>
+              <div id="tg-${esc(b.id)}-${esc(id)}-mod" style="width:52px;text-align:center;color:var(--accent);font-weight:700">${mod >= 0 ? '+' : ''}${mod}</div>`;
       });
       h += `</div><div style="font-size:10px;color:var(--muted);margin-top:8px">
             Enhanced = ${esc(b.layers[0] || 'Base')} + gear, Spells and Buffs. The Mod comes off the Enhanced value.</div>`;
@@ -125,7 +126,8 @@ registerBlockType('traitGrid', {
         const id = t.id || t;
         h += `<div style="font-size:13px">${esc(t.name || id)}</div>
               <input type="number" value="${d[id] || 0}" style="width:64px;text-align:center;padding:5px"
-                oninput="traitSet('${esc(b.id)}','${esc(id)}','value',this.value)">`;
+                oninput="traitSet('${esc(b.id)}','${esc(id)}','value',this.value)"
+                onchange="traitCommit('${esc(b.id)}')">`;
       });
       h += `</div>`;
     }
@@ -133,17 +135,38 @@ registerBlockType('traitGrid', {
   },
 });
 
+// Called on every keystroke, so it must NOT repaint its own block: rebuilding
+// the markup would replace the <input> being typed into and drop the caret.
+// The two derived cells are updated in place instead, and the blocks that
+// depend on this trait are repainted because they contain no input.
 function traitSet(blockId, traitId, layer, v) {
   const char = S && S.char; if (!char) return;
   const block = sysBlock(blockId); if (!block) return;
   const d = blockCtx(block, char).data;
   const n = parseInt(v, 10) || 0;
-  if (block.layers) { if (!d[traitId]) d[traitId] = { base: 0, bonus: 0 }; d[traitId][layer === 'bonus' ? 'bonus' : 'base'] = n; }
-  else d[traitId] = n;
+  if (block.layers) {
+    if (!d[traitId]) d[traitId] = { base: 0, bonus: 0 };
+    d[traitId][layer === 'bonus' ? 'bonus' : 'base'] = n;
+  } else {
+    d[traitId] = n;
+  }
   save();
-  blockRepaint(blockId);
+
+  if (block.layers) {
+    const cell = d[traitId] || { base: 0, bonus: 0 };
+    const total = (cell.base || 0) + (cell.bonus || 0);
+    const modOf = block.mod ? sysDerive(block.mod) : null;
+    const mod = modOf ? modOf(total) : 0;
+    const tot = document.getElementById('tg-' + blockId + '-' + traitId + '-tot');
+    const md = document.getElementById('tg-' + blockId + '-' + traitId + '-mod');
+    if (tot) tot.textContent = total;
+    if (md) md.textContent = (mod >= 0 ? '+' : '') + mod;
+  }
   (block.affects || []).forEach(blockRepaint);   // e.g. stats -> health, mana, evade
 }
+
+// On blur, redraw the grid once so anything else it shows is normalised.
+function traitCommit(blockId) { blockRepaint(blockId); }
 
 // ════════════════════════════════════════════════════════════════════════════
 // track — a row of slots.
@@ -318,10 +341,29 @@ registerBlockType('skillList', {
       <div class="pg-title" style="font-size:18px">${esc(b.label || 'Skills')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--muted)">${list.length} known${marked ? ' · ' + marked + ' marked' : ''}</span>
-        <button class="btn btn-secondary btn-xs" onclick="skillAdd('${esc(b.id)}')">+ Skill</button>
+        <button class="btn btn-secondary btn-xs" onclick="skillAddToggle('${esc(b.id)}')">${d.adding ? 'Cancel' : '+ Skill'}</button>
         ${marked ? `<button class="btn btn-primary btn-xs" onclick="skillAdvance('${esc(b.id)}')">Advance (${marked})</button>` : ''}
       </div></div>`;
     if (b.hint) h += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(b.hint)}</div>`;
+    if (d.adding) {
+      // A custom Skill is a first-class option in the book (p. 174), so it is
+      // typed here rather than being limited to the catalogue.
+      const cat = (SYS.catalogs && SYS.catalogs[b.catalog || 'skills']) || [];
+      h += `<div class="card-sm" style="border-color:var(--accent);margin-bottom:8px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input id="sk-add-${esc(b.id)}" list="sk-list-${esc(b.id)}" placeholder="Name" style="flex:1;min-width:130px;padding:6px">
+          <datalist id="sk-list-${esc(b.id)}">${cat.map(c => `<option value="${esc(c.name)}">`).join('')}</datalist>
+          <select id="sk-stat-${esc(b.id)}" style="width:76px">
+            <option value="">Stat…</option>
+            ${(b.stats || ['STR', 'INT', 'CON', 'DEX', 'CHA']).map(x => `<option value="${x}">${x}</option>`).join('')}
+          </select>
+          <input id="sk-rank-${esc(b.id)}" type="number" value="1" style="width:58px;text-align:center;padding:6px">
+          <button class="btn btn-primary btn-xs" onclick="skillAdd('${esc(b.id)}')">Add</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">
+          Pick one from the list, or type your own \u2014 a Skill the book does not have is still a Skill.</div>
+      </div>`;
+    }
     if (!list.length) {
       h += `<div class="tac text-muted" style="padding:14px;font-size:12px">No skills yet.</div>`;
       return h + '</div>';
@@ -337,7 +379,7 @@ registerBlockType('skillList', {
           border-radius:4px;cursor:pointer;background:${s.marked ? 'var(--green)' : 'transparent'};
           display:flex;align-items:center;justify-content:center;font-size:12px;color:#08140b">${s.marked ? '✓' : ''}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}</div>
+          <div style="font-size:13px;font-weight:600">${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
           <div style="font-size:10px;color:var(--muted)">${esc(s.stat || '—')}${mod ? ' +' + mod : ''}${s.checkType ? ' · ' + esc(s.checkType) : ''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:4px">
@@ -358,6 +400,42 @@ function _skillData(id) {
   const block = sysBlock(id); if (!block) return null;
   return { block, ctx: blockCtx(block, char) };
 }
+// Show or hide the add row. Repainting here is fine: no input has focus yet.
+function skillAddToggle(id) {
+  const t = _skillData(id); if (!t) return;
+  t.ctx.data.adding = !t.ctx.data.adding;
+  save(); blockRepaint(id);
+}
+
+// Add a Skill, from the catalogue or invented. A catalogue match brings its
+// Stat and check type with it; anything else takes what was typed.
+function skillAdd(id) {
+  const t = _skillData(id); if (!t) return;
+  const name = (document.getElementById('sk-add-' + id) || {}).value || '';
+  if (!name.trim()) return;
+  const statSel = (document.getElementById('sk-stat-' + id) || {}).value || '';
+  const rank = parseInt((document.getElementById('sk-rank-' + id) || {}).value, 10) || 0;
+  const lookup = sysDerive(t.block.lookup);
+  const cat = lookup ? lookup(name.trim()) : null;
+  t.ctx.data.skills = t.ctx.data.skills || [];
+  if (t.ctx.data.skills.some(s => s.name.toLowerCase() === name.trim().toLowerCase())) {
+    if (typeof flashSaveError === 'function') flashSaveError('Already known');
+    return;
+  }
+  t.ctx.data.skills.push({
+    name: cat ? cat.name : name.trim(),
+    rank: Math.max(0, Math.min(t.block.rankCap || 20, rank)),
+    stat: statSel || (cat ? cat.stat : null),
+    checkType: cat ? cat.checkType : null,
+    passive: !!(cat && cat.passive),
+    source: cat ? 'added' : 'custom',
+    custom: !cat,
+    marked: false,
+  });
+  t.ctx.data.adding = false;
+  save(); blockRepaint(id);
+}
+
 function skillMark(id, i) {
   const t = _skillData(id); if (!t) return;
   const s = t.ctx.data.skills[i]; if (!s || s.passive) return;   // passives never mark

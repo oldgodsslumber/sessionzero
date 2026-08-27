@@ -1192,6 +1192,152 @@ function boot(entry) {
     return bits === '[]' || bits;
   });
 
+  // ── review pass: focus, dead handlers, and custom options ────────────────
+  // Three classes of bug that a passing suite had been missing.
+
+  // 1. THE FOCUS BUG. An oninput handler must never repaint the element being
+  // typed into. This is the bug the whole project started with, and it was
+  // still live in traitGrid: editing a Stat on the sheet lost the caret after
+  // one keystroke.
+  check('[focus] typing in a Stat does not replace the input', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");
+    const el = "document.querySelector('#blk-stats input')";
+    if (!ev('!!' + el)) return 'no Stat input on the sheet';
+    ev(el + ".setAttribute('data-probe','1')");
+    ev("traitSet('stats','STR','base','1')");
+    ev("traitSet('stats','STR','base','12')");
+    const kept = ev(el + ".getAttribute('data-probe')");
+    if (kept !== '1') return 'the input was replaced while typing';
+    return ev("dccStatOf(S.char,'STR')") === 12 || 'value not stored';
+  });
+  check('[focus] the derived total and Mod still update as you type', () => {
+    ev("traitSet('stats','CON','base','6')");
+    const tot = ev("(document.getElementById('tg-stats-CON-tot')||{}).textContent");
+    const mod = ev("(document.getElementById('tg-stats-CON-mod')||{}).textContent");
+    return (tot === '6' && mod === '+3') || 'total=' + tot + ' mod=' + mod;
+  });
+  check('[focus] blocks that depend on a Stat repaint when it changes', () => {
+    // CON drives the Health Bar slot value, so the track must follow.
+    ev("traitSet('stats','CON','base','10')");
+    const hb = ev("(document.getElementById('blk-health')||{}).innerHTML||''");
+    return /\b4\b/.test(hb) || 'Health Bar did not pick up CON 10 (Mod +4)';
+  });
+
+  // 2. DEAD HANDLERS. "+ Skill" called a function that did not exist, so the
+  // button threw. Nothing caught it because no test had clicked it.
+  check('[wiring] every handler the sheet renders actually exists', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");
+    const html = ev("document.getElementById('hero-sheet').innerHTML");
+    const names = new Set();
+    const re = /on(?:click|input|change)="([A-Za-z_$][\w$]*)\(/g;
+    let m;
+    while ((m = re.exec(html))) names.add(m[1]);
+    const missing = [...names].filter(n => ev('typeof ' + n) !== 'function');
+    return missing.length ? 'not defined: ' + missing.join(', ') : true;
+  });
+  check('[wiring] every handler the wizard renders actually exists', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:false};renderHero();");
+    const missing = new Set();
+    for (let i = 0; i < ev('SYS.creation.length'); i++) {
+      ev('S.char.creation.step=' + i + ';wizRepaint();');
+      const html = ev("(document.getElementById('wiz-body')||{}).innerHTML||''");
+      const re = /on(?:click|input|change)="([A-Za-z_$][\w$]*)\(/g;
+      let m;
+      while ((m = re.exec(html))) {
+        if (ev('typeof ' + m[1]) !== 'function') missing.add(m[1] + ' (screen ' + (i + 1) + ')');
+      }
+    }
+    return missing.size ? 'not defined: ' + [...missing].join(', ') : true;
+  });
+
+  // 2b. DANGLING DERIVE REFERENCES. A block can name a derive function that was
+  // never written — the manifest edit that added the reference kept tripping an
+  // "already present" guard on the reference itself. Three separate features
+  // shipped half-wired that way before this check existed.
+  check('[wiring] every derive.x a block references actually exists', () => {
+    const refs = ev(`JSON.stringify((function(){
+      var out=[];
+      (SYS.schema.blocks||[]).forEach(function(b){
+        Object.keys(b).forEach(function(k){
+          var v=b[k];
+          if (typeof v==='string' && v.indexOf('derive.')===0) out.push(b.id+'.'+k+' -> '+v);
+          if (Array.isArray(v)) v.forEach(function(x){
+            if (x && typeof x.value==='string' && x.value.indexOf('derive.')===0)
+              out.push(b.id+'.'+k+' -> '+x.value);
+          });
+        });
+      });
+      return out;
+    })())`);
+    const bad = JSON.parse(refs).filter(r => {
+      const name = r.split('derive.')[1];
+      return ev('typeof (SYS.derive && SYS.derive[' + JSON.stringify(name) + '])') !== 'function';
+    });
+    return bad.length ? 'dangling: ' + bad.join(', ') : true;
+  });
+
+  // 3. CUSTOM OPTIONS. The book supports inventing your own Skills, Races and
+  // Classes, and the wizard used to force a pick from the printed lists.
+  check('[custom] a Skill can be invented, not just chosen', () => {
+    ev("S.char=SYS.newCharacter();S.char.blocks={skills:{skills:[]}};");
+    ev("document.body.insertAdjacentHTML('beforeend'," +
+       "'<input id=' + JSON.stringify('sk-add-skills') + '>');");
+    ev("var s=document.createElement('select');s.id='sk-stat-skills';" +
+       "var o=document.createElement('option');o.value='DEX';s.appendChild(o);s.value='DEX';" +
+       "document.body.appendChild(s);");
+    ev("var r=document.createElement('input');r.id='sk-rank-skills';r.value='4';document.body.appendChild(r);");
+    ev("document.getElementById('sk-add-skills').value='Yarn Wrangler';skillAdd('skills');");
+    const s = JSON.parse(ev('JSON.stringify(S.char.blocks.skills.skills)'));
+    if (s.length !== 1) return 'added ' + s.length;
+    if (s[0].name !== 'Yarn Wrangler') return s[0].name;
+    if (s[0].stat !== 'DEX' || s[0].rank !== 4) return JSON.stringify(s[0]);
+    return s[0].custom === true || 'not flagged as custom';
+  });
+  check('[custom] a catalogue Skill added by name brings its own Stat', () => {
+    ev("S.char.blocks.skills.skills=[];");
+    ev("document.getElementById('sk-stat-skills').value='';");
+    ev("document.getElementById('sk-add-skills').value='Climbing';skillAdd('skills');");
+    const s = JSON.parse(ev('JSON.stringify(S.char.blocks.skills.skills[0])'));
+    const cat = JSON.parse(ev("JSON.stringify(dccSkillByName('Climbing'))"));
+    return (s.stat === cat.stat && s.custom !== true) || JSON.stringify(s);
+  });
+  check('[custom] the same Skill cannot be added twice', () => {
+    ev("document.getElementById('sk-add-skills').value='Climbing';skillAdd('skills');");
+    return ev('S.char.blocks.skills.skills.length') === 1 || 'duplicated';
+  });
+
+  check('[custom] a Race can be built rather than chosen', () => {
+    ev("S.char=SYS.newCharacter();");
+    ev("dccChooseCustom('race');");
+    if (ev("dccPick(S.char).race") !== 'custom-race') return 'not selected';
+    if (ev("dccCustomEntry(S.char,'race')")) return 'accepted an unnamed custom Race';
+    ev("dccCustomSet('race','name','Trash Panda');dccCustomStat('race','DEX',4);");
+    const e = JSON.parse(ev("JSON.stringify(dccCustomEntry(S.char,'race'))"));
+    return (e && e.name === 'Trash Panda' && e.stats.DEX === 4 && e.custom === true)
+      || JSON.stringify(e);
+  });
+  check('[custom] a custom Race flows through the diff like a printed one', () => {
+    const d = JSON.parse(ev('JSON.stringify(dccRcDiff(S.char))'));
+    if (!d || !d.race) return 'no diff';
+    if (d.race.name !== 'Trash Panda') return d.race.name;
+    return (d.stats.DEX && d.stats.DEX.delta === 4) || JSON.stringify(d.stats);
+  });
+  check('[custom] a custom pick has no prerequisites to fail', () => {
+    ev("dccChooseCustom('class');dccCustomSet('class','name','Dumpster Diver');");
+    return ev('wizValidate(S.char,7)') === true || ev('wizValidate(S.char,7)');
+  });
+  check('[custom] an unnamed custom Class blocks the screen with a clear reason', () => {
+    ev("dccCustomSet('class','name','');");
+    const v = ev('wizValidate(S.char,7)');
+    return (v !== true && /custom Class/i.test(String(v))) || 'got ' + v;
+  });
+  check('[custom] naming a weapon keeps the Skill it works like', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("dccStoreCombat('weaponName','Tire Iron');");
+    const cm = JSON.parse(ev('JSON.stringify(dccCre(S.char).combat)'));
+    return (cm.weaponName === 'Tire Iron' && cm.weaponSkill === 'Club') || JSON.stringify(cm);
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>

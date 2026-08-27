@@ -430,13 +430,22 @@ const DCC_SCREENS = [
     render: dccScreenRaceClass,
     validate(c) {
       const p = dccPick(c);
-      if (!p.race) return 'Choose a Race.';
-      if (!p.cls) return 'Choose a Class.';
-      // A pick can stop qualifying if you go back and move Stat points around.
-      const r = dccMeetsPrereq(c, dccRace(p.race));
-      if (r.ok === false) return 'You no longer qualify for that Race: ' + r.why;
-      const k = dccMeetsPrereq(c, dccClass(p.cls));
-      if (k.ok === false) return 'You no longer qualify for that Class: ' + k.why;
+      if (!p.race) return 'Choose a Race, or build your own.';
+      if (!p.cls) return 'Choose a Class, or build your own.';
+      if (p.race === 'custom-race' && !dccCustomEntry(c, 'race')) return 'Name your custom Race.';
+      if (p.cls === 'custom-class' && !dccCustomEntry(c, 'class')) return 'Name your custom Class.';
+      // A printed pick can stop qualifying if you go back and move Stat points
+      // around. A custom one has no prerequisites: you built it yourself.
+      const race = p.race === 'custom-race' ? null : dccRace(p.race);
+      if (race) {
+        const r = dccMeetsPrereq(c, race);
+        if (r.ok === false) return 'You no longer qualify for that Race: ' + r.why;
+      }
+      const cls = p.cls === 'custom-class' ? null : dccClass(p.cls);
+      if (cls) {
+        const k = dccMeetsPrereq(c, cls);
+        if (k.ok === false) return 'You no longer qualify for that Class: ' + k.why;
+      }
       return true;
     },
   },
@@ -773,6 +782,7 @@ function dccScreenRaceClass(ctx) {
     'Nothing changes on your sheet until you finish &mdash; the preview below is what it would do.</div>';
 
   h += '<div class="card"><div class="pg-title" style="font-size:16px">Race</div>' +
+    dccCustomCard(c, 'race', p.race === 'custom-race') +
     '<input id="rc-race-q" placeholder="Search ' + DCC_RACES.length + ' Races" value="' + esc(p.raceQuery || '') +
     '" oninput="dccRcQuery(\'race\',this.value)" style="margin-bottom:6px">' +
     '<div id="rc-race-list" style="max-height:210px;overflow-y:auto">' +
@@ -781,6 +791,7 @@ function dccScreenRaceClass(ctx) {
     }).join('') + '</div></div>';
 
   h += '<div class="card"><div class="pg-title" style="font-size:16px">Class</div>' +
+    dccCustomCard(c, 'class', p.cls === 'custom-class') +
     '<input id="rc-cls-q" placeholder="Search ' + DCC_CLASSES.length + ' Classes" value="' + esc(p.clsQuery || '') +
     '" oninput="dccRcQuery(\'cls\',this.value)" style="margin-bottom:6px">' +
     '<div id="rc-cls-list" style="max-height:210px;overflow-y:auto">' +
@@ -851,8 +862,10 @@ function dccChoose(kind, id) {
 // The transaction: computed, shown, and only applied when creation finishes.
 function dccRcDiff(char) {
   const p = dccPick(char);
-  const race = p.race ? dccRace(p.race) : null;
-  const cls = p.cls ? dccClass(p.cls) : null;
+  const race = p.race === 'custom-race' ? dccCustomEntry(char, 'race')
+             : p.race ? dccRace(p.race) : null;
+  const cls = p.cls === 'custom-class' ? dccCustomEntry(char, 'class')
+            : p.cls ? dccClass(p.cls) : null;
   if (!race && !cls) return null;
   const stats = {}, notes = [];
   [race, cls].filter(Boolean).forEach(function (e) {
@@ -1155,5 +1168,87 @@ function dccRerollExperience(i) {
   const fs = dccLoot(S.char);
   if (!fs.experiences[i]) return;
   fs.experiences[i] = dccRollOneExperience();
+  save(); wizRepaint();
+}
+
+
+// ─── custom Races and Classes ───────────────────────────────────────────────
+// The Build System (pp. 158-162) lets you invent your own with 25 Race points
+// or 30 Class points. The point calculator is a later phase; this is the place
+// to record what you built, so the screen never forces a pick from the lists.
+function dccCustom(char, kind) {
+  const p = dccPick(char);
+  if (!p.custom) p.custom = {};
+  if (!p.custom[kind]) p.custom[kind] = { name: '', notes: '', stats: {} };
+  return p.custom[kind];
+}
+
+// A custom entry pretends to be a catalogue entry, so the diff, the finish step
+// and the review screen all treat it the same as a printed one.
+function dccCustomEntry(char, kind) {
+  const c = dccCustom(char, kind);
+  if (!String(c.name || '').trim()) return null;
+  return {
+    id: 'custom-' + kind, name: c.name.trim(), custom: true,
+    stats: Object.keys(c.stats || {}).reduce((o, k) => {
+      if (c.stats[k]) o[k] = c.stats[k];
+      return o;
+    }, {}),
+    skills: [], benefits: c.notes ? [c.notes] : [], rank20: [],
+  };
+}
+
+function dccCustomCard(char, kind, chosen) {
+  const c = dccCustom(char, kind);
+  const label = kind === 'race' ? 'Race' : 'Class';
+  let h = '<div style="padding:6px 8px;border-radius:6px;margin-bottom:6px;border:1px solid '
+    + (chosen ? 'var(--accent)' : 'var(--border)') + ';background:'
+    + (chosen ? 'var(--surface3)' : 'transparent') + '">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">'
+    + '<div style="font-size:13px;font-weight:600">Build your own ' + label + '</div>'
+    + '<button class="btn btn-xs ' + (chosen ? 'btn-primary' : 'btn-secondary') + '" '
+    + 'onclick="dccChooseCustom(' + JSON.stringify(kind) + ')">'
+    + (chosen ? 'Using this' : 'Use this') + '</button></div>'
+    + '<div style="font-size:10px;color:var(--muted);margin-bottom:4px">'
+    + (kind === 'race' ? '25 Race Build Points' : '30 Class Build Points')
+    + ' (pp. 158-162). Work it out in the book, then record it here.</div>'
+    + '<input value="' + esc(c.name || '') + '" placeholder="' + label + ' name" '
+    + 'oninput="dccCustomSet(' + JSON.stringify(kind) + ',' + JSON.stringify('name') + ',this.value)" '
+    + 'style="margin-bottom:4px">';
+  if (chosen) {
+    h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px">';
+    DCC_STATS.forEach(function (st) {
+      const v = (c.stats || {})[st.id] || 0;
+      h += '<div style="text-align:center">'
+        + '<div style="font-size:10px;color:var(--muted)">' + st.id + '</div>'
+        + '<div style="display:flex;align-items:center;justify-content:center;gap:2px">'
+        + '<button class="btn btn-secondary btn-xs" onclick="dccCustomStat(' + JSON.stringify(kind)
+        + ',' + JSON.stringify(st.id) + ',-1)">&minus;</button>'
+        + '<span style="min-width:20px;font-weight:700">' + (v > 0 ? '+' : '') + v + '</span>'
+        + '<button class="btn btn-secondary btn-xs" onclick="dccCustomStat(' + JSON.stringify(kind)
+        + ',' + JSON.stringify(st.id) + ',1)">+</button></div></div>';
+    });
+    h += '</div><textarea rows="2" placeholder="Benefits and drawbacks, in your own words" '
+      + 'oninput="dccCustomSet(' + JSON.stringify(kind) + ',' + JSON.stringify('notes') + ',this.value)">'
+      + esc(c.notes || '') + '</textarea>';
+  }
+  return h + '</div>';
+}
+
+function dccCustomSet(kind, field, v) {   // store only; never repaint on typing
+  dccCustom(S.char, kind)[field] = v;
+  save();
+}
+function dccCustomStat(kind, stat, delta) {
+  const c = dccCustom(S.char, kind);
+  c.stats = c.stats || {};
+  c.stats[stat] = (c.stats[stat] || 0) + delta;
+  if (!c.stats[stat]) delete c.stats[stat];
+  save(); wizRepaint();
+}
+function dccChooseCustom(kind) {
+  const p = dccPick(S.char);
+  const key = kind === 'race' ? 'race' : 'cls';
+  p[key] = p[key] === 'custom-' + kind ? null : 'custom-' + kind;
   save(); wizRepaint();
 }

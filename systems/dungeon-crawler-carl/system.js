@@ -95,6 +95,8 @@ registerSystem({
             + 'at the end of each floor from Rank 5. Passive Skills never mark.',
         statMod: 'derive.skillStatMod',
         advanceRoll: 'derive.advanceSkill',
+        lookup: 'derive.skillLookup',
+        catalog: 'skills',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
       {
@@ -103,6 +105,8 @@ registerSystem({
             + 'attempted untrained, except from a scroll.',
         statMod: 'derive.spellStatMod',
         advanceRoll: 'derive.advanceSkill',
+        lookup: 'derive.spellLookup',
+        catalog: 'spells',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
       {
@@ -174,7 +178,17 @@ registerSystem({
     mod:  dccModOf,
 
     // the Stat Mod a Skill row adds, given the character and the Skill's Stat
+    // Resolve a typed name against the catalogue, so an added Skill or Spell
+    // brings its Stat and check type with it and only a genuinely new name
+    // is recorded as custom.
+    skillLookup: name => dccSkillByName(name),
+    spellLookup: name => dccSpellByName(name),
+
     skillStatMod: (char, statId) => statId ? dccModOf(char, statId) : 0,
+
+    // A Spell rolls off INT unless its entry names another Stat, but it always
+    // costs INT-based Mana (p. 202).
+    spellStatMod: (char, statId) => dccModOf(char, statId || 'INT'),
 
     // Skill Advancement (p. 169): roll 1d20 against the Skill's CURRENT Rank.
     // Meet or beat it and the Rank goes up by one, to a maximum of 15.

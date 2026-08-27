@@ -87,6 +87,8 @@ function renderCreationStep(){
   if(c.step===0)h+=renderStepSeries();else if(c.step===1)h+=renderStepNames();else if(c.step===2)h+=renderStepAspects();
   else if(c.step===3)h+=renderStepCast();else if(c.step===4)h+=renderStepSkills();else if(c.step===5)h+=renderStepPowers();else if(c.step===6)h+=renderStepReview();
   document.getElementById('hero-creation').innerHTML=h;
+  // The stunt browser draws its shell only; fill its list once it is in the DOM.
+  if(document.getElementById('stunt-list'))renderStuntList();
 }
 function creationNext(){S.creation.step++;save();renderCreationStep();}
 function creationBack(){if(S.creation.step>0){S.creation.step--;save();renderCreationStep();}}
@@ -344,21 +346,36 @@ function addStunt(){_stuntBrowseOpen=true;_stuntSearch='';_stuntSkillFilter='';r
 function addCustomStunt(){const n=prompt('Stunt Name:');if(!n)return;const d=prompt('Description:')||'',cs=prompt('HP Cost (1-3):','1'),c=Math.max(1,Math.min(3,parseInt(cs)||1));if(!S.creation.stunts)S.creation.stunts=[];S.creation.stunts.push({name:n,desc:d,cost:c});save();renderCreationStep();}
 function renderStuntBrowser(){
   if(!_stuntBrowseOpen)return'';
+  const sf=_stuntSkillFilter;
+  const skillFilters=['All',...[...new Set(SAMPLE_STUNTS.map(s=>s.skill))].sort()];
+  let h=`<div class="card" style="border-color:var(--accent)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="fw-700">Add a Stunt</div><button class="btn btn-secondary btn-xs" onclick="_stuntBrowseOpen=false;renderCreationStep()">Close</button></div>`;
+  h+=`<input id="stunt-search" placeholder="Search stunts..." value="${esc(_stuntSearch)}" oninput="_stuntSearch=this.value;renderStuntList()" style="margin-bottom:6px;font-size:12px;padding:7px">`;
+  h+=`<div id="stunt-filters" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">${skillFilters.map(f=>`<button class="btn btn-xs ${(f==='All'&&!sf)||sf===f?'btn-primary':'btn-secondary'}" data-sf="${esc(f)}" onclick="setStuntFilter('${f==='All'?'':f}')">${f}</button>`).join('')}</div>`;
+  h+=`<div id="stunt-list" style="max-height:40vh;overflow-y:auto"></div>`;
+  h+=`<div class="divider"></div><button class="btn btn-secondary btn-sm btn-full" onclick="addCustomStunt()">Create Custom Stunt</button></div>`;
+  return h;
+}
+
+// Only the results repaint while you type, so the search box keeps its caret.
+function renderStuntList(){
+  const box=document.getElementById('stunt-list');if(!box)return;
   const q=_stuntSearch.toLowerCase(),sf=_stuntSkillFilter;
   const filtered=SAMPLE_STUNTS.filter(s=>{if(q&&!s.name.toLowerCase().includes(q)&&!s.desc.toLowerCase().includes(q))return false;if(sf&&s.skill!==sf)return false;return true;});
-  const skillFilters=['All',...[...new Set(SAMPLE_STUNTS.map(s=>s.skill))].sort()];
-  let h=`<div class="card" style="border-color:var(--accent)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="label" style="margin:0">Sample Stunts</div><button class="btn btn-secondary btn-xs" onclick="_stuntBrowseOpen=false;renderCreationStep()">Close</button></div>`;
-  h+=`<input id="stunt-search" placeholder="Search stunts..." value="${esc(_stuntSearch)}" oninput="_stuntSearch=this.value;renderCreationStep();_refocus('stunt-search')" style="margin-bottom:6px;font-size:12px;padding:7px">`;
-  h+=`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">${skillFilters.map(f=>`<button class="btn btn-xs ${(f==='All'&&!sf)||sf===f?'btn-primary':'btn-secondary'}" onclick="_stuntSkillFilter='${f==='All'?'':f}';renderCreationStep()" style="font-size:10px;padding:3px 7px">${f}</button>`).join('')}</div>`;
-  h+=`<div style="max-height:40vh;overflow-y:auto">`;
   const existing=(S.creation.stunts||[]).map(s=>s.name);
+  let h='';
   filtered.forEach(s=>{
     const have=existing.includes(s.name);
-    h+=`<div class="card-sm" style="display:flex;gap:8px;align-items:start;${have?'opacity:.5':''}"><div style="flex:1"><div class="fw-700" style="font-size:12px">${esc(s.name)} <span class="text-muted" style="font-weight:400;font-size:10px">[${s.skill}]</span></div><div style="font-size:11px;color:var(--muted)">${esc(s.desc)}</div></div>${have?'<span class="text-green" style="font-size:10px">\u2713</span>':`<button class="btn btn-primary btn-xs" onclick="pickSampleStunt('${esc(s.name)}')">Add</button>`}</div>`;
+    h+=`<div class="card-sm" style="display:flex;gap:8px;align-items:start;${have?'opacity:.5':''}"><div style="flex:1"><div class="fw-700" style="font-size:13px">${esc(s.name)}</div><div style="font-size:11px;color:var(--muted)">${esc(s.skill)} &middot; ${s.cost} HP</div><div style="font-size:12px">${esc(s.desc)}</div></div><button class="btn btn-xs ${have?'btn-secondary':'btn-primary'}" ${have?'disabled':''} onclick="pickSampleStunt('${esc(s.name).replace(/'/g,"\\'")}')">${have?'Taken':'Add'}</button></div>`;
   });
-  if(!filtered.length)h+='<div class="tac text-muted" style="padding:12px">No matches</div>';
-  h+=`</div><div class="divider"></div><button class="btn btn-secondary btn-sm btn-full" onclick="addCustomStunt()">Create Custom Stunt</button></div>`;
-  return h;
+  if(!filtered.length)h='<div class="tac text-muted" style="padding:12px">No matches</div>';
+  box.innerHTML=h;
+}
+
+function setStuntFilter(f){
+  _stuntSkillFilter=f;
+  const wrap=document.getElementById('stunt-filters');
+  if(wrap)wrap.querySelectorAll('button[data-sf]').forEach(b=>{const v=b.dataset.sf==='All'?'':b.dataset.sf;b.className='btn btn-xs '+(v===f?'btn-primary':'btn-secondary');});
+  renderStuntList();
 }
 function pickSampleStunt(name){
   const s=SAMPLE_STUNTS.find(x=>x.name===name);if(!s)return;
