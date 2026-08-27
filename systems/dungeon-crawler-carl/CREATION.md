@@ -310,34 +310,39 @@ truncation.
 | 5 Scars | **done** |
 | 6 What you brought | **done** |
 | 7 The tutorial floors | not started — needs Tables 25–34 extracted |
-| 8 Race & Class | **blocked on extraction**, see below |
+| 8 Race & Class | data **done** (30 Races, 52 Classes); screen not built |
 | 9 Review | not started |
 
-### Why Race & Class is not done yet
+### Race & Class extraction: done, with one caveat
 
-The Skills pipeline does not transfer to this chapter. Three problems, two solved:
+**30 Races and 52 Classes**, in `raceclass.js`. Three problems, all now handled:
 
-1. **A second, clipped copy of the body text.** Some pages carry the same
-   paragraph twice, the second with its left side cut off — "aces ca c oose" for
-   "Races can choose". **Solved:** the copy shares the real block's baseline and
-   right edge but starts further right, which is specific enough to filter on.
-   `drop_overlays()` in the extraction script does this, and it improves every
-   future extraction from this book.
-2. **Entry names are Title Case, not ALL CAPS.** Shape heuristics cannot tell
-   "Health Bar" (a bullet continuation) from "Pocket Kuma" (a Race). **Solved:**
-   the book sets every entry name in CitrusGothic at 13pt and nothing else on the
-   page uses it, so the font is a reliable signal where shape is not.
-3. **The display font drops doubled letters, and names are proper nouns.**
-   "Dwarf, Clasic", "Obsidian Buterfly", "Rat Holigan", "Dopelgänger". In the
-   Skills chapter this affected two names and the body text gave the right
-   spelling. Here it affects many, and they are names — so guessing is not
-   acceptable. **Not solved.** Each needs checking against a body-text mention.
+1. **A clipped duplicate text layer.** Solved by `drop_overlays()`: the copy
+   shares the real block's baseline and right edge but starts further right.
+2. **Names are Title Case, not ALL CAPS**, so shape cannot tell a name from a
+   bullet continuation. Solved by font: every entry name is CitrusGothic 13pt and
+   nothing else on the page is.
+3. **The display font drops doubled letters in proper nouns.** 13 names needed
+   repair. Every one was confirmed against an independent mention elsewhere in
+   the book — "Classic Dwarf", "School Wand", "Tattoo Artist" ×8, "hysicker" ×3 —
+   before being written down. None was guessed.
 
-The current pass yields 46 races and 53 classes against the book's stated 30 and
-49, so entries are still being split or duplicated. Shipping that would be exactly
-the plausible-but-wrong catalogue §11 warns about. It needs a dedicated pass:
-resolve the count against the book's own totals first, then repair the names
-against body text, then parse the benefit lists.
+**On the count.** The blurb advertises "30 races and 49 classes". Races match
+exactly. The chapter contains 52 Class entries, each with its own `Class Type:`
+line; the two extra `Class Type:` markers a raw scan finds are duplicates of
+Fire Spiritualist and Boring Ol' Paladin. So 52 is the content and the blurb is
+approximate.
+
+**The caveat.** The overlay filter does not clear every page. On the pages where
+it fails, some free-text benefit lines are merged or truncated. Rather than ship
+garbage, a line that is visibly incomplete — unbalanced brackets, repeated words,
+or ending on "a"/"the"/"with" — is **dropped**, and the entry is marked
+`needsReview` with its page number so the screen can say "check p.129".
+
+That affects the **prose only**. The mechanical fields the app actually applies —
+Size, Stat deltas, Skill grants, Class Type, prerequisites — parsed cleanly for
+all 82 entries and are asserted in `test/dcc.js`, including that Arachnid's
+Dexterity is +5 rather than the +10 a duplicated bullet would have summed to.
 
 ---
 

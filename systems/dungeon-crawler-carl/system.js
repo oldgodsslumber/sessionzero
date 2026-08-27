@@ -153,6 +153,8 @@ registerSystem({
   // ─── content the shell can already use ────────────────────────────────────
   catalogs: {
     skills: DCC_SKILLS,
+    races: DCC_RACES,
+    classes: DCC_CLASSES,
     backgrounds: DCC_BACKGROUNDS,
     storyTables: DCC_STORY_TABLES,
     weaponCategories: DCC_WEAPON_CATEGORIES,

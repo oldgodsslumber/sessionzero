@@ -588,6 +588,82 @@ function boot(entry) {
     return ev("Object.keys(S.char.dcc.background).length") === 0 || 'stale picks survived';
   });
 
+  // ── Races and Classes (D6 data) ──────────────────────────────────────────
+  eq(ev('DCC_RACES.length'), 30, '[rc] 30 Races, matching the book');
+  eq(ev('DCC_CLASSES.length'), 52,
+     '[rc] 52 Class entries — the blurb says 49, the chapter has 52');
+  check('[rc] every entry has a unique id and a name', () => {
+    const bad = ev(`JSON.stringify([...DCC_RACES,...DCC_CLASSES].filter(e=>!e.id||!e.name).map(e=>e.name))`);
+    const ids = ev('new Set([...DCC_RACES,...DCC_CLASSES].map(e=>e.id)).size');
+    if (bad !== '[]') return bad;
+    return ids === 82 || 'duplicate ids: ' + ids + ' unique of 82';
+  });
+  check('[rc] every Class carries its Class Type', () => {
+    const bad = ev(`JSON.stringify(DCC_CLASSES.filter(c=>!c.classType).map(c=>c.name))`);
+    return bad === '[]' || bad;
+  });
+  check('[rc] Stat deltas only ever name the five Stats', () => {
+    const bad = ev(`JSON.stringify([...DCC_RACES,...DCC_CLASSES].flatMap(e=>
+      Object.keys(e.stats||{}).filter(k=>!['STR','INT','CON','DEX','CHA'].includes(k))))`);
+    return bad === '[]' || bad;
+  });
+  check('[rc] every granted Skill exists in the catalogue', () => {
+    const bad = ev(`JSON.stringify([...new Set([...DCC_RACES,...DCC_CLASSES]
+      .flatMap(e=>(e.skills||[]).map(s=>s.skill)))].filter(n=>!dccSkillByName(n)))`);
+    return bad === '[]' || 'orphans: ' + bad;
+  });
+  // The name repairs are the part most at risk of being invented, so pin them.
+  eq(ev("!!dccRace('dwarf-classic')"), true, '[rc] "Dwarf, Clasic" was repaired to Classic');
+  eq(ev("!!dccRace('rat-hooligan')"), true, '[rc] "Rat Holigan" -> Rat Hooligan');
+  eq(ev("!!dccRace('obsidian-butterfly')"), true, '[rc] "Obsidian Buterfly" -> Butterfly');
+  eq(ev("!!dccClass('prison-tattoo-artist')"), true, '[rc] "Prison Tato Artist" -> Tattoo');
+  eq(ev("!!dccClass('physicker')"), true, '[rc] "PHysicker" -> Physicker');
+  eq(ev("!!dccClass('spellbinder')"), true, '[rc] "Spelbinder" -> Spellbinder');
+  check('[rc] no name still carries a dropped-doubled-letter artefact', () => {
+    const bad = ev(`JSON.stringify([...DCC_RACES,...DCC_CLASSES].map(e=>e.name)
+      .filter(n=>/Clasic|Buterfly|Holigan|Spelbinder|Tato |Warior|Stret |Mesenger|Profesional|Aley /.test(n)))`);
+    return bad === '[]' || bad;
+  });
+  // Amazonian is the worked example: Medium (4), +6 STR, +3 DEX, +2 to three Skills.
+  check('[rc] Amazonian matches the book', () => {
+    const r = ev("JSON.stringify(dccRace('amazonian'))");
+    const o = JSON.parse(r);
+    if (!o) return 'missing';
+    if (o.size.n !== 4 || o.stats.STR !== 6 || o.stats.DEX !== 3) return 'stats/size: ' + r;
+    const sk = o.skills.map(s => s.skill).sort().join(',');
+    if (sk !== 'Bow,Endurance,Pugilism') return 'skills: ' + sk;
+    if (!/Strength/.test(o.prerequisites || '')) return 'prereq missing';
+    return true;
+  });
+  check('[rc] a duplicated bullet is not summed into a doubled Stat', () =>
+    ev("dccRace('arachnid').stats.DEX") === 5 ||
+    'Arachnid DEX is ' + ev("dccRace('arachnid').stats.DEX") + ', should be 5');
+  // Entries whose benefit prose came out incomplete are flagged, not faked.
+  check('[rc] flagged entries carry a page reference', () => {
+    const bad = ev(`JSON.stringify([...DCC_RACES,...DCC_CLASSES].filter(e=>e.needsReview&&!e.page).map(e=>e.name))`);
+    return bad === '[]' || bad;
+  });
+  check('[rc] no benefit line was shipped ending mid-sentence', () => {
+    const bad = ev(`JSON.stringify([...DCC_RACES,...DCC_CLASSES].flatMap(e=>
+      (e.benefits||[]).filter(b=>/\b(a|an|the|and|or|of|to|in|on|at|with|for|your|their|you)$/i.test(b.trim()))
+      ).slice(0,5))`);
+    return bad === '[]' || bad;
+  });
+  // prerequisite gating
+  check('[rc] a Stat/Skill prerequisite is enforced', () => {
+    ev("S.char=SYS.newCharacter();S.char.blocks={skills:{skills:[{name:'Bow',rank:2,stat:'DEX'}]}};");
+    const no = ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('amazonian')))");
+    ev("S.char.blocks.skills.skills[0].rank=5;");
+    const yes = ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('amazonian')))");
+    if (JSON.parse(no).ok !== false) return 'Rank 2 was allowed: ' + no;
+    if (JSON.parse(yes).ok !== true) return 'Rank 5 was refused: ' + yes;
+    return true;
+  });
+  check('[rc] an entry with no prerequisite is always available', () => {
+    const r = ev(`JSON.stringify(dccMeetsPrereq(S.char,DCC_RACES.find(x=>!x.prerequisites)))`);
+    return JSON.parse(r).ok === true || r;
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>
