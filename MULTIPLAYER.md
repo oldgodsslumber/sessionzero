@@ -17,10 +17,21 @@ manager. Until then the Firebase SDK is never fetched.
 
 ## 1. Firebase setup
 
-`firebase-config.js` is committed and points at the `daringcomics-98cea`
-project, so a clone of this repo is already wired up. Running your own project
-instead? Copy `firebase-config.example.js` over it and fill in your values — see
-the note at the end of this section for why it is committed rather than hidden.
+`firebase-config.js` is **not** committed in the shell (it is git-ignored). Copy
+`firebase-config.example.js` over it and fill in your own project's values.
+
+**One Firebase project serves every game.** The config is fetched lazily by
+`_loadScript('firebase-config.js')` the first time someone opens the lobby, so a
+single file at the repo root is picked up by every entry file — you do not add
+anything to a new game's `.html`. One project is the right shape here because all
+the games are served from one origin, so the API-key referrer allowlist and the
+Auth authorized-domains list are one list either way, and because these security
+rules are the only thing keeping GM secrets off players' machines: duplicating
+them per project multiplies the chance of getting one of them wrong.
+
+Worlds are kept apart by the `systemId` stamped in their `meta` (see §2a), not by
+living in separate databases.
+
 Either way:
 
 1. **Realtime Database → Create Database**, then paste the rules in §2. Do not
@@ -125,10 +136,19 @@ players' machines.
 
         "meta": {
           // Readable before you are a member — the join flow has to read it to
-          // find the universe. Writable by the GM, or by anyone when it does
-          // not exist yet, which is how a universe gets created.
+          // find the world. Writable by the GM, or by anyone when it does
+          // not exist yet, which is how a world gets created.
           ".read":  "auth != null",
-          ".write": "auth != null && (!data.exists() || data.child('gmUid').val() === auth.uid)"
+          ".write": "auth != null && (!data.exists() || data.child('gmUid').val() === auth.uid)",
+
+          // Which game this world belongs to ('daring-comics',
+          // 'dungeon-crawler-carl', ...). Write-once: the client refuses a
+          // cross-game join, and this stops a GM changing the stamp underneath a
+          // table that has already joined. Worlds created before this field
+          // existed have no stamp and stay joinable by anyone.
+          "systemId": {
+            ".validate": "!data.exists() || data.val() === newData.val()"
+          }
         },
 
         "members": {
@@ -190,11 +210,32 @@ allowed, something granted read higher up the tree.
 
 ---
 
+## 2a. Why worlds carry a `systemId`
+
+A join code is four digits and carries no information about which game made it.
+Without a stamp, a Dungeon Crawler Carl client could join a Daring Comics world,
+mirror a crawler into its roster and inherit a comic wiki — corrupting both sides
+with no error anywhere.
+
+So `meta.systemId` records the pack that created the world, and `MP.joinUniverse`
+refuses a mismatch with a message naming the owning game. Two deliberate details:
+
+- **The stamp is applied inside `MP`, not at the call site.** `createUniverse`
+  defaults it from the active pack, so there is no way to create an unstamped
+  world by forgetting an argument, and `joinUniverse` runs the check by default.
+- **An absent stamp is treated as compatible.** Worlds created before the field
+  existed have no `systemId`, and locking those tables out of their own game
+  would be a worse failure than the one being prevented.
+
+Pack-specific world settings live under `meta.packMeta` rather than as loose
+fields. Daring Comics puts its tone and power level there; a pack with no such
+settings writes nothing, and the shared `meta` shape stays the same for every game.
+
 ## 3. Data model
 
 ```
 universes/{code}/
-  meta       { gmUid, gmName, name, createdAt }
+  meta       { gmUid, gmName, name, systemId, packMeta, createdAt }   // §2a
   members/{uid}  { name, photoURL, heroId, joinedAt }
   heroes/{uid}   each player's character sheet — owner-writable
   roster/{id}    NPCs & villains, plus mirrors of everyone's heroes

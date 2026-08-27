@@ -17,6 +17,7 @@ function check(name, expr) {
   try {
     const r = w.eval('(function(){' + expr + '})()');
     if (r === false) fails.push(name + ' -> false');
+    else if (typeof r === 'string') fails.push(name + ' -> ' + r);
     else ok.push(name);
   } catch (e) { fails.push(name + ' -> ' + e.message); }
 }

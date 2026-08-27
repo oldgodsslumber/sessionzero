@@ -108,18 +108,27 @@ window.MP = (function(){
     throw new Error('Could not allocate a free 4-digit code — try again.');
   }
 
+  // The active system's id. Defaulted inside MP rather than at each call site,
+  // so there is no way to create an unstamped world or to join without the
+  // cross-game check running.
+  function _sysId(){ return (typeof SYS!=='undefined'&&SYS&&SYS.id)?SYS.id:''; }
+
   async function createUniverse(opts){
     if(!user) throw new Error('Sign in first.');
     opts=opts||{};
     const code=await _claimCode(user.uid);
     const meta={
       gmUid:user.uid, gmName:displayName(),
-      name:(opts.name||'Untitled Universe'),
-      // Tone and power level are properties of the world, so they travel with
-      // it — a joining player inherits the table's setting rather than picking
-      // their own during character creation.
-      tone:(opts.series&&opts.series.tone)||'',
-      level:(opts.series&&opts.series.level)||'',
+      name:(opts.name||'Untitled World'),
+      // Which game this world belongs to. Join refuses a mismatch: the code is
+      // only four digits, so without this a Daring Comics client could join a
+      // Dungeon Crawler Carl crawl and sync a comic roster into it. The rules
+      // make this field immutable once written.
+      systemId:(opts.systemId||_sysId()),
+      // Whatever else the active pack wants to travel with the world. Daring
+      // Comics puts its tone and power level here, so a joining player inherits
+      // the table's setting; a pack with no such settings sends nothing.
+      packMeta:(opts.packMeta||null),
       createdAt:firebase.database.ServerValue.TIMESTAMP
     };
     await db.ref('universes/'+code+'/meta').set(meta);
@@ -132,12 +141,19 @@ window.MP = (function(){
     });
     return code;
   }
-  async function joinUniverse(code){
+  async function joinUniverse(code,opts){
     if(!user) throw new Error('Sign in first.');
     code=String(code).padStart(4,'0');
     const snap=await db.ref('universes/'+code+'/meta').get();
-    if(!snap.exists()) throw new Error('No universe with code '+code+'.');
+    if(!snap.exists()) throw new Error('No world with code '+code+'.');
     const meta=snap.val();
+    // Refuse a cross-game join rather than corrupting both sides' data. Worlds
+    // created before systemId existed have no stamp; treat those as compatible
+    // so an existing table is not locked out by an upgrade.
+    const want=(opts&&opts.systemId!==undefined)?opts.systemId:_sysId();
+    if(want&&meta.systemId&&meta.systemId!==want){
+      throw new Error('Code '+code+' belongs to a different game ('+meta.systemId+'). Open that game\u2019s app to join it.');
+    }
     // A GM rejoining through the join path must stay GM, or their saved list
     // mislabels them after create → join.
     const role=(meta.gmUid===user.uid)?'gm':'player';

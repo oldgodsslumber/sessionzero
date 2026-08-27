@@ -19,7 +19,12 @@ function mk(seed) {
 }
 function checker(w, tag) {
   return (name, expr) => {
-    try { const r = w.eval('(function(){' + expr + '})()'); if (r === false) fails.push('[' + tag + '] ' + name + ' -> false'); else ok.push(name); }
+    try {
+      const r = w.eval('(function(){' + expr + '})()');
+      if (r === false) fails.push('[' + tag + '] ' + name + ' -> false');
+      else if (typeof r === 'string') fails.push('[' + tag + '] ' + name + ' -> ' + r);
+      else ok.push(name);
+    }
     catch (e) { fails.push('[' + tag + '] ' + name + ' -> ' + e.message); }
   };
 }

@@ -21,6 +21,7 @@ function checker(w, tag) {
     try {
       const r = w.eval('(function(){' + expr + '})()');
       if (r === false) fails.push('[' + tag + '] ' + name + ' -> false');
+      else if (typeof r === 'string') fails.push('[' + tag + '] ' + name + ' -> ' + r);
       else ok.push(name);
     } catch (e) { fails.push('[' + tag + '] ' + name + ' -> ' + e.message); }
   };

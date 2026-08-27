@@ -134,17 +134,17 @@
   async function _renderLobby(){
     const card=$('dc-mp-lobby-card');if(!card)return;
     const u=MP.currentUser();
-    let h='<div class="pg-title" style="font-size:24px">Shared Universes</div>';
-    h+='<div class="pg-sub" style="margin-bottom:12px">Play in the same world as your table. Your hero and save files stay on your device — the universe is what everyone shares.</div>';
+    let h='<div class="pg-title" style="font-size:24px">Shared '+lexU('universes')+'</div>';
+    h+='<div class="pg-sub" style="margin-bottom:12px">Play in the same world as your table. Your '+lexL('hero')+' and '+lexL('saves')+' stay on your device — the '+lexL('universe')+' is what everyone shares.</div>';
     if(!u){
       h+='<button class="btn btn-primary btn-full" onclick="DC_MP.signIn()">Sign in with Google</button>';
-      h+='<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Sign-in identifies who owns which hero. Nothing is shared until you create or join a universe.</div>';
+      h+='<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Sign-in identifies who owns which '+lexL('hero')+'. Nothing is shared until you create or join a universe.</div>';
       h+='<div class="divider"></div><button class="btn btn-secondary btn-full" onclick="DC_MP.playOffline()">Keep playing offline</button>';
       card.innerHTML=h;return;
     }
-    h+='<div class="card-sm"><div class="label mb-1">Join a universe</div><div style="display:flex;gap:6px"><input id="dc-mp-code" inputmode="numeric" maxlength="4" placeholder="4-digit code" value="'+(_pendingJoinCode||'')+'" style="flex:1;font-family:var(--font-label);font-size:18px;letter-spacing:3px;text-align:center"><button class="btn btn-primary" onclick="DC_MP.join()">Join</button></div></div>';
-    h+='<div class="card-sm"><div class="label mb-1">Start a new one</div><div style="display:flex;gap:6px"><input id="dc-mp-name" placeholder="Universe name, e.g. Earth-77" style="flex:1"><button class="btn btn-gold" onclick="DC_MP.create()">Create</button></div><div style="font-size:11px;color:var(--muted);margin-top:5px">You become the GM. Only the GM can see hidden wiki entries and secrets.</div></div>';
-    h+='<div id="dc-mp-mine"><div style="font-size:11px;color:var(--muted);padding:6px">Loading your universes…</div></div>';
+    h+='<div class="card-sm"><div class="label mb-1">Join a '+lexL('universe')+'</div><div style="display:flex;gap:6px"><input id="dc-mp-code" inputmode="numeric" maxlength="4" placeholder="4-digit code" value="'+(_pendingJoinCode||'')+'" style="flex:1;font-family:var(--font-label);font-size:18px;letter-spacing:3px;text-align:center"><button class="btn btn-primary" onclick="DC_MP.join()">Join</button></div></div>';
+    h+='<div class="card-sm"><div class="label mb-1">Start a new one</div><div style="display:flex;gap:6px"><input id="dc-mp-name" placeholder="'+lexU('universe')+' name, e.g. Earth-77" style="flex:1"><button class="btn btn-gold" onclick="DC_MP.create()">Create</button></div><div style="font-size:11px;color:var(--muted);margin-top:5px">You become the GM. Only the GM can see hidden wiki entries and secrets.</div></div>';
+    h+='<div id="dc-mp-mine"><div style="font-size:11px;color:var(--muted);padding:6px">Loading your '+lexL('universes')+'…</div></div>';
     h+='<div class="divider"></div><button class="btn btn-secondary btn-full" onclick="DC_MP.playOffline()">Keep playing offline</button>';
     card.innerHTML=h;
 
@@ -159,7 +159,7 @@
       else MP.forgetUniverse(row.code).catch(function(){});
     }
     if(!alive.length){wrap.innerHTML='';return;}
-    let lh='<div class="label mb-1" style="margin-top:10px">Your universes</div>';
+    let lh='<div class="label mb-1" style="margin-top:10px">Your '+lexL('universes')+'</div>';
     alive.forEach(function(r){
       lh+='<div class="card-sm" style="display:flex;align-items:center;gap:8px">';
       lh+='<div style="flex:1;min-width:0"><div class="fw-700">'+esc(r.name||'Untitled')+'</div><div style="font-size:11px;color:var(--muted)">#'+esc(r.code)+(r.role==='gm'?' · GM':'')+'</div></div>';
@@ -178,13 +178,17 @@
     playOffline:function(){_closeLobby();},
     create:async function(){
       const n=($('dc-mp-name')||{}).value||'';
-      if(!n.trim())return _toast('Give the universe a name first.',true);
-      // Carry the local universe's tone/level up if we have one, so a GM who
-      // set the world up offline doesn't lose it when they share it.
+      if(!n.trim())return _toast('Give the '+lexL('universe')+' a name first.',true);
+      // Carry the local world's pack settings up if we have any, so a GM who set
+      // things up offline doesn't lose them when they share it.
       const lu=_u(),ls=(lu&&lu.series)||{};
       try{
-        const code=await MP.createUniverse({name:n.trim(),series:{tone:ls.tone||'',level:ls.level||''}});
-        _toast('Universe created — code '+code);
+        const code=await MP.createUniverse({
+          name:n.trim(),
+          systemId:(typeof SYS!=='undefined'&&SYS)?SYS.id:'',
+          packMeta:(ls.tone||ls.level)?{tone:ls.tone||'',level:ls.level||''}:null
+        });
+        _toast(lexU('universe')+' created — code '+code);
         await _enterShared(code,n.trim());
       }catch(e){_err(e);}
     },
@@ -193,17 +197,17 @@
       if(!/^\d{1,4}$/.test(code))return _toast('Enter the 4-digit code.',true);
       code=String(code).padStart(4,'0');
       try{
-        const meta=await MP.joinUniverse(code);
+        const meta=await MP.joinUniverse(code,{systemId:(typeof SYS!=='undefined'&&SYS)?SYS.id:''});
         await _enterShared(code,meta&&meta.name);
       }catch(e){_err(e);}
     },
     forget:async function(code){
-      if(!confirm('Leave this universe? Your local copy of its roster and wiki stays on this device.'))return;
+      if(!confirm('Leave this '+lexL('universe')+'? Your local copy of its '+lexL('roster')+' and '+lexL('wiki')+' stays on this device.'))return;
       try{await MP.forgetUniverse(code);_renderLobby();}catch(e){_err(e);}
     },
     destroy:async function(code){
-      if(!confirm('Delete this universe for EVERYONE at the table? This cannot be undone.'))return;
-      try{await MP.deleteUniverse(code);_toast('Universe deleted.');_renderLobby();}catch(e){_err(e);}
+      if(!confirm('Delete this '+lexL('universe')+' for EVERYONE at the table? This cannot be undone.'))return;
+      try{await MP.deleteUniverse(code);_toast(lexU('universe')+' deleted.');_renderLobby();}catch(e){_err(e);}
     },
     reveal:_revealCurrentLore,
     openLobby:_openLobby,
@@ -284,16 +288,21 @@
       if(u){
         let dirty=false;
         if(meta.name&&u.name!==meta.name){u.name=meta.name;dirty=true;}
-        // The GM owns tone and power level; players inherit them.
-        u.series=u.series||{tone:'',level:''};
-        if(meta.tone&&u.series.tone!==meta.tone){u.series.tone=meta.tone;dirty=true;}
-        if(meta.level&&u.series.level!==meta.level){u.series.level=meta.level;dirty=true;}
+        // The GM owns the pack's world settings; players inherit them. Read
+        // packMeta, falling back to the flat tone/level of worlds created before
+        // the field existed.
+        const pm=meta.packMeta||{tone:meta.tone,level:meta.level}||{};
+        if(pm.tone!==undefined||pm.level!==undefined){
+          u.series=u.series||{tone:'',level:''};
+          if(pm.tone&&u.series.tone!==pm.tone){u.series.tone=pm.tone;dirty=true;}
+          if(pm.level&&u.series.level!==pm.level){u.series.level=pm.level;dirty=true;}
+        }
         if(dirty){_withRemote(function(){saveUniverses();});_rerenderAll();}
       }
     }
     // GM deleted the universe while we were in it.
     if(had&&!meta&&inShared){
-      alert('The GM ended this universe.');
+      alert('The GM ended this '+lexL('universe')+'.');
       MP.forgetUniverse(MP.currentUniverse().code).catch(function(){});
       _leaveShared();
       return;
@@ -480,7 +489,7 @@
         const r=orig.apply(this,arguments);
         if(inShared&&S&&S.dice){
           MP.appendRoll({
-            name:(S.char&&S.char.costumedName)||MP.displayName(),
+            name:sysCharName(S.char)||MP.displayName(),
             skill:S.dice.skill||'',total:S.dice.total,
             dice:S.dice.dice||[],mod:S.dice.mod||0,tn:S.dice.tn||0
           }).catch(function(){});
@@ -644,7 +653,7 @@
   window.mpPushUniverseSeries=function(){
     if(!inShared||!MP.isGM())return;
     const u=_u(),s=(u&&u.series)||{};
-    MP.writeMeta({name:(u&&u.name)||'',tone:s.tone||'',level:s.level||''}).catch(_err);
+    MP.writeMeta({name:(u&&u.name)||'',packMeta:{tone:s.tone||'',level:s.level||''}}).catch(_err);
   };
 
   // Expose a little state for tests and debugging.

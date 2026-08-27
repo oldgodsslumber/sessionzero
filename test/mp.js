@@ -13,9 +13,16 @@ const MPJS = fs.readFileSync(path.join(ROOT, 'core/mp.js'), 'utf8');
 const APPJS = fs.readFileSync(path.join(ROOT, 'core/app-mp.js'), 'utf8');
 
 const fails = [], ok = [];
+// A check fails on `false` OR on a returned string, which is the reason.
+// Without the string case, `() => cond || 'why it failed'` silently PASSES,
+// which is exactly how the cross-game join test managed to assert nothing.
 function check(name, fn) {
-  try { const r = fn(); if (r === false) fails.push(name + ' -> false'); else ok.push(name); }
-  catch (e) { fails.push(name + ' -> ' + e.message); }
+  try {
+    const r = fn();
+    if (r === false) fails.push(name + ' -> false');
+    else if (typeof r === 'string') fails.push(name + ' -> ' + r);
+    else ok.push(name);
+  } catch (e) { fails.push(name + ' -> ' + e.message); }
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -83,9 +90,45 @@ const CHAR = n => ({
   await gm.eval('currentUniverse().series={tone:"fourcolor",level:"mightiest"};saveUniverses();mpPushUniverseSeries();');
   await wait(400);
   check('GM series reaches the meta', () => {
+    // Pack-specific world settings now travel under meta.packMeta, so the shared
+    // meta shape stays the same for every game. Daring Comics puts tone/level
+    // there; a pack with no such settings sends nothing.
     const meta = backend._raw('universes/' + code + '/meta');
-    return meta.tone === 'fourcolor' && meta.level === 'mightiest';
+    const pm = meta.packMeta || {};
+    return pm.tone === 'fourcolor' && pm.level === 'mightiest';
   });
+  check('the world is stamped with the system that made it', () => {
+    const meta = backend._raw('universes/' + code + '/meta');
+    return meta.systemId === 'daring-comics';
+  });
+
+  // ═══ CROSS-GAME JOIN IS REFUSED ═══
+  // The code is only four digits and carries no game information, so without
+  // this gate a Dungeon Crawler Carl client could join a Daring Comics world and
+  // sync a crawler into its roster — corrupting both sides.
+  const crossErr = await gm.eval(
+    "MP.joinUniverse('" + code + "',{systemId:'dungeon-crawler-carl'})" +
+    ".then(function(){return 'JOINED';},function(e){return e.message;})");
+  check('a client from another game cannot join this world',
+    () => crossErr !== 'JOINED' || 'the join was allowed');
+  check('...and the refusal names the game that owns the code',
+    () => /daring-comics/.test(crossErr) || 'unhelpful message: ' + crossErr);
+  const sameErr = await gm.eval(
+    "MP.joinUniverse('" + code + "',{systemId:'daring-comics'})" +
+    ".then(function(){return 'JOINED';},function(e){return e.message;})");
+  check('the matching game still joins normally', () => sameErr === 'JOINED' || sameErr);
+  // A world created before systemId existed carries no such key at all. It must
+  // stay joinable, or upgrading would lock an existing table out of its own game.
+  // createUniverse always stamps now, so reproduce the legacy shape the way the
+  // database actually holds it: delete the field.
+  const legacyCode = await gm.eval("MP.createUniverse({name:'Legacy'})");
+  delete backend._raw('universes/' + legacyCode + '/meta').systemId;
+  check('the legacy fixture really is unstamped',
+    () => !('systemId' in backend._raw('universes/' + legacyCode + '/meta')) || 'fixture still stamped');
+  const legacy = await gm.eval(
+    "MP.joinUniverse('" + legacyCode + "',{systemId:'dungeon-crawler-carl'})" +
+    ".then(function(){return 'JOINED';},function(e){return e.message;})");
+  check('an unstamped legacy world stays joinable', () => legacy === 'JOINED' || legacy);
   check('player inherits the GM tone and level', () =>
     pl.eval('currentUniverse().series.tone') === 'fourcolor' &&
     pl.eval('currentUniverse().series.level') === 'mightiest');
