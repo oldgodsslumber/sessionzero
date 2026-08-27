@@ -180,6 +180,10 @@ registerSystem({
   catalogs: {
     skills: DCC_SKILLS,
     spells: DCC_SPELLS,
+    craftingTables: DCC_CRAFTING_TABLES,
+    craftingSkills: DCC_CRAFTING_SKILLS,
+    salvage: DCC_SALVAGE,
+    concoctions: DCC_CONCOCTIONS,
     races: DCC_RACES,
     classes: DCC_CLASSES,
     backgrounds: DCC_BACKGROUNDS,

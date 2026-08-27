@@ -17,9 +17,16 @@ function check(name, fn) {
     else ok.push(name);
   } catch (e) { fails.push(name + ' -> ' + e.message); }
 }
+// eq takes a THUNK or a value. A thunk is evaluated inside the try, so a null
+// dereference in the expression under test becomes a named failure instead of
+// aborting the whole run — which is what happened when a deliberately broken
+// salvage band made dccSalvageFor(3) return null.
 function eq(a, b, name) {
-  if (a === b) ok.push(name);
-  else fails.push(name + ' -> got ' + JSON.stringify(a) + ', expected ' + JSON.stringify(b));
+  try {
+    const v = typeof a === 'function' ? a() : a;
+    if (v === b) ok.push(name);
+    else fails.push(name + ' -> got ' + JSON.stringify(v) + ', expected ' + JSON.stringify(b));
+  } catch (e) { fails.push(name + ' -> ' + e.message); }
 }
 
 function boot(entry) {
@@ -1041,6 +1048,59 @@ function boot(entry) {
     ev("dccFinishCreation(S.char);");
     const names = JSON.parse(ev('JSON.stringify(S.char.blocks.spells.skills)')).map(s => s.name);
     return (names.length === 1 && names[0] === 'Heal') || 'got ' + names.join(', ');
+  });
+
+  // ── crafting (D7) ────────────────────────────────────────────────────────
+  eq(ev('DCC_CRAFTING_TABLES.length'), 7, '[craft] seven types of crafting table');
+  eq(ev('DCC_CRAFTING_SKILLS.length'), 6, '[craft] six item/effect rows in Table 45');
+  eq(ev('DCC_SALVAGE.length'), 3, '[craft] three salvage bands');
+  eq(ev('DCC_CONCOCTIONS.length'), 5, '[craft] five concoction outcomes');
+  check('[craft] every crafting Skill named exists in the catalogue', () => {
+    const bad = ev(`JSON.stringify([...new Set(DCC_CRAFTING_SKILLS.flatMap(r=>r.skills))]
+      .filter(n=>!dccSkillByName(n)))`);
+    return bad === '[]' || 'orphans: ' + bad;
+  });
+  check('[craft] Explosives keeps BOTH of its Skills', () => {
+    const r = JSON.parse(ev("JSON.stringify(dccCraftingSkillFor('Explosives'))"));
+    if (!r) return 'row missing';
+    const s = r.skills.slice().sort().join(', ');
+    return s === 'Explosives Handling, Goblin Explosives' || 'got ' + s;
+  });
+  eq(ev("dccCraftingSkillFor('Potions').skills[0]"), 'Alchemy',
+     '[craft] potions need Alchemy');
+  eq(ev("dccCraftingSkillFor('Tattoos').skills[0]"), 'Tattoo Artistry',
+     '[craft] tattoos need Tattoo Artistry');
+
+  // salvage bands read off how far the Check missed
+  eq(() => ev('dccSalvageFor(12).band'), '10+', '[craft] missing by 12 falls in the 10+ band');
+  eq(() => ev('dccSalvageFor(10).band'), '10+', '[craft] ...and 10 is the bottom of it');
+  eq(() => ev('dccSalvageFor(9).band'), '3-9', '[craft] missing by 9 salvages half');
+  eq(() => ev('dccSalvageFor(3).band'), '3-9', '[craft] ...down to 3');
+  eq(() => ev('dccSalvageFor(2).band'), '1-2', '[craft] a near miss salvages everything');
+  eq(() => ev('dccSalvageFor(1).band'), '1-2', '[craft] ...including missing by 1');
+  check('[craft] a successful Check has nothing to salvage', () =>
+    ev('dccSalvageFor(0)') === null && ev('dccSalvageFor(-4)') === null);
+  check('[craft] the bands cover every miss from 1 upward with no gap', () => {
+    for (let m = 1; m <= 60; m++) {
+      if (!ev('dccSalvageFor(' + m + ')')) return 'no band covers a miss of ' + m;
+    }
+    return true;
+  });
+
+  // concoctions key off the degrees the dice engine already produces
+  eq(ev("dccConcoctionFor('crit_hit').label"), 'Critical Hit',
+     '[craft] a Critical Hit invents something new');
+  eq(ev("dccConcoctionFor('crit_fail').label"), 'Critical Fail',
+     '[craft] a Critical Fail blows up in your face');
+  check('[craft] every degree the roller can produce maps to an outcome', () => {
+    const bad = ev(`JSON.stringify(DCC_DEGREES.map(d=>d.id).filter(id=>!dccConcoctionFor(id)))`);
+    return bad === '[]' || 'no concoction outcome for: ' + bad;
+  });
+  check('[craft] the failure degrees share the Near Miss or Failure row', () => {
+    const a = ev("dccConcoctionFor('near_miss').label");
+    const b = ev("dccConcoctionFor('fail').label");
+    const c = ev("dccConcoctionFor('major_fail').label");
+    return (a === b && b === c && a === 'Near Miss or Failure') || [a, b, c].join(' / ');
   });
 
   // ── the sheet actually renders ───────────────────────────────────────────
