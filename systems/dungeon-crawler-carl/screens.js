@@ -496,8 +496,16 @@ const DCC_SCREENS = [
       if (left < 0) return (-left) + ' Stat points over budget — take some back.';
       if (fs.favor === null) return 'Roll your AI Favor.';
       if (!(fs.loot && fs.loot.spread)) return 'Roll for your Acquired Loot.';
-      if ((fs.experiences || []).length !== DCC_EXPERIENCE_COUNT) {
-        return 'Roll your six Tutorial Floor Experiences.';
+      const wantExp = dccExperienceCount(cfg);
+      if ((fs.experiences || []).length !== wantExp) {
+        return 'Roll your ' + wantExp + ' Tutorial Floor Experiences.';
+      }
+      if (cfg.skillBoost) {
+        const boosts = fs.skillBoosts || [];
+        if (boosts.length < cfg.skillBoost.count) {
+          return 'Choose ' + (cfg.skillBoost.count - boosts.length) + ' more Skill' +
+                 (cfg.skillBoost.count - boosts.length === 1 ? '' : 's') + ' to advance.';
+        }
       }
       return true;
     },
@@ -581,7 +589,14 @@ function dccFinishCreation(char) {
   // Popularity starts at CHA Mod x2 (p. 115) -- but only for a crawler who has
   // been through the Tutorial Floors. Viewers cannot tune in until after the
   // First Floor, so a Floor 1 crawler has no audience yet.
-  char.blocks.popularity = { current: fs2cfg.popularity === false ? 0 : dccModOf(char, 'CHA') * 2 };
+  // CHA Mod x2 on the Third Floor (p. 115), plus CHA Mod again for each floor
+  // beyond it (p. 118). None at all before the Second Floor, when the viewers
+  // first tune in.
+  char.blocks.popularity = {
+    current: fs2cfg.popularity === false
+      ? 0
+      : dccModOf(char, 'CHA') * (2 + (fs2cfg.popularityBonus || 0)),
+  };
   char.blocks.aiFavor = {
     current: (char.species === 'animal' ? 0 : 1) + (fs.favor || 0),
   };
@@ -785,17 +800,71 @@ function dccScreenTutorial(ctx) {
   });
   h += '</div></div>';
 
-  const pop = dccModOf(c, 'CHA') * 2;
+  const popMult = 2 + (cfg.popularityBonus || 0);
+  const pop = dccModOf(c, 'CHA') * popMult;
   h += '<div class="card"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-around;text-align:center">' +
        '<div><div style="font-size:22px;font-weight:800;color:var(--accent)">' + (fs.favor === null ? '&mdash;' : fs.favor) + '</div>' +
        '<div class="label" style="margin:0">AI Favor</div>' +
        '<button class="btn btn-gold btn-xs" style="margin-top:4px" onclick="dccRollFavor()">Roll 1d2</button></div>' +
        '<div><div style="font-size:22px;font-weight:800;color:var(--accent)">' + pop + '</div>' +
        '<div class="label" style="margin:0">Popularity</div>' +
-       '<div style="font-size:10px;color:var(--muted)">CHA Mod &times; 2</div></div></div></div>';
+       '<div style="font-size:10px;color:var(--muted)">CHA Mod &times; ' + popMult + '</div></div></div></div>';
 
+  h += dccScreenSkillBoost(ctx);
   h += dccScreenLoot(ctx);
+  if (cfg.extraLoot) {
+    h += '<div class="card"><div class="pg-title" style="font-size:16px">One more piece of loot</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Starting on Floor ' + cfg.floor +
+      ' you gain an additional Starting Loot from your <strong>' + cfg.extraLoot.join('</strong> and <strong>') +
+      '</strong> options on Table 25. You can choose the same as before or switch.</div>' +
+      '<input value="' + esc((fs.loot && fs.loot.extra) || '') + '" placeholder="What you took" ' +
+      'oninput="dccStoreExtraLoot(this.value)"></div>';
+  }
   return h;
+}
+
+// "Choose 6 Skills. Add 2d2 Ranks if at Rank 4 or less, or 1d2 Ranks if Rank
+// 5+" (p. 118) — Floor 4; eight Skills on Floor 5. Each pick rolls on its own,
+// because which die you get depends on the Rank that Skill is already at.
+function dccScreenSkillBoost(ctx) {
+  const c = ctx.char, fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+  if (!cfg.skillBoost) return '';
+  const picked = fs.skillBoosts || [];
+  const left = cfg.skillBoost.count - picked.length;
+  const list = dccFinalSkills(c).filter(function (s) { return !s.passive; });
+  let h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">' +
+    '<div class="pg-title" style="font-size:16px">Extra Skill Ranks</div>' +
+    (picked.length ? '<button class="btn btn-secondary btn-xs" onclick="dccSkillBoostClear()">Start over</button>' : '') +
+    '</div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Choose ' + cfg.skillBoost.count +
+    ' Skills. Each gains ' + cfg.skillBoost.low + ' Ranks at Rank ' + cfg.skillBoost.threshold +
+    ' or less, or ' + cfg.skillBoost.high + ' Ranks at Rank ' + (cfg.skillBoost.threshold + 1) + '+. ' +
+    (left > 0 ? left + ' still to choose.' : 'All chosen.') + '</div>';
+  if (picked.length) {
+    h += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:2px 8px;font-size:12px;align-items:center;margin-bottom:6px">';
+    picked.forEach(function (b) {
+      h += '<div>' + esc(b.name) + '</div>' +
+           '<div style="color:var(--muted)">' + b.from + '</div>' +
+           '<div style="color:var(--muted)">+' + b.roll + '</div>' +
+           '<div style="font-weight:700;text-align:right">' + b.to +
+           (b.wasted ? ' <span style="color:var(--red);font-size:9px">' + b.wasted + ' wasted</span>' : '') + '</div>';
+    });
+    h += '</div>';
+  }
+  h += '<div>' + list.map(function (sk) {
+    const on = picked.some(function (b) { return b.name === sk.name; });
+    const full = !on && left <= 0;
+    return '<button class="btn btn-xs ' + (on ? 'btn-primary' : 'btn-secondary') + '"' +
+      ' style="margin:0 4px 4px 0;' + (full ? 'opacity:.35' : '') + '"' +
+      (full ? '' : ' onclick="dccSkillBoostToggle(' + jsArg(sk.name) + ')"') +
+      '>' + esc(sk.name) + ' <span style="color:var(--muted)">' + sk.rank + '</span></button>';
+  }).join('') + '</div></div>';
+  return h;
+}
+
+function dccStoreExtraLoot(v) {             // store only; never repaint on typing
+  const fs = dccLoot(S.char);
+  fs.loot.extra = v;
+  save();
 }
 
 function dccSetFloor(n) {
@@ -1148,6 +1217,11 @@ function dccFinalSkills(char) {
     const s = out.find(function (x) { return x.name === b.name; });
     if (s) s.rank = b.to;
   });
+  // Floors 4 and 5 advance a handful of Skills again, after the bumps.
+  (dccFloorStart(char).skillBoosts || []).forEach(function (b) {
+    const s = out.find(function (x) { return x.name === b.name; });
+    if (s) s.rank = b.to;
+  });
   const diff = dccRcDiff(char);
   if (diff) {
     diff.skills.forEach(function (g) {
@@ -1326,8 +1400,38 @@ function dccRollOneExperience() {
 }
 function dccRollExperiences() {
   const fs = dccLoot(S.char);
+  const n = dccExperienceCount(dccFloorCfg(S.char));
   fs.experiences = [];
-  for (let i = 0; i < DCC_EXPERIENCE_COUNT; i++) fs.experiences.push(dccRollOneExperience());
+  for (let i = 0; i < n; i++) fs.experiences.push(dccRollOneExperience());
+  save(); wizRepaint();
+}
+
+// ─── the extra Skill advancement Floors 4 and 5 grant ───────────────────────
+// "Choose 6 Skills. Add 2d2 Ranks if at Rank 4 or less, or 1d2 Ranks if Rank
+// 5+" (p. 118). Rolled per Skill, because the two dice differ by the Rank the
+// Skill is already at.
+function dccSkillBoostRoll(rank, cfg) {
+  const d2 = function () { return 1 + Math.floor(Math.random() * 2); };
+  return rank <= cfg.threshold ? d2() + d2() : d2();
+}
+function dccSkillBoostToggle(name) {
+  const c = S.char, fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+  if (!cfg.skillBoost) return;
+  fs.skillBoosts = fs.skillBoosts || [];
+  const at = fs.skillBoosts.findIndex(function (b) { return b.name === name; });
+  if (at >= 0) { fs.skillBoosts.splice(at, 1); save(); wizRepaint(); return; }
+  if (fs.skillBoosts.length >= cfg.skillBoost.count) return;
+  // Roll against the Rank the Skill has BEFORE this advancement, which is what
+  // the tutorial bumps left it at.
+  const base = (dccFinalSkills(c).find(function (x) { return x.name === name; }) || {}).rank || 0;
+  const roll = dccSkillBoostRoll(base, cfg.skillBoost);
+  fs.skillBoosts.push({ name: name, from: base, roll: roll,
+                        to: Math.min(cfg.rankCap, base + roll),
+                        wasted: Math.max(0, base + roll - cfg.rankCap) });
+  save(); wizRepaint();
+}
+function dccSkillBoostClear() {
+  dccFloorStart(S.char).skillBoosts = [];
   save(); wizRepaint();
 }
 function dccRerollExperience(i) {

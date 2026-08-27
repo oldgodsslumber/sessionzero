@@ -210,8 +210,21 @@ const DCC_FLOOR_START = [
         + 'You are Human, Level 1, and you pick a Race and Class when you reach the Third Floor.' },
   { floor: 3, level: 10, statPoints: 27, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
     tutorial: true, raceClass: true, popularity: true },
+  // Floors 4 and 5 are each "the rules for creating a Third Floor Crawler,
+  // then..." (p. 118) — NOT cumulative with each other. Beyond the extra Stat
+  // points, each adds four things the app used to ignore entirely.
   { floor: 4, level: 20, statPoints: 57, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
-    tutorial: true, raceClass: true, popularity: true },
+    tutorial: true, raceClass: true, popularity: true,
+    extraExperiences: 2,                       // "including the Third Floor table"
+    skillBoost: { count: 6, low: '2d2', high: '1d2', threshold: 4 },
+    popularityBonus: 1,                        // "Add your CHA Mod to your Popularity"
+    extraLoot: ['Bronze', 'Silver'] },
+  { floor: 5, level: 30, statPoints: 87, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
+    tutorial: true, raceClass: true, popularity: true,
+    extraExperiences: 4,
+    skillBoost: { count: 8, low: '2d2', high: '1d2', threshold: 4 },
+    popularityBonus: 1,
+    extraLoot: ['Gold', 'Platinum'] },
 ];
 const DCC_CREATION_STEPS = [
   { id: 'identity', label: 'Who are you' },
@@ -293,4 +306,8 @@ const DCC_EXPERIENCE_TABLES = [
   { roll: 5, table: 33, title: 'Traps & Accidents', rolls: 12, page: 122 },
   { roll: 6, table: 34, title: 'Interview Show Experiences', rolls: 12, page: 123 },
 ];
+// Six on the Third Floor; a higher starting floor rolls more (p. 118).
 const DCC_EXPERIENCE_COUNT = 6;
+function dccExperienceCount(cfg) {
+  return DCC_EXPERIENCE_COUNT + ((cfg && cfg.extraExperiences) || 0);
+}

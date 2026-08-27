@@ -1012,6 +1012,99 @@ function boot(entry) {
     return !cm.weaponName || 'an Axe is still called ' + JSON.stringify(cm.weaponName);
   });
 
+  // ── Floors 4 and 5 (p. 118) ──────────────────────────────────────────────
+  // Each is "the rules for creating a Third Floor Crawler, then..." — they are
+  // NOT cumulative with each other. Floor 4 used to implement only the first of
+  // its five bullets, and Floor 5 did not exist.
+  check('[floor45] Floor 5 can be chosen, at Level 30', () => {
+    const f = JSON.parse(ev('JSON.stringify(DCC_FLOOR_START.map(function(x){return [x.floor,x.level,x.statPoints]}))'));
+    const five = f.filter(x => x[0] === 5)[0];
+    if (!five) return 'floors offered are ' + f.map(x => x[0]).join(', ');
+    // 27 on the Third Floor plus 60 more.
+    return (five[1] === 30 && five[2] === 87) || 'Level ' + five[1] + ', ' + five[2] + ' points';
+  });
+  check('[floor45] Floor 4 is 27 + 30 points, Floor 5 is 27 + 60', () => {
+    const pts = f => ev('DCC_FLOOR_START.filter(function(x){return x.floor===' + f + '})[0].statPoints');
+    return (pts(3) === 27 && pts(4) === 57 && pts(5) === 87)
+      || [3, 4, 5].map(f => 'F' + f + '=' + pts(f)).join(' ');
+  });
+  check('[floor45] a higher floor rolls more Tutorial Floor Experiences', () => {
+    const n = f => {
+      ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(" + f + ");dccRollExperiences();");
+      return ev('S.char.dcc.floorStart.experiences.length');
+    };
+    const got = [n(3), n(4), n(5)];
+    return (got[0] === 6 && got[1] === 8 && got[2] === 10)
+      || 'rolled ' + got.join(', ') + ' — expected 6, 8, 10';
+  });
+  check('[floor45] the extra Skill advancement is demanded before you can continue', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(4);");
+    ev("dccRollBumps();dccRollFavor();dccRollSpread();dccRollExperiences();");
+    ev("for(var i=0;i<57;i++)dccStatPoint('CON',1);");
+    const v = ev('wizValidate(S.char,6)');
+    return (v !== true && /Skill/.test(String(v))) || 'let through without choosing Skills: ' + v;
+  });
+  check('[floor45] 2d2 Ranks at Rank 4 or less, 1d2 at Rank 5+', () => {
+    // Roll each band many times and check the range, since the die differs by
+    // the Rank the Skill is already at.
+    const cfg = "{count:6,low:'2d2',high:'1d2',threshold:4}";
+    const low = [], high = [];
+    for (let i = 0; i < 60; i++) {
+      low.push(ev('dccSkillBoostRoll(3,' + cfg + ')'));
+      high.push(ev('dccSkillBoostRoll(7,' + cfg + ')'));
+    }
+    const badLow = low.filter(r => r < 2 || r > 4);
+    const badHigh = high.filter(r => r < 1 || r > 2);
+    if (badLow.length) return 'a Rank 3 Skill rolled ' + badLow[0] + ', outside 2d2';
+    if (badHigh.length) return 'a Rank 7 Skill rolled ' + badHigh[0] + ', outside 1d2';
+    // and the bands must actually differ
+    return Math.max.apply(null, high) <= 2 && Math.max.apply(null, low) >= 3
+      || 'the two bands are not distinguishable';
+  });
+  check('[floor45] an advanced Skill reaches the finished sheet', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(4);dccRollBumps();");
+    const before = ev("(dccFinalSkills(S.char).find(function(x){return x.name==='Club'})||{}).rank");
+    ev("dccSkillBoostToggle('Club');");
+    const b = JSON.parse(ev("JSON.stringify(S.char.dcc.floorStart.skillBoosts[0])"));
+    const after = ev("(dccFinalSkills(S.char).find(function(x){return x.name==='Club'})||{}).rank");
+    if (b.from !== before) return 'rolled against Rank ' + b.from + ' but the Skill was at ' + before;
+    return after === b.to || 'the sheet shows ' + after + ', the roll said ' + b.to;
+  });
+  check('[floor45] choosing the same Skill again takes the advancement back', () => {
+    ev("dccSkillBoostToggle('Club');");
+    return ev('(S.char.dcc.floorStart.skillBoosts||[]).length') === 0 || 'still chosen';
+  });
+  check('[floor45] no more Skills can be chosen than the floor grants', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(4);dccRollBumps();");
+    // Only two Skills exist on this crawler, so ask for each repeatedly.
+    for (let i = 0; i < 20; i++) ev("dccSkillBoostToggle('Skill" + i + "');");
+    return ev('(S.char.dcc.floorStart.skillBoosts||[]).length') <= 6
+      || 'took ' + ev('(S.char.dcc.floorStart.skillBoosts||[]).length') + ' of 6';
+  });
+  check('[floor45] Popularity gains CHA Mod again beyond the Third Floor', () => {
+    const pop = f => {
+      ev("S.char=SYS.newCharacter();dccSetFloor(" + f + ");S.char.blocks.stats={CHA:{base:20,bonus:0}};");
+      ev("dccFinishCreation(S.char);");
+      return ev('S.char.blocks.popularity.current');
+    };
+    const mod = ev("dccStatMod(20)");
+    const got = [pop(3), pop(4), pop(5)];
+    const want = [mod * 2, mod * 3, mod * 3];
+    return got.join(',') === want.join(',')
+      || 'got ' + got.join(', ') + ' — expected ' + want.join(', ') + ' (CHA Mod ' + mod + ')';
+  });
+  check('[floor45] each floor names the loot tiers it adds', () => {
+    const tiers = f => ev("JSON.stringify(DCC_FLOOR_START.filter(function(x){return x.floor===" + f + "})[0].extraLoot||null)");
+    if (tiers(3) !== 'null') return 'Floor 3 should add no extra loot: ' + tiers(3);
+    if (tiers(4) !== '["Bronze","Silver"]') return 'Floor 4: ' + tiers(4);
+    return tiers(5) === '["Gold","Platinum"]' || 'Floor 5: ' + tiers(5);
+  });
+  check('[floor45] Floor 3 gained none of this', () => {
+    const f3 = JSON.parse(ev("JSON.stringify(DCC_FLOOR_START.filter(function(x){return x.floor===3})[0])"));
+    const extras = ['extraExperiences', 'skillBoost', 'popularityBonus', 'extraLoot'].filter(k => f3[k]);
+    return extras.length === 0 || 'Floor 3 picked up ' + extras.join(', ');
+  });
+
   // ── starting on the First Floor at Level 1 ───────────────────────────────
   // The core rulebook only builds Third and Fourth Floor crawlers: "If you'd
   // rather start out at Level 1, look for the Dungeon Crawler Carl Roleplaying
