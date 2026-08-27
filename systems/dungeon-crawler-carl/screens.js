@@ -308,11 +308,38 @@ function dccScreenStats(ctx) {
   return h;
 }
 
+
+// The Enhanced layer (`blocks.stats[x].bonus`) is the SUM of two independent
+// grants: the tutorial-floor points you spent, and the Race/Class deltas.
+// Both used to write that one field directly, so each clobbered the other —
+// finishing twice stacked the Race/Class bonus forever, and a single "-" click
+// on the Stats screen deleted it. Recompute the field from both sources
+// instead; every caller then becomes idempotent for free.
+function dccApplyStatBonuses(char, withRaceClass) {
+  const fs = dccFloorStart(char);
+  const pts = fs.points || {};
+  // Default to whatever the character's own history says: the Race/Class layer
+  // counts once the finish step has landed it, and not before.
+  const useRc = (withRaceClass === undefined) ? !!fs.rcApplied : withRaceClass;
+  const rc = useRc ? ((dccRcDiff(char) || {}).stats || {}) : {};
+  char.blocks = char.blocks || {};
+  char.blocks.stats = char.blocks.stats || {};
+  DCC_STATS.forEach(function (st) {
+    const cell = char.blocks.stats[st.id] || { base: 0, bonus: 0 };
+    cell.bonus = (pts[st.id] || 0) + ((rc[st.id] && rc[st.id].delta) || 0);
+    char.blocks.stats[st.id] = cell;
+  });
+}
+
 function dccStatMethod(m) {
   const c = S.char, d = dccCre(c);
   if (d.statMethod === m) return;
   d.statMethod = m;
   c.blocks = c.blocks || {}; c.blocks.stats = {};      // switching method starts over
+  // ...but the tutorial points are a separate grant and are still spent, so
+  // re-apply them. They used to vanish while dccPointsSpent() still counted
+  // them, leaving the crawler 27 points poorer with no warning.
+  dccApplyStatBonuses(c);
   save(); wizRepaint();
 }
 function dccAssignStat(id, n) {
@@ -325,6 +352,7 @@ function dccAssignStat(id, n) {
   const cell = c.blocks.stats[id] || { base: 0, bonus: 0 };
   cell.base = (cell.base === n) ? 0 : n;
   c.blocks.stats[id] = cell;
+  dccApplyStatBonuses(c);
   save(); wizRepaint();
 }
 function dccRollStats() {
@@ -335,6 +363,7 @@ function dccRollStats() {
     while (v === 1) v = wizRoll(6);            // reroll 1s
     c.blocks.stats[s.id] = { base: v, bonus: 0 };
   });
+  dccApplyStatBonuses(c);
   save(); wizRepaint();
 }
 
@@ -415,8 +444,15 @@ const DCC_SCREENS = [
       // Same order as the screen, so the message names the first thing you
       // still have to do rather than something further down.
       if (!fs.bumps) return 'Roll your tutorial-floor Skill Ranks.';
+      if (dccBumpsStale(c)) {
+        return 'Your starting Skills changed — roll your tutorial-floor Skill Ranks again.';
+      }
       const left = cfg.statPoints - dccPointsSpent(c);
       if (left > 0) return left + ' Stat points still unspent — Races and Classes check these.';
+      // Overspending should be impossible now that dccStatPoint clamps and
+      // dccSetFloor trims, but the validator is the last gate before a crawler
+      // is finished, so it refuses rather than trusting the callers.
+      if (left < 0) return (-left) + ' Stat points over budget — take some back.';
       if (fs.favor === null) return 'Roll your AI Favor.';
       if (!(fs.loot && fs.loot.spread)) return 'Roll for your Acquired Loot.';
       if ((fs.experiences || []).length !== DCC_EXPERIENCE_COUNT) {
@@ -466,12 +502,11 @@ function dccFinishCreation(char) {
   // Apply the Race/Class Stat deltas onto the Enhanced layer, on top of the
   // tutorial-floor points already there. This is the only moment the shopping
   // on screen 8 actually lands.
+  // Recomputed from the tutorial points plus the Race/Class deltas, so
+  // finishing a second time lands on the same numbers instead of stacking.
+  dccFloorStart(char).rcApplied = true;
+  dccApplyStatBonuses(char, true);
   if (diff) {
-    Object.keys(diff.stats).forEach(function (k) {
-      const cell = char.blocks.stats[k] || { base: 0, bonus: 0 };
-      cell.bonus = (cell.bonus || 0) + diff.stats[k].delta;
-      char.blocks.stats[k] = cell;
-    });
     if (diff.race) char.race = diff.race.name;
     if (diff.cls) char.class = diff.cls.name;
     if (diff.race && diff.race.size) char.size = diff.race.size.n;
@@ -642,6 +677,12 @@ function dccScreenTutorial(ctx) {
        '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">+' + cfg.primaryBump + ' to ' +
        esc(primary || 'your primary attack Skill') + ', +' + cfg.otherBump + ' to each of the others. ' +
        'Nothing passes Rank ' + cfg.rankCap + ' here, and anything over is wasted.</div>';
+  if (fs.bumps && dccBumpsStale(c)) {
+    h += '<div class="card-sm" style="border-color:var(--red)">' +
+      '<div class="label mb-1" style="color:var(--red)">These rolls are out of date</div>' +
+      '<div style="font-size:11px;color:var(--muted)">Your starting Skills changed after you rolled. ' +
+      'Roll again so the bumps land on the Skills you actually have.</div></div>';
+  }
   if (fs.bumps) {
     h += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:2px 8px;font-size:12px;align-items:center">';
     fs.bumps.forEach(function (b) {
@@ -688,24 +729,67 @@ function dccScreenTutorial(ctx) {
   return h;
 }
 
-function dccSetFloor(n) { dccFloorStart(S.char).floor = n; save(); wizRepaint(); }
+function dccSetFloor(n) {
+  const c = S.char, fs = dccFloorStart(c);
+  fs.floor = n;
+  // A lower tutorial floor grants fewer Stat points. Without trimming, dropping
+  // from floor 4 to floor 3 kept all 57 points, the screen read "-30 of 27
+  // left", and the wizard still let you finish 30 points over budget.
+  const cap = dccFloorCfg(c).statPoints;
+  fs.points = fs.points || {};
+  let over = dccPointsSpent(c) - cap;
+  if (over > 0) {
+    DCC_STATS.slice().reverse().forEach(function (st) {
+      if (over <= 0) return;
+      const have = fs.points[st.id] || 0;
+      const take = Math.min(have, over);
+      fs.points[st.id] = have - take;
+      over -= take;
+    });
+    dccApplyStatBonuses(c);
+  }
+  save(); wizRepaint();
+}
 function dccStatPoint(id, d) {
   const c = S.char, fs = dccFloorStart(c), cfg = dccFloorCfg(c);
   fs.points = fs.points || {};
-  if (d > 0 && dccPointsSpent(c) >= cfg.statPoints) return;
-  const next = Math.max(0, (fs.points[id] || 0) + d);
+  // Clamp to what is left rather than only refusing once the budget is already
+  // gone: the old check read the total BEFORE the increment, so a delta bigger
+  // than 1 sailed straight past it.
+  const left = cfg.statPoints - dccPointsSpent(c);
+  const step = d > 0 ? Math.min(d, Math.max(0, left)) : d;
+  const next = Math.max(0, (fs.points[id] || 0) + step);
   fs.points[id] = next;
-  // Tutorial points raise the Enhanced layer, which is what the Mod reads.
-  c.blocks = c.blocks || {};
-  c.blocks.stats = c.blocks.stats || {};
-  const cell = c.blocks.stats[id] || { base: 0, bonus: 0 };
-  cell.bonus = next;
-  c.blocks.stats[id] = cell;
+  // The Enhanced layer is owned by dccApplyStatBonuses; assigning it here is
+  // what used to wipe the Race/Class grant on a finished crawler.
+  dccApplyStatBonuses(c);
   save(); wizRepaint();
 }
 function dccRollFavor() { dccFloorStart(S.char).favor = wizRoll(2); save(); wizRepaint(); }
 
 // +2d4 to the primary attack Skill, +1d4 to each of the other nine, capped.
+// The bumps are a snapshot of the Skills you had when you rolled them. Changing
+// your weapon, your hand-to-hand style, your species or a background pick
+// changes that list, and the snapshot went stale in silence: you kept a +2d4 on
+// a Club you no longer carry and got nothing on the Longsword you swapped to,
+// while the screen still said you were done. Rather than remembering to clear
+// it in five separate setters, ask whether it still fits what you have now.
+function dccBumpsStale(char) {
+  const fs = dccFloorStart(char);
+  if (!fs.bumps || !fs.bumps.length) return false;
+  const now = dccStartingSkills(char).map(function (s) { return s.name; });
+  const primary = dccPrimaryAttack(char);
+  const rec = fs.bumps.map(function (b) { return b.name; });
+  // Every Skill you now start with must have been rolled for...
+  if (now.some(function (n) { return rec.indexOf(n) < 0; })) return true;
+  // ...nothing you have since dropped may still be carrying a bump...
+  if (rec.some(function (n) { return now.indexOf(n) < 0 && n !== primary; })) return true;
+  // ...and the +2d4 must be sitting on the attack you actually use.
+  const p = fs.bumps.filter(function (b) { return b.primary; })[0];
+  if (primary && (!p || p.name !== primary)) return true;
+  return false;
+}
+
 function dccRollBumps() {
   const c = S.char, cfg = dccFloorCfg(c), primary = dccPrimaryAttack(c);
   const d4 = function () { return wizRoll(4); };

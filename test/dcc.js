@@ -867,13 +867,107 @@ function boot(entry) {
   });
   // prerequisite gating
   check('[rc] a Stat/Skill prerequisite is enforced', () => {
-    ev("S.char=SYS.newCharacter();S.char.blocks={skills:{skills:[{name:'Bow',rank:2,stat:'DEX'}]}};");
+    // Driven through the real creation path. This check used to hand-plant
+    // char.blocks.skills — a field dccFinishCreation does not write until the
+    // wizard has already ended — so it was verifying its own fixture. During
+    // actual creation the prerequisite saw an empty list, which locked the one
+    // gate it could parse and left the other thirteen wide open.
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("dccStatMethod('array');dccAssignStat('STR',6);dccAssignStat('CON',5);" +
+       "dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);dccRollBumps();");
+    ev("S.char.dcc.floorStart.bumps.forEach(function(b){b.to=2;});");
     const no = ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('amazonian')))");
-    ev("S.char.blocks.skills.skills[0].rank=5;");
+    if (JSON.parse(no).ok !== false) return 'a Rank 2 crawler was allowed: ' + no;
+    ev("S.char.dcc.floorStart.bumps.forEach(function(b){if(b.primary)b.to=5;});");
     const yes = ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('amazonian')))");
-    if (JSON.parse(no).ok !== false) return 'Rank 2 was allowed: ' + no;
     if (JSON.parse(yes).ok !== true) return 'Rank 5 was refused: ' + yes;
     return true;
+  });
+  check('[rc] the prerequisite reads the live Skill list, not the finished block', () => {
+    // The regression that made the above unfalsifiable: blocks.skills is absent
+    // for the whole of creation, so anything reading it sees nothing.
+    if (ev("JSON.stringify(S.char.blocks.skills)") !== undefined &&
+        ev("!!(S.char.blocks && S.char.blocks.skills)")) return 'blocks.skills exists mid-creation now';
+    return ev("dccPrereqSkills(S.char).length") > 0 || 'the live Skill list is empty during creation';
+  });
+  // ── the tutorial-floor budget and its snapshot ───────────────────────────
+  check('[floor] dropping to a lower floor gives back the points it does not grant', () => {
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("dccSetFloor(4);for(var i=0;i<57;i++)dccStatPoint('CON',1);");
+    if (ev('dccPointsSpent(S.char)') !== 57) return 'floor 4 did not grant 57';
+    ev("dccSetFloor(3);");
+    const spent = ev('dccPointsSpent(S.char)');
+    return spent === 27 || 'kept ' + spent + ' points against a budget of 27';
+  });
+  check('[floor] a Stat point delta larger than one cannot outrun the budget', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccStatPoint('STR',1000);");
+    const spent = ev('dccPointsSpent(S.char)');
+    return spent === 27 || 'spent ' + spent + ' of 27';
+  });
+  check('[floor] switching Stat method keeps the tutorial points you spent', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);for(var i=0;i<27;i++)dccStatPoint('STR',1);");
+    ev("dccStatMethod('roll');dccRollStats();");
+    const cell = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.STR)"));
+    return cell.bonus === 27
+      || 'the 27 points vanished but were still counted as spent: ' + JSON.stringify(cell);
+  });
+  check('[floor] finishing twice does not stack the Race and Class bonuses', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccChoose('race','human');dccChoose('cls','boring-ol-fighter');");
+    ev("dccFinishCreation(S.char);");
+    const once = ev("dccStatOf(S.char,'STR')") + '/' + ev("dccStatOf(S.char,'CON')");
+    ev("dccFinishCreation(S.char);");
+    const twice = ev("dccStatOf(S.char,'STR')") + '/' + ev("dccStatOf(S.char,'CON')");
+    ev("dccFinishCreation(S.char);");
+    const thrice = ev("dccStatOf(S.char,'STR')") + '/' + ev("dccStatOf(S.char,'CON')");
+    return (once === twice && twice === thrice)
+      || 'STR/CON drifted across finishes: ' + once + ' -> ' + twice + ' -> ' + thrice;
+  });
+  check('[floor] ...and a "-" click afterwards does not delete them', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccChoose('race','human');dccChoose('cls','boring-ol-fighter');dccFinishCreation(S.char);");
+    const before = ev("S.char.blocks.stats.CON.bonus");
+    ev("dccStatPoint('CON',-1);");
+    const after = ev("S.char.blocks.stats.CON.bonus");
+    return after === before || 'the Class grant went from ' + before + ' to ' + after;
+  });
+  check('[floor] changing your weapon invalidates the tutorial Skill bumps', () => {
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');dccRollBumps();");
+    if (ev('dccBumpsStale(S.char)') !== false) return 'fresh bumps reported stale';
+    ev("dccSetWeapon('Longsword');");
+    if (ev('dccBumpsStale(S.char)') !== true) return 'a weapon swap left the Club bump in place';
+    ev("dccRollBumps();");
+    const rank = ev("(dccFinalSkills(S.char).find(function(s){return s.name==='Longsword'})||{}).rank");
+    return (ev('dccBumpsStale(S.char)') === false && rank > 3)
+      || 'after re-rolling, Longsword is rank ' + rank;
+  });
+  check('[floor] changing species invalidates them too', () => {
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');dccRollBumps();");
+    ev("dccSetSpecies('animal');");
+    return ev('dccBumpsStale(S.char)') === true || 'an animal kept its human Skill bumps';
+  });
+
+  check('[rc] a Popularity gate is enforced', () => {
+    const bune = ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('bune')))");
+    if (JSON.parse(bune).ok !== false) return 'Popularity 0 was allowed: ' + bune;
+    ev("S.char.blocks.popularity={current:6};");
+    return JSON.parse(ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('bune')))")).ok === true
+      || 'Popularity 6 was still refused';
+  });
+  check('[rc] a named-Skill gate is enforced', () => {
+    // "Rank 5+ in the Smush Skill" — a form the old single regex never matched,
+    // so it fell through to "no opinion" and the Race was a free pick.
+    const r = ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('sasquatch')))");
+    if (!/Smush/.test(ev("String(dccRace('sasquatch').prerequisites)"))) return 'wrong entry chosen';
+    return JSON.parse(r).ok === false || 'a crawler with no Smush was allowed: ' + r;
+  });
+  check('[rc] a gate the app cannot check is a note, not a lock', () => {
+    // Gender, achievements and two entries whose source text is truncated. The
+    // app must not pretend to have verified these.
+    const soft = ev("JSON.stringify([].concat(DCC_RACES,DCC_CLASSES)" +
+      ".filter(function(e){return e.prerequisites&&dccMeetsPrereq(S.char,e).note})" +
+      ".map(function(e){return e.name}))");
+    const names = JSON.parse(soft);
+    return names.length > 0 || 'every gate claims to be checkable, which is not true';
   });
   check('[rc] an entry with no prerequisite is always available', () => {
     const r = ev(`JSON.stringify(dccMeetsPrereq(S.char,DCC_RACES.find(x=>!x.prerequisites)))`);

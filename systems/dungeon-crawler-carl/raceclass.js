@@ -192,20 +192,81 @@ function dccRace(id) { return DCC_RACES.find(r => r.id === id) || null; }
 function dccClass(id) { return DCC_CLASSES.find(c => c.id === id) || null; }
 
 // Does a crawler meet an entry's Stat and Skill prerequisites?
-// The book also gates some on achievements, which the app cannot check, so
-// those are returned as a note for the player rather than a hard block.
+//
+// The Skill list has to come from dccFinalSkills(), which is live throughout
+// creation. Reading char.blocks.skills instead — which dccFinishCreation does
+// not write until the wizard has already ended — meant that during creation
+// this saw an empty list: the one gate it could parse was unsatisfiable, and
+// the other thirteen fell through to "no opinion" and were free picks.
+//
+// The book also gates some entries on things the app cannot see (achievements,
+// story events, the crawler's gender). Those come back ok:true with a note, so
+// the card can show the requirement without pretending to have checked it.
+function dccPrereqSkills(char) {
+  if (typeof dccFinalSkills === 'function') {
+    try { const l = dccFinalSkills(char); if (l && l.length) return l; } catch (e) {}
+  }
+  return (char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+}
+function dccPrereqPopularity(char) {
+  if (char.blocks && char.blocks.popularity && typeof char.blocks.popularity.current === 'number') {
+    return char.blocks.popularity.current;
+  }
+  // Before the finish step lands the block, Popularity is CHA Mod x2 (p. 111).
+  return (typeof dccModOf === 'function' ? dccModOf(char, 'CHA') : 0) * 2;
+}
+const DCC_STAT_WORDS = { Strength: 'STR', Intelligence: 'INT', Constitution: 'CON',
+                         Dexterity: 'DEX', Charisma: 'CHA' };
+
 function dccMeetsPrereq(char, entry) {
   const text = entry.prerequisites;
   if (!text) return { ok: true };
-  const need = text.match(/at least one (\w+)[ -]?(?:or (\w+)[ -]?)?based Skill at Rank (\d+)/i);
-  if (need) {
-    const want = [need[1], need[2]].filter(Boolean)
-      .map(w => ({ Strength: 'STR', Intelligence: 'INT', Constitution: 'CON',
-                   Dexterity: 'DEX', Charisma: 'CHA' })[w]).filter(Boolean);
-    const rank = parseInt(need[3], 10) || 0;
-    const list = (char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+  const list = dccPrereqSkills(char);
+
+  // "at least one Strength or Dexterity-based Skill at Rank 5+"
+  const byStat = text.match(/at least one (\w+)[ -]?(?:or (\w+)[ -]?)?based Skill at Rank (\d+)/i);
+  if (byStat) {
+    const want = [byStat[1], byStat[2]].filter(Boolean)
+      .map(w => DCC_STAT_WORDS[w]).filter(Boolean);
+    const rank = parseInt(byStat[3], 10) || 0;
     const hit = list.some(s => (s.rank || 0) >= rank && want.indexOf(s.stat) >= 0);
     return hit ? { ok: true } : { ok: false, why: text };
   }
+
+  // "Rank 5+ in the Smush Skill", "Rank 5+ in the Jumping or Light on Your Feet"
+  const byName = text.match(/Rank (\d+)\+?\s*(?:with|in)\s+(?:the\s+)?([A-Za-z' ]+?)(?:\s+Skill|\s*$|,)/i);
+  if (byName) {
+    const rank = parseInt(byName[1], 10) || 0;
+    const names = byName[2].split(/\s+or\s+/i).map(n => n.trim().toLowerCase()).filter(Boolean);
+    // The source text for a few entries is truncated mid-sentence, so a name
+    // that matches nothing in the catalogue is not evidence the crawler fails.
+    const known = names.filter(n => typeof dccSkillByName === 'function' && dccSkillByName(n));
+    if (!known.length) return { ok: true, note: text };
+    const hit = list.some(s => (s.rank || 0) >= rank && known.indexOf(String(s.name).toLowerCase()) >= 0);
+    return hit ? { ok: true } : { ok: false, why: text };
+  }
+
+  // "3 or more Popularity", "Popularity 3+", "Popularity 3 or higher"
+  const pop = text.match(/(\d+)\s+or more Popularity/i)
+           || text.match(/Popularity\s+(\d+)\s*(?:\+|or higher)/i);
+  if (pop) {
+    const need = parseInt(pop[1], 10) || 0;
+    const have = dccPrereqPopularity(char);
+    return have >= need ? { ok: true }
+      : { ok: false, why: text + ' (you have ' + have + ')' };
+  }
+
+  // "only available to crawlers who are already a Cat" / "to cat-based Races"
+  const family = text.match(/already an? ([A-Za-z ]+?)(?:\s*$|,|\.)/i)
+              || text.match(/only available to ([a-z]+)-based Races/i);
+  if (family) {
+    const want = family[1].trim().toLowerCase();
+    const mine = String((char.race || '')).toLowerCase();
+    const picked = char.dcc && char.dcc.picks && char.dcc.picks.race;
+    const pickedName = picked ? String((dccRace(picked) || {}).name || '').toLowerCase() : '';
+    const hit = (mine + ' ' + pickedName).indexOf(want) >= 0;
+    return hit ? { ok: true } : { ok: false, why: text };
+  }
+
   return { ok: true, note: text };
 }
