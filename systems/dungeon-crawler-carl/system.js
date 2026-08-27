@@ -88,6 +88,15 @@ registerSystem({
           { label: 'Size',   value: 'derive.size' },
         ],
       },
+      {
+        id: 'skills', type: 'skillList', label: 'Skills',
+        hint: 'Tick a Skill when you use it. Skills do not rise on level-up — they advance from use: '
+            + 'roll d20 against the Skill’s current Rank, every 2 hours of play at Rank 4 or lower, '
+            + 'at the end of each floor from Rank 5. Passive Skills never mark.',
+        statMod: 'derive.skillStatMod',
+        advanceRoll: 'derive.advanceSkill',
+        rankCap: DCC_SKILL_RANK_SOFT_CAP,
+      },
       { id: 'aiFavor',    type: 'pool', label: 'AI Favor',   hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
       { id: 'popularity', type: 'pool', label: 'Popularity', hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
       { id: 'gold',       type: 'pool', label: 'Gold',       hint: 'All of it fits in one Inventory slot.' },
@@ -112,6 +121,18 @@ registerSystem({
     // exposed for the sheet, the dice tab and the tests
     stat: dccStatOf,
     mod:  dccModOf,
+
+    // the Stat Mod a Skill row adds, given the character and the Skill's Stat
+    skillStatMod: (char, statId) => statId ? dccModOf(char, statId) : 0,
+
+    // Skill Advancement (p. 169): roll 1d20 against the Skill's CURRENT Rank.
+    // Meet or beat it and the Rank goes up by one, to a maximum of 15.
+    advanceSkill: skill => {
+      const before = skill.rank || 0;
+      const roll = 1 + Math.floor(Math.random() * 20);
+      const gained = roll >= before && before < DCC_SKILL_RANK_SOFT_CAP;
+      return { roll, before, gained, rank: gained ? before + 1 : before };
+    },
   },
 
   // ─── dice ─────────────────────────────────────────────────────────────────
@@ -128,6 +149,8 @@ registerSystem({
 
   // ─── content the shell can already use ────────────────────────────────────
   catalogs: {
+    skills: DCC_SKILLS,
+    rankDamage: DCC_RANK_DAMAGE,
     debuffs: DCC_DEBUFFS,
     damageTypes: DCC_DAMAGE_TYPES,
     gearSlots: DCC_GEAR_SLOTS,

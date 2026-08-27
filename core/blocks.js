@@ -296,3 +296,96 @@ registerBlockType('readout', {
     return `<div class="card"><div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:space-around">${items}</div></div>`;
   },
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// skillList — ranked skills with an advancement mark.
+//
+// Added for DCC, where Skills do NOT improve on level-up: you tick a box the
+// first time you use a Skill in a period, then roll to see whether it advances
+// (DCC RPG p. 169). The mark is the mechanic, so it is part of the block rather
+// than a note. Generic enough for any system with use-based advancement: the
+// pack supplies the cadence text and the advancement roll.
+// ════════════════════════════════════════════════════════════════════════════
+registerBlockType('skillList', {
+  init() { return { skills: [] }; },
+  render(ctx) {
+    const b = ctx.block, d = ctx.data;
+    const list = d.skills || [];
+    const modOf = b.statMod ? sysDerive(b.statMod) : null;
+    const marked = list.filter(s => s.marked).length;
+    let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="pg-title" style="font-size:18px">${esc(b.label || 'Skills')}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--muted)">${list.length} known${marked ? ' · ' + marked + ' marked' : ''}</span>
+        <button class="btn btn-secondary btn-xs" onclick="skillAdd('${esc(b.id)}')">+ Skill</button>
+        ${marked ? `<button class="btn btn-primary btn-xs" onclick="skillAdvance('${esc(b.id)}')">Advance (${marked})</button>` : ''}
+      </div></div>`;
+    if (b.hint) h += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(b.hint)}</div>`;
+    if (!list.length) {
+      h += `<div class="tac text-muted" style="padding:14px;font-size:12px">No skills yet.</div>`;
+      return h + '</div>';
+    }
+    h += `<div style="max-height:46vh;overflow-y:auto">`;
+    list.slice().sort((a, z) => a.name.localeCompare(z.name)).forEach(s => {
+      const i = list.indexOf(s);
+      const mod = (modOf && s.stat) ? modOf(ctx.char, s.stat) : 0;
+      const total = (s.rank || 0) + mod;
+      h += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+        <div title="Mark when you use this Skill" onclick="skillMark('${esc(b.id)}',${i})"
+          style="width:20px;height:20px;flex-shrink:0;border:2px solid ${s.marked ? 'var(--green)' : 'var(--border)'};
+          border-radius:4px;cursor:pointer;background:${s.marked ? 'var(--green)' : 'transparent'};
+          display:flex;align-items:center;justify-content:center;font-size:12px;color:#08140b">${s.marked ? '✓' : ''}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}</div>
+          <div style="font-size:10px;color:var(--muted)">${esc(s.stat || '—')}${mod ? ' +' + mod : ''}${s.checkType ? ' · ' + esc(s.checkType) : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <button class="btn btn-secondary btn-xs" onclick="skillRank('${esc(b.id)}',${i},-1)">−</button>
+          <div style="min-width:26px;text-align:center;font-weight:700">${s.rank || 0}</div>
+          <button class="btn btn-secondary btn-xs" onclick="skillRank('${esc(b.id)}',${i},1)">+</button>
+        </div>
+        <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
+        <button class="btn btn-secondary btn-xs" onclick="skillDel('${esc(b.id)}',${i})">✕</button>
+      </div>`;
+    });
+    return h + '</div></div>';
+  },
+});
+
+function _skillData(id) {
+  const char = S && S.char; if (!char) return null;
+  const block = sysBlock(id); if (!block) return null;
+  return { block, ctx: blockCtx(block, char) };
+}
+function skillMark(id, i) {
+  const t = _skillData(id); if (!t) return;
+  const s = t.ctx.data.skills[i]; if (!s || s.passive) return;   // passives never mark
+  s.marked = !s.marked; save(); blockRepaint(id);
+}
+function skillRank(id, i, d) {
+  const t = _skillData(id); if (!t) return;
+  const s = t.ctx.data.skills[i]; if (!s) return;
+  const cap = s.cap || (t.block.rankCap || 20);
+  s.rank = Math.max(0, Math.min(cap, (s.rank || 0) + d));
+  save(); blockRepaint(id);
+}
+function skillDel(id, i) {
+  const t = _skillData(id); if (!t) return;
+  t.ctx.data.skills.splice(i, 1); save(); blockRepaint(id);
+}
+// Resolve advancement for every marked skill, then clear the marks.
+function skillAdvance(id) {
+  const t = _skillData(id); if (!t) return;
+  const roll = sysDerive(t.block.advanceRoll);
+  if (!roll) return;
+  const lines = [];
+  t.ctx.data.skills.forEach(s => {
+    if (!s.marked) return;
+    const r = roll(s);
+    if (r.gained) s.rank = r.rank;
+    s.marked = false;
+    lines.push(`${s.name}: rolled ${r.roll} vs Rank ${r.before} — ${r.gained ? 'up to ' + r.rank : 'no change'}`);
+  });
+  save(); blockRepaint(id);
+  if (lines.length && typeof alert === 'function') alert('Skill Advancement\n\n' + lines.join('\n'));
+}

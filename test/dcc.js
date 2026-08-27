@@ -4,6 +4,7 @@
 // is wrong or the book was misread — not that the test drifted.
 const { JSDOM, VirtualConsole } = require('jsdom');
 const { loadAppHTML } = require('./loadapp');
+const CREATION_SKILLS = require('./fixtures-creation-skills');
 
 const fails = [], ok = [];
 // A check fails on `false` OR on a returned string, which is the failure reason.
@@ -236,6 +237,99 @@ function boot(entry) {
   check('[isolation] the scratch crawler is restored, not regenerated', () => {
     ev("S.char=null;renderHero();");
     return ev("S.char.blocks.stats.STR.base") === 9 || 'got ' + ev("S.char.blocks.stats.STR.base");
+  });
+
+  // ── Skills catalogue (D3) ────────────────────────────────────────────────
+  eq(ev('DCC_SKILLS.length'), 113, '[skills] all 113 skills present');
+  check('[skills] every skill has an id, a name and three upgrade tiers', () => {
+    const bad = ev(`JSON.stringify(DCC_SKILLS.filter(s=>!s.id||!s.name||
+      !s.upgrades||!(s.upgrades[5]&&s.upgrades[10]&&s.upgrades[15])).map(s=>s.name))`);
+    return bad === '[]' || bad;
+  });
+  check('[skills] ids are unique', () =>
+    ev('new Set(DCC_SKILLS.map(s=>s.id)).size') === ev('DCC_SKILLS.length') || 'duplicate ids');
+  check('[skills] every non-passive skill names one of the five Stats', () => {
+    const bad = ev(`JSON.stringify(DCC_SKILLS.filter(s=>!s.passive&&
+      !['STR','INT','CON','DEX','CHA'].includes(s.stat)).map(s=>s.name))`);
+    return bad === '[]' || bad;
+  });
+  check('[skills] every Attack Skill rolls against Evade and has base damage', () => {
+    const bad = ev(`JSON.stringify(DCC_SKILLS.filter(s=>s.kind==='attack'&&
+      (s.checkType!=='evade'||!s.baseDamage)).map(s=>s.name))`);
+    return bad === '[]' || bad;
+  });
+  // The two skills the markdown extraction silently dropped, and a name it corrupted.
+  check('[skills] Pugilism survived the tagline that hid it', () =>
+    !!ev("dccSkill('pugilism')") || 'missing');
+  check('[skills] Noggin Nocker survived too', () =>
+    !!ev("dccSkill('noggin-nocker')") || 'missing');
+  eq(ev("dccSkillByName('Hide in Shadows') ? dccSkillByName('Hide in Shadows').name : null"),
+     'Hide in Shadows', '[skills] name casing follows the book, not naive title-case');
+  eq(ev("dccSkill('character-actor').name"), 'Character Actor',
+     '[skills] the OCR-mangled name is corrected');
+  // Upgrade text must be whole sentences, not truncated at the column width.
+  eq(ev("dccSkill('club').upgrades[15]"),
+     '+1d6 base damage, and if the target loses at least 3 Health Bar slots, they gain the Take Down Debuff.',
+     '[skills] wrapped upgrade text is joined, not cut off');
+  check('[skills] no upgrade text ends mid-sentence', () => {
+    // The PDF wraps text at the column width; before continuation lines were
+    // joined, entries ended on things like "and you may make an".
+    const CUT = ['an','a','the','and','to','of','you','with','for','their','your','on','at','is','or'];
+    const bad = ev('JSON.stringify(DCC_SKILLS.map(function(s){' +
+      'var t=[5,10,15].map(function(r){return s.upgrades[r]||"";});' +
+      'var w=t.filter(function(x){var m=x.trim().split(/\s+/).pop().toLowerCase();' +
+      'return x && ' + JSON.stringify(CUT) + '.indexOf(m)>=0;});' +
+      'return w.length?s.name:null;}).filter(Boolean))');
+    return bad === '[]' || 'truncated: ' + bad;
+  });
+
+  // ── the dependency that gates D5 (CREATION.md section 5) ─────────────────
+  check('[creation] every Skill the background tables hand out exists', () => {
+    const missing = CREATION_SKILLS.filter(n => !ev('!!dccSkillByName(' + JSON.stringify(n) + ')'));
+    return missing.length ? 'not in the catalogue: ' + missing.join(', ') : true;
+  });
+  eq(CREATION_SKILLS.length, 44, '[creation] the background tables name 44 distinct Skills');
+
+  // Rank damage dice (Table 37, p. 176) — closest die without going over.
+  eq(ev('dccRankDamage(1)'), '+1', '[rankdmg] Rank 1 is a flat +1');
+  eq(ev('dccRankDamage(7)'), '+1d6', "[rankdmg] the book's Rank 7 example is 1d6");
+  eq(ev('dccRankDamage(15)'), '+1d8 & +1d6', '[rankdmg] Rank 15 is two dice');
+  eq(ev('dccRankDamage(20)'), '+2d10', '[rankdmg] Rank 20 tops out at 2d10');
+
+  // ── Skill Advancement (p. 169) ───────────────────────────────────────────
+  check('[advance] a roll meeting or beating the current Rank gains one', () => {
+    for (let i = 0; i < 400; i++) {
+      const r = ev('SYS.derive.advanceSkill({rank:3})');
+      if (r.gained !== (r.roll >= 3)) return 'roll ' + r.roll + ' gained ' + r.gained;
+      if (r.gained && r.rank !== 4) return 'wrong new rank ' + r.rank;
+    }
+    return true;
+  });
+  check('[advance] Rank 15 is the ceiling for use-based advancement', () => {
+    for (let i = 0; i < 200; i++) {
+      const r = ev('SYS.derive.advanceSkill({rank:15})');
+      if (r.gained || r.rank !== 15) return 'advanced past 15';
+    }
+    return true;
+  });
+  check('[advance] a Rank 0 skill always advances', () => {
+    for (let i = 0; i < 100; i++) if (!ev('SYS.derive.advanceSkill({rank:0})').gained) return 'failed at rank 0';
+    return true;
+  });
+  check('[advance] marking clears after resolving, and passives never mark', () => {
+    ev("S.char.blocks.skills={skills:[{name:'A',rank:2,marked:true},{name:'P',rank:2,passive:true,marked:false}]}");
+    ev("skillMark('skills',1)");                       // try to mark the passive
+    if (ev('S.char.blocks.skills.skills[1].marked')) return 'passive got marked';
+    ev("skillAdvance('skills')");
+    if (ev('S.char.blocks.skills.skills[0].marked')) return 'mark not cleared';
+    return true;
+  });
+  check('[advance] rank edits clamp at 0 and at the cap', () => {
+    ev("S.char.blocks.skills={skills:[{name:'A',rank:0}]}");
+    ev("skillRank('skills',0,-1)");
+    if (ev('S.char.blocks.skills.skills[0].rank') !== 0) return 'went below 0';
+    ev("for(let i=0;i<40;i++)skillRank('skills',0,1)");
+    return ev('S.char.blocks.skills.skills[0].rank') === 15 || 'cap was ' + ev('S.char.blocks.skills.skills[0].rank');
   });
 
   // ── the sheet actually renders ───────────────────────────────────────────
