@@ -1,5 +1,17 @@
+// A pack can supply its own combat tracker; the zone-based one below is Daring
+// Comics'. The shared S.conflict object is what multiplayer syncs, so a pack
+// tracker that lives there gets party sync for free.
 function renderConflict(){
-  const el=document.getElementById('conflict-content'),c=S.conflict;
+  const el=document.getElementById('conflict-content');
+  if(SYS&&SYS.combat&&typeof SYS.combat.render==='function'){
+    if(!S.conflict||S.conflict.systemId!==SYS.id){
+      S.conflict=SYS.combat.init?SYS.combat.init():{systemId:SYS.id,active:false};
+      S.conflict.systemId=SYS.id;
+    }
+    el.innerHTML=SYS.combat.render({state:S.conflict,floor:S.floor||3});
+    return;
+  }
+  const c=S.conflict;
   let h=`<div class="pg-title">Conflict</div><div class="pg-sub">Zone-based combat tracker</div>`;
   if(!c.active){h+=`<div class="tac" style="padding:30px"><div style="font-size:36px;margin-bottom:8px">\u2694</div><div class="text-muted mb-3">No active conflict</div><button class="btn btn-primary" onclick="startConflict()">Start Conflict</button></div>`;}
   else{

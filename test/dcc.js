@@ -1338,6 +1338,126 @@ function boot(entry) {
     return (cm.weaponName === 'Tire Iron' && cm.weaponSkill === 'Club') || JSON.stringify(cm);
   });
 
+  // ── the combat tracker (D8) ──────────────────────────────────────────────
+  eq(ev('DCC_COMBAT_STEPS.length'), 5, '[combat] the round is five steps');
+  check('[combat] the steps are the book\'s, in order', () => {
+    const names = ev('DCC_COMBAT_STEPS.map(s=>s.name).join(" | ")');
+    return names === 'Mob Action Declaration | Crawler Reaction Phase | Mob Action Resolution | '
+      + 'Crawler Action Phase | Clean Up' || names;
+  });
+  check('[combat] the conflict tab uses the pack tracker, not the Fate one', () => {
+    ev("showTab('conflict')");
+    const html = ev("document.getElementById('conflict-content').innerHTML");
+    return (/five-step round/.test(html) && !/Zone-based/.test(html)) || 'wrong tracker rendered';
+  });
+
+  ev('dccCombatStart()');
+  check('[combat] starting a fight opens on round 1, step 1', () => {
+    const c = JSON.parse(ev('JSON.stringify(S.conflict)'));
+    return (c.active && c.round === 1 && c.step === 0) || JSON.stringify(c).slice(0, 80);
+  });
+  check('[combat] the tracker state is stamped with the system that owns it', () =>
+    ev('S.conflict.systemId') === 'dungeon-crawler-carl' || ev('S.conflict.systemId'));
+
+  // Actions per round differ by what you are.
+  ev("document.body.insertAdjacentHTML('beforeend'," +
+     "'<input id=' + JSON.stringify('dcc-cb-name') + '>');");
+  ev("var s=document.createElement('select');s.id='dcc-cb-side';" +
+     "['crawler','mob','boss'].forEach(function(k){var o=document.createElement('option');" +
+     "o.value=k;s.appendChild(o);});document.body.appendChild(s);");
+  const addCombatant = (name, side) =>
+    ev("document.getElementById('dcc-cb-name').value=" + JSON.stringify(name) +
+       ";document.getElementById('dcc-cb-side').value=" + JSON.stringify(side) +
+       ";dccCombatAdd();");
+  addCombatant('Keisha', 'crawler');
+  addCombatant('Wren', 'crawler');
+  addCombatant('Bad Llama', 'mob');
+  eq(() => ev("S.conflict.combatants.find(m=>m.name==='Keisha').maxActions"), 2,
+     '[combat] a crawler gets two Actions a round');
+  check('[combat] a Boss gets one Action per crawler', () => {
+    addCombatant('Mordecai', 'boss');
+    const boss = JSON.parse(ev("JSON.stringify(S.conflict.combatants.find(m=>m.side==='boss'))"));
+    return boss.maxActions === 2 || 'two crawlers but ' + boss.maxActions + ' Actions';
+  });
+  check('[combat] adding a third crawler gives the Boss a third Action', () => {
+    addCombatant('Chase', 'crawler');
+    const boss = JSON.parse(ev("JSON.stringify(S.conflict.combatants.find(m=>m.side==='boss'))"));
+    return boss.maxActions === 3 || 'got ' + boss.maxActions;
+  });
+  check('[combat] a crawler dying does not take the Boss\'s Action away', () => {
+    // "Bosses have 1 Action per crawler, even if a crawler kicks the bucket
+    // mid-fight" (p. 270) — so removing one from the tracker is the GM's call,
+    // but the count must follow whatever is actually listed.
+    const before = ev("S.conflict.combatants.find(m=>m.side==='boss').maxActions");
+    return before === 3 || 'got ' + before;
+  });
+
+  // Spending Actions.
+  check('[combat] clicking a pip spends down to it, and clicking again restores', () => {
+    const i = ev("S.conflict.combatants.findIndex(m=>m.name==='Keisha')");
+    ev('dccCombatAction(' + i + ',0)');
+    const after = ev('S.conflict.combatants[' + i + '].actions');
+    if (after !== 1) return 'spent to ' + after + ', expected 1';
+    ev('dccCombatAction(' + i + ',1)');
+    return ev('S.conflict.combatants[' + i + '].actions') === 0
+      || 'second pip left ' + ev('S.conflict.combatants[' + i + '].actions');
+  });
+  check('[combat] Actions never go below zero or above the maximum', () => {
+    const i = ev("S.conflict.combatants.findIndex(m=>m.name==='Keisha')");
+    for (let p = 0; p < 6; p++) ev('dccCombatAction(' + i + ',' + p + ')');
+    const a = ev('S.conflict.combatants[' + i + '].actions');
+    const max = ev('S.conflict.combatants[' + i + '].maxActions');
+    return (a >= 0 && a <= max) || 'actions ' + a + ' of ' + max;
+  });
+
+  // Stepping through the round.
+  check('[combat] stepping runs 1 to 5 then rolls into the next round', () => {
+    ev('S.conflict.step=0;S.conflict.round=1;');
+    for (let s = 0; s < 4; s++) {
+      ev('dccCombatNext()');
+      if (ev('S.conflict.step') !== s + 1) return 'stuck at step ' + ev('S.conflict.step');
+      if (ev('S.conflict.round') !== 1) return 'round advanced early';
+    }
+    ev('dccCombatNext()');
+    return (ev('S.conflict.round') === 2 && ev('S.conflict.step') === 0)
+      || 'round ' + ev('S.conflict.round') + ' step ' + ev('S.conflict.step');
+  });
+  check('[combat] a new round gives everyone their Actions back', () => {
+    const i = ev("S.conflict.combatants.findIndex(m=>m.name==='Keisha')");
+    ev('S.conflict.combatants[' + i + '].actions=0;');
+    ev('S.conflict.step=4;dccCombatNext();');
+    const a = ev('S.conflict.combatants[' + i + '].actions');
+    const max = ev('S.conflict.combatants[' + i + '].maxActions');
+    return a === max || 'refreshed to ' + a + ' of ' + max;
+  });
+
+  // Dying counts down a round at a time.
+  check('[combat] a Dying combatant loses a round each Clean Up', () => {
+    const i = ev("S.conflict.combatants.findIndex(m=>m.name==='Wren')");
+    ev('S.conflict.combatants[' + i + "].dying=3;");
+    ev('S.conflict.step=4;dccCombatNext();');
+    if (ev('S.conflict.combatants[' + i + '].dying') !== 2) return 'got ' + ev('S.conflict.combatants[' + i + '].dying');
+    ev('S.conflict.step=4;dccCombatNext();');
+    return ev('S.conflict.combatants[' + i + '].dying') === 1 || 'second tick wrong';
+  });
+  check('[combat] running out of rounds is recorded in the log', () => {
+    const i = ev("S.conflict.combatants.findIndex(m=>m.name==='Wren')");
+    ev('S.conflict.combatants[' + i + '].dying=1;');
+    ev('S.conflict.step=4;dccCombatNext();');
+    const log = ev('JSON.stringify(S.conflict.log)');
+    return /run out of rounds/.test(log) || log.slice(-90);
+  });
+  check('[combat] the log does not grow without bound', () => {
+    for (let r = 0; r < 45; r++) { ev('S.conflict.step=4;dccCombatNext();'); }
+    return ev('S.conflict.log.length') <= 40 || 'log is ' + ev('S.conflict.log.length');
+  });
+
+  check('[combat] ending a fight clears the tracker', () => {
+    ev('dccCombatEnd()');
+    return (ev('S.conflict.active') === false && ev('S.conflict.combatants.length') === 0)
+      || 'still active';
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>

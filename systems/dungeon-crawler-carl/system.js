@@ -138,6 +138,10 @@ registerSystem({
     ],
   },
 
+  // The combat tracker for the conflict tab. State lives in S.conflict, which
+  // multiplayer already syncs, so the whole table sees the same round.
+  combat: { init: dccCombatInit, render: dccCombatRender, steps: DCC_COMBAT_STEPS },
+
   creation: DCC_SCREENS,
   finishCreation: dccFinishCreation,
 
