@@ -9,9 +9,9 @@
 // bug, and a vocabulary that repeated the pattern would multiply it across every
 // system. Call blockRepaint(id) after mutating state, not a full sheet render.
 //
-// Implemented so far (phases D1–D2): traitGrid, track, pool, readout.
+// Implemented so far: traitGrid, track, pool, readout, skillList, inventory.
 // Still to come: textList, catalogItems, groups, variants, entityRefs,
-// richText, inventory, statusEffects, progression.
+// richText, statusEffects, progression.
 
 const BLOCK_TYPES = {};
 function registerBlockType(id, def) { BLOCK_TYPES[id] = def; }
@@ -388,4 +388,226 @@ function skillAdvance(id) {
   });
   save(); blockRepaint(id);
   if (lines.length && typeof alert === 'function') alert('Skill Advancement\n\n' + lines.join('\n'));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// inventory — the third block contract DCC forced, and the one SHELL-PLAN §8
+// under-described. It is not one list: it is several containers with DIFFERENT
+// rules, and moving an item between them is the whole point.
+//
+// Three container kinds, each generic:
+//   slots — named slots with a capacity each (worn gear: Head, Torso, Hands…)
+//   stack — a fixed number of numbered slots, each holding a stack (a Hotlist)
+//   list  — unbounded (a backpack)
+//
+// A pack declares which containers it has and what the rules are; the shell
+// enforces capacity and the moves. Fate's "gear is a text note" is the
+// degenerate case of a single list container.
+// ════════════════════════════════════════════════════════════════════════════
+registerBlockType('inventory', {
+  init(block) {
+    const d = { counters: {} };
+    (block.containers || []).forEach(c => {
+      if (c.kind === 'slots') {
+        d[c.id] = {};
+        (c.slots || []).forEach(s => { d[c.id][s.id] = []; });
+      } else {
+        d[c.id] = [];
+      }
+    });
+    (block.counters || []).forEach(c => { d.counters[c.id] = 0; });
+    return d;
+  },
+  render(ctx) {
+    const b = ctx.block, d = ctx.data;
+    let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div class="pg-title" style="font-size:18px">${esc(b.label || 'Gear')}</div>`;
+    const cap = b.carryLimit ? blockValue(b.carryLimit, ctx, null) : null;
+    if (cap !== null) h += `<div style="font-size:11px;color:var(--muted)">${esc(String(cap))}</div>`;
+    h += `</div>`;
+    if (b.hint) h += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(b.hint)}</div>`;
+
+    (b.containers || []).forEach(c => {
+      h += `<div class="label" style="margin:10px 0 4px">${esc(c.label || c.id)}`;
+      if (c.note) h += ` <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">${esc(c.note)}</span>`;
+      h += `</div>`;
+      if (c.kind === 'slots') h += invSlots(b, c, d);
+      else if (c.kind === 'stack') h += invStack(b, c, d);
+      else h += invList(b, c, d);
+      h += invAdder(b, c);
+    });
+
+    if ((b.counters || []).length) {
+      h += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">`;
+      b.counters.forEach(c => {
+        h += `<div style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-secondary btn-xs" onclick="invCounter('${esc(b.id)}','${esc(c.id)}',-1)">−</button>
+          <div style="text-align:center;min-width:56px">
+            <div style="font-size:18px;font-weight:800">${(d.counters || {})[c.id] || 0}</div>
+            <div class="label" style="margin:0">${esc(c.label || c.id)}</div></div>
+          <button class="btn btn-secondary btn-xs" onclick="invCounter('${esc(b.id)}','${esc(c.id)}',1)">+</button></div>`;
+      });
+      h += `</div>`;
+    }
+    return h + '</div>';
+  },
+});
+
+function invItemRow(b, c, item, where, idx, extra) {
+  const moves = (b.containers || []).filter(x => x.id !== c.id).map(x =>
+    `<button class="btn btn-secondary btn-xs" title="Move to ${esc(x.label || x.id)}"
+      onclick="invMove('${esc(b.id)}','${esc(c.id)}','${esc(x.id)}','${esc(where)}',${idx})">→ ${esc((x.label || x.id).split(' ')[0])}</button>`
+  ).join('');
+  return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
+    <div style="flex:1;min-width:0;font-size:12px">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}</div>
+    ${extra || ''}${moves}
+    <button class="btn btn-secondary btn-xs" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx})">✕</button>
+  </div>`;
+}
+
+function invSlots(b, c, d) {
+  const store = d[c.id] || {};
+  let h = '';
+  (c.slots || []).forEach(s => {
+    const items = store[s.id] || [];
+    const full = items.length >= (s.max || 1);
+    h += `<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0">
+      <div style="width:104px;flex-shrink:0;font-size:11px;font-weight:700;color:${full ? 'var(--muted)' : 'var(--text)'}">
+        ${esc(s.name)}<div style="font-weight:400;color:var(--muted);font-size:9px">${items.length}/${s.max || 1}</div></div>
+      <div style="flex:1;min-width:0">`;
+    if (!items.length) h += `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
+    items.forEach((it, i) => { h += invItemRow(b, c, it, s.id, i); });
+    h += `</div></div>`;
+  });
+  return h;
+}
+
+function invStack(b, c, d) {
+  const items = d[c.id] || [];
+  const size = c.size || 10;
+  let h = `<div>`;
+  for (let i = 0; i < size; i++) {
+    const it = items[i];
+    h += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
+      <div style="width:20px;flex-shrink:0;font-size:10px;color:var(--muted)">${i + 1}</div>`;
+    if (!it) {
+      h += `<div style="flex:1;font-size:11px;color:var(--muted)">empty</div></div>`;
+      continue;
+    }
+    h += `<div style="flex:1;min-width:0;font-size:12px">${esc(it.name)}</div>
+      <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
+      <div style="min-width:34px;text-align:center;font-weight:700">${it.qty || 1}</div>
+      <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},1)">+</button>`;
+    (b.containers || []).filter(x => x.id !== c.id).forEach(x => {
+      h += `<button class="btn btn-secondary btn-xs" onclick="invMove('${esc(b.id)}','${esc(c.id)}','${esc(x.id)}','',${i})">→ ${esc((x.label || x.id).split(' ')[0])}</button>`;
+    });
+    h += `<button class="btn btn-secondary btn-xs" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','',${i})">✕</button></div>`;
+  }
+  return h + `</div>`;
+}
+
+function invList(b, c, d) {
+  const items = d[c.id] || [];
+  if (!items.length) return `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
+  return items.map((it, i) => invItemRow(b, c, it, '', i,
+    `<button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
+     <div style="min-width:26px;text-align:center;font-weight:700">${it.qty || 1}</div>
+     <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},1)">+</button>`)).join('');
+}
+
+function invAdder(b, c) {
+  const slotPick = c.kind === 'slots'
+    ? `<select id="inv-slot-${esc(b.id)}-${esc(c.id)}" style="flex:0 0 130px">` +
+      (c.slots || []).map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') + `</select>`
+    : '';
+  return `<div style="display:flex;gap:6px;margin-top:6px">
+    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…" style="flex:1">
+    ${slotPick}
+    <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div>`;
+}
+
+// ─── mutators ───────────────────────────────────────────────────────────────
+function _inv(id) {
+  const char = S && S.char; if (!char) return null;
+  const block = sysBlock(id); if (!block) return null;
+  return { block, ctx: blockCtx(block, char) };
+}
+function _container(block, cid) {
+  return (block.containers || []).find(c => c.id === cid) || null;
+}
+// How many more items will this container take? null means no limit.
+function invRoom(block, data, cid, slotId) {
+  const c = _container(block, cid); if (!c) return 0;
+  if (c.kind === 'slots') {
+    const s = (c.slots || []).find(x => x.id === slotId);
+    if (!s) return 0;
+    return Math.max(0, (s.max || 1) - ((data[cid] || {})[slotId] || []).length);
+  }
+  if (c.kind === 'stack') return Math.max(0, (c.size || 10) - (data[cid] || []).length);
+  return null;
+}
+function invAdd(id, cid) {
+  const t = _inv(id); if (!t) return;
+  const inp = document.getElementById('inv-add-' + id + '-' + cid);
+  const name = (inp && inp.value || '').trim();
+  if (!name) return;
+  const c = _container(t.block, cid);
+  const sel = document.getElementById('inv-slot-' + id + '-' + cid);
+  const slotId = sel ? sel.value : '';
+  if (invRoom(t.block, t.ctx.data, cid, slotId) === 0) {
+    if (typeof flashSaveError === 'function') flashSaveError('No room there');
+    return;
+  }
+  const item = { name, qty: 1 };
+  if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
+  else t.ctx.data[cid].push(item);
+  if (inp) inp.value = '';
+  save(); blockRepaint(id);
+}
+function invRemove(id, cid, slotId, i) {
+  const t = _inv(id); if (!t) return;
+  const c = _container(t.block, cid);
+  const arr = c.kind === 'slots' ? (t.ctx.data[cid] || {})[slotId] : t.ctx.data[cid];
+  if (!arr) return;
+  arr.splice(i, 1);
+  save(); blockRepaint(id);
+}
+function invQty(id, cid, i, delta) {
+  const t = _inv(id); if (!t) return;
+  const c = _container(t.block, cid);
+  const arr = t.ctx.data[cid];
+  const it = Array.isArray(arr) ? arr[i] : null;
+  if (!it) return;
+  const max = c.stackMax || 999;
+  it.qty = Math.max(1, Math.min(max, (it.qty || 1) + delta));
+  save(); blockRepaint(id);
+}
+// Move an item between containers, refusing when the destination is full.
+function invMove(id, fromId, toId, slotId, i) {
+  const t = _inv(id); if (!t) return;
+  const from = _container(t.block, fromId), to = _container(t.block, toId);
+  if (!from || !to) return;
+  const src = from.kind === 'slots' ? (t.ctx.data[fromId] || {})[slotId] : t.ctx.data[fromId];
+  const item = src && src[i];
+  if (!item) return;
+  // a slots destination needs a target slot: use the first with room
+  let destSlot = '';
+  if (to.kind === 'slots') {
+    const s = (to.slots || []).find(x => invRoom(t.block, t.ctx.data, toId, x.id) > 0);
+    if (!s) { if (typeof flashSaveError === 'function') flashSaveError('No free slot'); return; }
+    destSlot = s.id;
+  } else if (invRoom(t.block, t.ctx.data, toId, '') === 0) {
+    if (typeof flashSaveError === 'function') flashSaveError((to.label || to.id) + ' is full');
+    return;
+  }
+  src.splice(i, 1);
+  if (to.kind === 'slots') (t.ctx.data[toId][destSlot] = t.ctx.data[toId][destSlot] || []).push(item);
+  else t.ctx.data[toId].push(item);
+  save(); blockRepaint(id);
+}
+function invCounter(id, cid, delta) {
+  const t = _inv(id); if (!t) return;
+  t.ctx.data.counters = t.ctx.data.counters || {};
+  t.ctx.data.counters[cid] = Math.max(0, (t.ctx.data.counters[cid] || 0) + delta);
+  save(); blockRepaint(id);
 }

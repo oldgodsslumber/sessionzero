@@ -101,7 +101,11 @@ vocabulary is short by more than I estimated.
   Rank (every 2 hours of play at Rank ≤4, every floor at Rank ≥5), then clear the
   ticks. This is a first-class app feature, not a footnote.
 - `inventory` — and richer than predicted: **three containers with different
-  rules** (Inventory / Hotlist / Gear Slots), not one list.
+  rules** (Inventory / Hotlist / Gear Slots), not one list. **Built in D4** as a
+  block type with three generic container kinds — `slots` (named, each with a
+  capacity), `stack` (a fixed number of numbered slots holding stacks) and
+  `list` (unbounded) — plus moves between them. Fate's "gear is a text note"
+  is the degenerate case: a single `list` container.
 - `statusEffects` — with durations, a stackable flag, an active-cap (3 External
   Buffs), and escalation (Minor Injury twice ⇒ Long-Term Minor Injury).
 
@@ -294,7 +298,7 @@ several headings are mis-levelled. Consequences:
 | **D1** | Shell work: dual-layer `traitGrid`, value-slot `track`. Port the Daring Comics sheet onto the revised contracts to prove nothing broke. |
 | **D2** | Crawler sheet: Stats, Health Bar, Mana, Evade, DR, Move/Step. |
 | **D3** | Skills catalogue + the advancement checkbox loop. |
-| **D4** | Inventory / Hotlist / Gear Slots. |
+| **D4** | Inventory / Hotlist / Gear Slots. **done** |
 | **D5** | Creation wizard — nine screens, both phases. See [CREATION.md](CREATION.md). **Depends on D3.** |
 | **D6** | Races & Classes as a transactional diff, with prerequisite gating. |
 | **D7** | Spells, loot, crafting, pets/mounts/minions. |

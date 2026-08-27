@@ -97,6 +97,22 @@ registerSystem({
         advanceRoll: 'derive.advanceSkill',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
+      {
+        id: 'gear', type: 'inventory', label: 'Gear',
+        hint: 'Only what is in a Gear Slot gives you anything. The Hotlist is for reach, not bonuses '
+            + '— an item put back into it turns its benefits off. Inventory is weightless; the '
+            + 'only limit is whether you could pick the thing up.',
+        carryLimit: 'derive.liftLimit',
+        containers: [
+          { id: 'equipped', kind: 'slots', label: 'Gear Slots', slots: DCC_GEAR_SLOTS,
+            note: 'one item each, except Accessories' },
+          { id: 'hotlist', kind: 'stack', label: 'Hotlist', size: DCC_HOTLIST_SLOTS, stackMax: 999,
+            note: 'ten slots, reachable with one Action' },
+          { id: 'inventory', kind: 'list', label: 'Inventory',
+            note: 'weightless, and retrieved at the speed of thought outside combat' },
+        ],
+        counters: [{ id: 'junk', label: 'Misc. Junk' }],
+      },
       { id: 'aiFavor',    type: 'pool', label: 'AI Favor',   hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
       { id: 'popularity', type: 'pool', label: 'Popularity', hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
       { id: 'gold',       type: 'pool', label: 'Gold',       hint: 'All of it fits in one Inventory slot.' },
@@ -111,6 +127,8 @@ registerSystem({
   derive: {
     statMod: enhancedValue => dccStatMod(enhancedValue),
     hbSlotValue: char => dccModOf(char, 'CON'),
+    // The only cap on Inventory is whether you could lift the thing: STR x 15 lb (p. 98).
+    liftLimit: char => 'Lift limit ' + (dccStatOf(char, 'STR') * 15) + ' lb',
     maxMana:     char => dccStatOf(char, 'INT'),
     evade:       char => '+' + dccModOf(char, 'DEX'),
     dr:          char => (char && char.dr) || 0,

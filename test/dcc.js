@@ -786,6 +786,112 @@ function boot(entry) {
     return JSON.parse(r).ok === true || r;
   });
 
+  // ── inventory: three containers, three sets of rules (D4) ────────────────
+  ev("S.char=SYS.newCharacter();S.char.blocks={};blockCtx(sysBlock('gear'),S.char);");
+  check('[gear] the block starts with every container and slot present', () => {
+    const d = JSON.parse(ev('JSON.stringify(S.char.blocks.gear)'));
+    if (!d.equipped || !d.hotlist || !d.inventory) return 'missing a container';
+    const slots = Object.keys(d.equipped).sort().join(',');
+    return slots === 'accessories,arms,feet,hands,head,legs,torso'
+      || 'gear slots: ' + slots;
+  });
+
+  // slots: one item each, except Accessories
+  check('[gear] a Gear Slot holds one item and then refuses another', () => {
+    ev("S.char.blocks.gear.equipped.head=[];");
+    ev("document.body.insertAdjacentHTML('beforeend'," +
+       "'<input id=\"inv-add-gear-equipped\"><select id=\"inv-slot-gear-equipped\">" +
+       "<option value=\"head\">Head</option></select>');");
+    ev("document.getElementById('inv-add-gear-equipped').value='Cunning Hat';invAdd('gear','equipped');");
+    ev("document.getElementById('inv-add-gear-equipped').value='Second Hat';invAdd('gear','equipped');");
+    const n = ev('S.char.blocks.gear.equipped.head.length');
+    return n === 1 || 'Head holds ' + n + ' items';
+  });
+  check('[gear] Accessories takes ten', () => {
+    ev("S.char.blocks.gear.equipped.accessories=[];");
+    return ev("invRoom(sysBlock('gear'),S.char.blocks.gear,'equipped','accessories')") === 10
+      || 'room reported as ' + ev("invRoom(sysBlock('gear'),S.char.blocks.gear,'equipped','accessories')");
+  });
+
+  // stack: ten numbered slots, stacking to 999
+  check('[gear] the Hotlist takes exactly ten entries', () => {
+    ev("S.char.blocks.gear.hotlist=[];");
+    ev("document.body.insertAdjacentHTML('beforeend','<input id=\"inv-add-gear-hotlist\">');");
+    ev("for(let i=0;i<14;i++){document.getElementById('inv-add-gear-hotlist').value='Potion '+i;invAdd('gear','hotlist');}");
+    const n = ev('S.char.blocks.gear.hotlist.length');
+    return n === 10 || 'Hotlist holds ' + n;
+  });
+  check('[gear] a Hotlist stack tops out at 999 and never drops below 1', () => {
+    ev("S.char.blocks.gear.hotlist=[{name:'Healing Potion',qty:1}];");
+    ev("for(let i=0;i<1200;i++)invQty('gear','hotlist',0,1);");
+    if (ev('S.char.blocks.gear.hotlist[0].qty') !== 999) return 'max is ' + ev('S.char.blocks.gear.hotlist[0].qty');
+    ev("for(let i=0;i<1200;i++)invQty('gear','hotlist',0,-1);");
+    return ev('S.char.blocks.gear.hotlist[0].qty') === 1 || 'min is ' + ev('S.char.blocks.gear.hotlist[0].qty');
+  });
+
+  // list: unbounded
+  check('[gear] Inventory is unbounded', () => {
+    ev("S.char.blocks.gear.inventory=[];");
+    return ev("invRoom(sysBlock('gear'),S.char.blocks.gear,'inventory','')") === null
+      || 'Inventory reported a limit';
+  });
+
+  // moving between containers is the point of the block
+  check('[gear] an item moves from Inventory into the Hotlist', () => {
+    ev("S.char.blocks.gear.inventory=[{name:'Bandage',qty:3}];S.char.blocks.gear.hotlist=[];");
+    ev("invMove('gear','inventory','hotlist','',0);");
+    const inInv = ev('S.char.blocks.gear.inventory.length');
+    const inHot = ev('S.char.blocks.gear.hotlist.length');
+    const qty = ev('S.char.blocks.gear.hotlist[0] ? S.char.blocks.gear.hotlist[0].qty : 0');
+    return (inInv === 0 && inHot === 1 && qty === 3) || `inv=${inInv} hot=${inHot} qty=${qty}`;
+  });
+  check('[gear] a move into a full Hotlist is refused, not silently dropped', () => {
+    ev("S.char.blocks.gear.hotlist=[];for(let i=0;i<10;i++)S.char.blocks.gear.hotlist.push({name:'x'+i,qty:1});");
+    ev("S.char.blocks.gear.inventory=[{name:'Torch',qty:1}];");
+    ev("invMove('gear','inventory','hotlist','',0);");
+    const kept = ev('S.char.blocks.gear.inventory.length') === 1;
+    const hot = ev('S.char.blocks.gear.hotlist.length') === 10;
+    return (kept && hot) || 'the item vanished or overfilled the Hotlist';
+  });
+  check('[gear] a move into Gear Slots picks the first slot with room', () => {
+    ev("Object.keys(S.char.blocks.gear.equipped).forEach(k=>S.char.blocks.gear.equipped[k]=[]);");
+    ev("S.char.blocks.gear.inventory=[{name:'Breastplate',qty:1}];");
+    ev("invMove('gear','inventory','equipped','',0);");
+    const placed = JSON.parse(ev('JSON.stringify(S.char.blocks.gear.equipped)'));
+    const where = Object.keys(placed).filter(k => placed[k].length);
+    return where.length === 1 || 'landed in ' + JSON.stringify(where);
+  });
+  check('[gear] a move out of a Gear Slot leaves it empty', () => {
+    const slot = JSON.parse(ev('JSON.stringify(S.char.blocks.gear.equipped)'));
+    const filled = Object.keys(slot).find(k => slot[k].length);
+    ev(`invMove('gear','equipped','inventory','${filled}',0);`);
+    return ev(`S.char.blocks.gear.equipped.${filled}.length`) === 0 || 'slot still occupied';
+  });
+
+  // Misc. Junk
+  check('[gear] Misc. Junk counts up and stops at zero', () => {
+    ev("invCounter('gear','junk',5);");
+    if (ev('S.char.blocks.gear.counters.junk') !== 5) return 'got ' + ev('S.char.blocks.gear.counters.junk');
+    ev("for(let i=0;i<9;i++)invCounter('gear','junk',-1);");
+    return ev('S.char.blocks.gear.counters.junk') === 0 || 'went negative';
+  });
+
+  // the lift limit is derived, not stored
+  check('[gear] the lift limit follows Strength', () => {
+    ev("S.char.blocks.stats={STR:{base:4,bonus:0}};");
+    const a = ev('SYS.derive.liftLimit(S.char)');
+    ev("S.char.blocks.stats.STR.bonus=6;");
+    const b = ev('SYS.derive.liftLimit(S.char)');
+    return (/60/.test(a) && /150/.test(b)) || 'got "' + a + '" then "' + b + '"';
+  });
+
+  check('[gear] the block renders every container', () => {
+    ev("renderHero();S.char.creation={step:0,complete:true};renderHero();");
+    const el = ev("(document.getElementById('blk-gear')||{}).innerHTML||''");
+    return (/Gear Slots/.test(el) && /Hotlist/.test(el) && /Inventory/.test(el) && /Misc. Junk/.test(el))
+      || 'a container is missing from the rendered block';
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>
