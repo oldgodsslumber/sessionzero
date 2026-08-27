@@ -1103,6 +1103,95 @@ function boot(entry) {
     return (a === b && b === c && a === 'Near Miss or Failure') || [a, b, c].join(' / ');
   });
 
+  // ── pets, mounts and minions (D7) ────────────────────────────────────────
+  // A pet gains TWO levels per crawler level until it hits 15, then one.
+  eq(ev('dccPetLevel(0)'), 1,  '[pets] a new pet is level 1');
+  eq(ev('dccPetLevel(1)'), 3,  '[pets] one crawler level makes it 3');
+  eq(ev('dccPetLevel(6)'), 13, '[pets] still doubling at 13');
+  eq(ev('dccPetLevel(7)'), 15, '[pets] reaches 15 after seven of your levels');
+  eq(ev('dccPetLevel(8)'), 16, '[pets] and then keeps pace with you');
+  eq(ev('dccPetLevel(20)'), 28, '[pets] 15 + the 13 levels since');
+  check('[pets] the level curve never goes backwards or jumps', () => {
+    let prev = 0;
+    for (let n = 0; n <= 40; n++) {
+      const l = ev('dccPetLevel(' + n + ')');
+      if (l < prev) return 'went backwards at ' + n;
+      if (l - prev > 2) return 'jumped by ' + (l - prev) + ' at ' + n;
+      prev = l;
+    }
+    return true;
+  });
+  check('[pets] doubling stops exactly at 15, not before or after', () => {
+    for (let n = 0; n <= 20; n++) {
+      const l = ev('dccPetLevel(' + n + ')');
+      const step = n ? l - ev('dccPetLevel(' + (n - 1) + ')') : 0;
+      if (n && l <= 15 && step !== 2) return 'step of ' + step + ' below the cap at ' + n;
+      if (n && l > 16 && step !== 1) return 'step of ' + step + ' above the cap at ' + n;
+    }
+    return true;
+  });
+
+  // A pet rolls at the Floor Number regardless of level, and cannot train up.
+  eq(ev('dccPetRank(3)'), 3, '[pets] a pet rolls at the Floor Number');
+  eq(ev('dccPetRank(5)'), 5, '[pets] ...on floor 5 too');
+  check('[pets] Rank depends on the floor and not at all on the level', () => {
+    const a = ev('dccPetRank(4)');
+    const b = ev('dccPetRank(4)');
+    return a === b && a === 4 || 'Rank moved: ' + a + ' vs ' + b;
+  });
+
+  // 3 Stat points a level, and never into Intelligence.
+  eq(ev('dccPetStatPoints(1, 5)'), 12, '[pets] four levels gained is 12 Stat points');
+  eq(ev('dccPetStatPoints(5, 5)'), 0,  '[pets] no levels, no points');
+  eq(ev('dccPetStatPoints(9, 3)'), 0,  '[pets] going down does not refund points');
+  eq(ev('DCC_PET_STAT_EXCLUDED'), 'INT', '[pets] Intelligence is off limits');
+
+  // Attack upgrades land at Ranks 5/10/15, which for a pet means those floors.
+  eq(ev('dccPetAttackDice(4)'), 0,  '[pets] no extra damage die below floor 5');
+  eq(ev('dccPetAttackDice(5)'), 1,  '[pets] one on floor 5');
+  eq(ev('dccPetAttackDice(10)'), 2, '[pets] two on floor 10');
+  eq(ev('dccPetAttackDice(15)'), 3, '[pets] three on floor 15');
+  check('[pets] level 15 is where a pet is called mature', () =>
+    ev('dccPetIsMature(14)') === false && ev('dccPetIsMature(15)') === true);
+
+  eq(ev('DCC_COMPANION_KINDS.length'), 3, '[pets] pets, mounts and minions');
+  check('[pets] every kind carries its rule, not just a label', () => {
+    const bad = ev(`JSON.stringify(DCC_COMPANION_KINDS.filter(k=>!k.id||!k.label||!k.note).map(k=>k.id))`);
+    return bad === '[]' || bad;
+  });
+  check('[pets] the mount rule mentions its one Action and the Move to mount', () => {
+    const m = ev(`DCC_COMPANION_KINDS.find(k=>k.id==='mount').note`);
+    return (/one Action/i.test(m) && /Move Action/i.test(m)) || m;
+  });
+
+  // the block
+  check('[companions] adding one records its kind, and only a pet tracks levels', () => {
+    ev("S.char.blocks.companions={entries:[]};");
+    ev("var i=document.createElement('input');i.id='ent-add-companions';document.body.appendChild(i);" +
+       "var s=document.createElement('select');s.id='ent-kind-companions';" +
+       "['pet','mount'].forEach(function(k){var o=document.createElement('option');o.value=k;s.appendChild(o);});" +
+       "document.body.appendChild(s);");
+    ev("document.getElementById('ent-add-companions').value='Mongo';entAdd('companions');");
+    const e = JSON.parse(ev('JSON.stringify(S.char.blocks.companions.entries)'));
+    if (e.length !== 1) return 'added ' + e.length;
+    if (e[0].name !== 'Mongo' || e[0].kind !== 'pet') return JSON.stringify(e[0]);
+    ev("entLevel('companions',0,3)");
+    return ev('S.char.blocks.companions.entries[0].levelsGained') === 3 || 'levels not tracked';
+  });
+  check('[companions] levels gained never go below zero', () => {
+    ev("for(let i=0;i<9;i++)entLevel('companions',0,-1)");
+    return ev('S.char.blocks.companions.entries[0].levelsGained') === 0 || 'went negative';
+  });
+  check("[companions] the readout shows a pet's derived level and Rank", () => {
+    ev("entLevel('companions',0,7);S.floor=5;");
+    const bits = ev("JSON.stringify(SYS.derive.companionReadout(S.char,S.char.blocks.companions.entries[0]))");
+    return (/Level 15/.test(bits) && /Rank 5/.test(bits) && /mature/.test(bits)) || bits;
+  });
+  check('[companions] a mount has no derived numbers, only its rule', () => {
+    const bits = ev("JSON.stringify(SYS.derive.companionReadout(S.char,{kind:'mount',name:'Horse'}))");
+    return bits === '[]' || bits;
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>

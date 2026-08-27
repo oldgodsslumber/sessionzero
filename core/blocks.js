@@ -9,9 +9,10 @@
 // bug, and a vocabulary that repeated the pattern would multiply it across every
 // system. Call blockRepaint(id) after mutating state, not a full sheet render.
 //
-// Implemented so far: traitGrid, track, pool, readout, skillList, inventory.
-// Still to come: textList, catalogItems, groups, variants, entityRefs,
-// richText, statusEffects, progression.
+// Implemented so far: traitGrid, track, pool, readout, skillList, inventory,
+// entityList.
+// Still to come: textList, catalogItems, groups, variants, richText,
+// statusEffects, progression.
 
 const BLOCK_TYPES = {};
 function registerBlockType(id, def) { BLOCK_TYPES[id] = def; }
@@ -609,5 +610,84 @@ function invCounter(id, cid, delta) {
   const t = _inv(id); if (!t) return;
   t.ctx.data.counters = t.ctx.data.counters || {};
   t.ctx.data.counters[cid] = Math.max(0, (t.ctx.data.counters[cid] || 0) + delta);
+  save(); blockRepaint(id);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// entityList — companions: things that travel with you and have their own
+// numbers, but are not characters in their own right. Pets, mounts, minions;
+// in another system, allies or contacts or hirelings.
+//
+// The pack supplies the kinds and a per-row derived readout, so the shell never
+// learns what a Floor Number is.
+// ════════════════════════════════════════════════════════════════════════════
+registerBlockType('entityList', {
+  init() { return { entries: [] }; },
+  render(ctx) {
+    const b = ctx.block, d = ctx.data;
+    const kinds = b.kinds || [];
+    const rows = d.entries || [];
+    let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="pg-title" style="font-size:18px">${esc(b.label || 'Companions')}</div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <input id="ent-add-${esc(b.id)}" placeholder="Name" style="width:120px;padding:5px">
+        <select id="ent-kind-${esc(b.id)}" style="width:96px">
+          ${kinds.map(k => `<option value="${esc(k.id)}">${esc(k.label)}</option>`).join('')}
+        </select>
+        <button class="btn btn-secondary btn-xs" onclick="entAdd('${esc(b.id)}')">Add</button>
+      </div></div>`;
+    if (b.hint) h += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(b.hint)}</div>`;
+    if (!rows.length) {
+      return h + `<div class="tac text-muted" style="padding:12px;font-size:12px">Nothing travelling with you.</div></div>`;
+    }
+    rows.forEach((e, i) => {
+      const kind = kinds.find(k => k.id === e.kind) || kinds[0] || {};
+      const readout = b.readout ? sysDerive(b.readout) : null;
+      const bits = readout ? readout(ctx.char, e) : [];
+      h += `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${esc(e.name)}
+              <span style="font-size:10px;color:var(--muted);font-weight:400">${esc(kind.label || e.kind)}</span></div>
+            ${bits.length ? `<div style="font-size:11px;color:var(--muted)">${bits.map(esc).join(' · ')}</div>` : ''}
+          </div>
+          ${e.kind === 'pet' ? `<button class="btn btn-secondary btn-xs" onclick="entLevel('${esc(b.id)}',${i},-1)">−</button>
+            <div style="min-width:52px;text-align:center;font-size:11px">
+              <div style="font-weight:700">${e.levelsGained || 0}</div>
+              <div style="font-size:8px;color:var(--muted)">your levels</div></div>
+            <button class="btn btn-secondary btn-xs" onclick="entLevel('${esc(b.id)}',${i},1)">+</button>` : ''}
+          <button class="btn btn-secondary btn-xs" onclick="entDel('${esc(b.id)}',${i})">✕</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(kind.note || '')}</div>
+      </div>`;
+    });
+    return h + '</div>';
+  },
+});
+
+function _ent(id) {
+  const char = S && S.char; if (!char) return null;
+  const block = sysBlock(id); if (!block) return null;
+  return { block, ctx: blockCtx(block, char) };
+}
+function entAdd(id) {
+  const t = _ent(id); if (!t) return;
+  const inp = document.getElementById('ent-add-' + id);
+  const sel = document.getElementById('ent-kind-' + id);
+  const name = (inp && inp.value || '').trim();
+  if (!name) return;
+  t.ctx.data.entries.push({ name, kind: sel ? sel.value : 'pet', levelsGained: 0 });
+  if (inp) inp.value = '';
+  save(); blockRepaint(id);
+}
+function entDel(id, i) {
+  const t = _ent(id); if (!t) return;
+  t.ctx.data.entries.splice(i, 1);
+  save(); blockRepaint(id);
+}
+function entLevel(id, i, delta) {
+  const t = _ent(id); if (!t) return;
+  const e = t.ctx.data.entries[i]; if (!e) return;
+  e.levelsGained = Math.max(0, (e.levelsGained || 0) + delta);
   save(); blockRepaint(id);
 }

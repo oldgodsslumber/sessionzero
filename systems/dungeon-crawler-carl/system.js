@@ -121,6 +121,13 @@ registerSystem({
         ],
         counters: [{ id: 'junk', label: 'Misc. Junk' }],
       },
+      {
+        id: 'companions', type: 'entityList', label: 'Pets, Mounts & Minions',
+        hint: 'A pet levels twice as fast as you until 15, and rolls at the Floor Number '
+            + 'however green it is. Track how many levels YOU have gained since it joined.',
+        kinds: DCC_COMPANION_KINDS,
+        readout: 'derive.companionReadout',
+      },
       { id: 'aiFavor',    type: 'pool', label: 'AI Favor',   hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
       { id: 'popularity', type: 'pool', label: 'Popularity', hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
       { id: 'gold',       type: 'pool', label: 'Gold',       hint: 'All of it fits in one Inventory slot.' },
@@ -136,6 +143,21 @@ registerSystem({
     statMod: enhancedValue => dccStatMod(enhancedValue),
     hbSlotValue: char => dccModOf(char, 'CON'),
     // The only cap on Inventory is whether you could lift the thing: STR x 15 lb (p. 98).
+    // One line of numbers under a companion's name. A pet is the only kind
+    // with anything to derive; the others carry rules, not statistics.
+    companionReadout: (char, e) => {
+      if (!e || e.kind !== 'pet') return [];
+      const floor = (typeof S !== 'undefined' && S && S.floor) || 3;
+      const lvl = dccPetLevel(e.levelsGained || 0);
+      const out = ['Level ' + lvl,
+                   'Rank ' + dccPetRank(floor) + ' (Floor ' + floor + ')',
+                   dccPetStatPoints(1, lvl) + ' Stat points, none in ' + DCC_PET_STAT_EXCLUDED];
+      const dice = dccPetAttackDice(floor);
+      if (dice) out.push('+' + dice + ' base damage ' + (dice === 1 ? 'die' : 'dice'));
+      if (dccPetIsMature(lvl)) out.push('mature');
+      return out;
+    },
+
     liftLimit: char => 'Lift limit ' + (dccStatOf(char, 'STR') * 15) + ' lb',
     maxMana:     char => dccStatOf(char, 'INT'),
     evade:       char => '+' + dccModOf(char, 'DEX'),
