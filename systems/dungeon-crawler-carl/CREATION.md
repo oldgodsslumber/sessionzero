@@ -301,17 +301,32 @@ truncation.
 
 ## 7a. Where the build has got to
 
+**All nine screens are built.** A crawler can be made start to finish.
+
 | Screen | State |
 |---|---|
-| 1 Who are you | **done** |
-| 2 Background | **done** |
-| 3 How you fight | **done** |
-| 4 Stats | **done** |
-| 5 Scars | **done** |
-| 6 What you brought | **done** |
-| 7 The tutorial floors | not started — needs Tables 25–34 extracted |
-| 8 Race & Class | data **done** (30 Races, 52 Classes); screen not built |
-| 9 Review | not started |
+| 1 Who are you | done |
+| 2 Background | done |
+| 3 How you fight | done |
+| 4 Stats | done |
+| 5 Scars | done |
+| 6 What you brought | done |
+| 7 The tutorial floors | done, except the six Experiences and Acquired Loot (Tables 25–34) |
+| 8 Race & Class | done — 30 Races, 52 Classes, prerequisite-gated, with a diff preview |
+| 9 Review | done |
+
+Two things are deliberately deferred rather than faked:
+
+- **The six Tutorial Floor Experiences and Acquired Loot** need Tables 25–34.
+  They are story hooks and starting gear rather than Stats, so they can be added
+  to a finished crawler later. Screen 7 says so on the screen.
+- **A Spell-route crawler's primary attack is a Spell**, and Spells are D7. The
+  +2d4 is still rolled and shown, flagged as a Spell, rather than being silently
+  skipped — and it does not create a phantom Skill on the sheet.
+
+**Nothing is applied while you shop on screen 8.** The diff is computed live and
+the transaction only lands in `dccFinishCreation`, so backing out is free and
+changing a Stat point on screen 7 re-checks your Race and Class prerequisites.
 
 ### Race & Class extraction: done, with one caveat
 

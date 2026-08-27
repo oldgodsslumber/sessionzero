@@ -407,16 +407,70 @@ const DCC_SCREENS = [
     // GM, not a rule the app should gate on.
     validate() { return true; },
   },
+  {
+    id: 'tutorial', label: 'The tutorial floors',
+    render: dccScreenTutorial,
+    validate(c) {
+      const fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+      if (!fs.bumps) return 'Roll your tutorial-floor Skill Ranks.';
+      if (fs.favor === null) return 'Roll your AI Favor.';
+      const left = cfg.statPoints - dccPointsSpent(c);
+      if (left > 0) return left + ' Stat points still unspent — Races and Classes check these.';
+      return true;
+    },
+  },
+  {
+    id: 'raceclass', label: 'Race & Class',
+    render: dccScreenRaceClass,
+    validate(c) {
+      const p = dccPick(c);
+      if (!p.race) return 'Choose a Race.';
+      if (!p.cls) return 'Choose a Class.';
+      // A pick can stop qualifying if you go back and move Stat points around.
+      const r = dccMeetsPrereq(c, dccRace(p.race));
+      if (r.ok === false) return 'You no longer qualify for that Race: ' + r.why;
+      const k = dccMeetsPrereq(c, dccClass(p.cls));
+      if (k.ok === false) return 'You no longer qualify for that Class: ' + k.why;
+      return true;
+    },
+  },
+  {
+    id: 'review', label: 'Review',
+    render: dccScreenReview,
+    validate() { return true; },
+  },
 ];
 
 // Called by the wizard when the last screen is finished: turn the choices into
 // the Skills the sheet actually carries.
 function dccFinishCreation(char) {
   if (!char.blocks) char.blocks = {};
-  char.blocks.skills = { skills: dccStartingSkills(char) };
+  const diff = dccRcDiff(char);
+  const fs = dccFloorStart(char);
+
+  // Apply the Race/Class Stat deltas onto the Enhanced layer, on top of the
+  // tutorial-floor points already there. This is the only moment the shopping
+  // on screen 8 actually lands.
+  if (diff) {
+    Object.keys(diff.stats).forEach(function (k) {
+      const cell = char.blocks.stats[k] || { base: 0, bonus: 0 };
+      cell.bonus = (cell.bonus || 0) + diff.stats[k].delta;
+      char.blocks.stats[k] = cell;
+    });
+    if (diff.race) char.race = diff.race.name;
+    if (diff.cls) char.class = diff.cls.name;
+    if (diff.race && diff.race.size) char.size = diff.race.size.n;
+  }
+
+  char.blocks.skills = { skills: dccFinalSkills(char) };
   char.blocks.mana = { current: dccStatOf(char, 'INT') };
-  char.blocks.aiFavor = { current: char.species === 'animal' ? 0 : 1 };
   char.blocks.health = { marked: 0 };
+  char.level = dccFloorCfg(char).level;
+  char.floor = fs.floor;
+  char.blocks.popularity = { current: dccModOf(char, 'CHA') * 2 };
+  char.blocks.aiFavor = {
+    current: (char.species === 'animal' ? 0 : 1) + (fs.favor || 0),
+  };
 }
 
 // ─── screen 5: scars ────────────────────────────────────────────────────────
@@ -528,3 +582,394 @@ function dccScreenGear(ctx) {
   return h;
 }
 function dccStoreGear(k, v) { dccGear(S.char)[k] = v; save(); }     // store only
+
+// ─── screen 7: the tutorial floors ──────────────────────────────────────────
+// Phase 2 of creation: advance a finished Floor-1 crawler to the floor you are
+// actually starting on. Order matters — the Stat points are spent HERE, before
+// Race & Class, because those have Stat prerequisites (p. 115).
+const DCC_RC_RANK_CAP = 10;   // the Rank ceiling during Race/Class selection, p.129
+
+function dccFloorStart(char) {
+  const d = dccCre(char);
+  if (!d.floorStart) d.floorStart = { floor: 3, bumps: null, favor: null, points: {} };
+  return d.floorStart;
+}
+function dccFloorCfg(char) {
+  const f = dccFloorStart(char).floor;
+  return DCC_FLOOR_START.find(x => x.floor === f) || DCC_FLOOR_START[0];
+}
+function dccPrimaryAttack(char) {
+  const cm = dccCre(char).combat;
+  return cm.route === 'weapon' ? cm.weaponSkill
+       : cm.route === 'spell' ? cm.spell
+       : cm.route === 'handtohand' ? cm.h2h : null;
+}
+function dccPointsSpent(char) {
+  const p = dccFloorStart(char).points || {};
+  return DCC_STATS.reduce((n, s) => n + (p[s.id] || 0), 0);
+}
+
+function dccScreenTutorial(ctx) {
+  const c = ctx.char, fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+  const primary = dccPrimaryAttack(c);
+  let h = '<div class="card"><div class="label">Which floor are you starting on?</div>';
+  h += DCC_FLOOR_START.map(f => '<button class="btn btn-xs ' + (fs.floor === f.floor ? 'btn-primary' : 'btn-secondary') +
+    '" style="margin:0 4px 4px 0" onclick="dccSetFloor(' + f.floor + ')">Floor ' + f.floor + ' &middot; Level ' + f.level + '</button>').join('');
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">You did not appear here from nowhere. ' +
+       'Everything below is what the Tutorial Floors did to you.</div></div>';
+
+  h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">' +
+       '<div class="pg-title" style="font-size:16px">Skill Ranks</div>' +
+       '<button class="btn btn-gold btn-xs" onclick="dccRollBumps()">' + (fs.bumps ? 'Roll again' : 'Roll') + '</button></div>' +
+       '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">+' + cfg.primaryBump + ' to ' +
+       esc(primary || 'your primary attack Skill') + ', +' + cfg.otherBump + ' to each of the others. ' +
+       'Nothing passes Rank ' + cfg.rankCap + ' here, and anything over is wasted.</div>';
+  if (fs.bumps) {
+    h += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:2px 8px;font-size:12px;align-items:center">';
+    fs.bumps.forEach(function (b) {
+      h += '<div>' + esc(b.name) + (b.primary ? ' <span style="color:var(--accent);font-size:9px">PRIMARY</span>' : '') + '</div>' +
+           '<div style="color:var(--muted)">' + b.from + '</div>' +
+           '<div style="color:var(--muted)">+' + b.roll + '</div>' +
+           '<div style="font-weight:700;text-align:right">' + b.to +
+           (b.wasted ? ' <span style="color:var(--red);font-size:9px">' + b.wasted + ' wasted</span>' : '') + '</div>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+
+  const spent = dccPointsSpent(c), left = cfg.statPoints - spent;
+  h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">' +
+       '<div class="pg-title" style="font-size:16px">Stat points</div>' +
+       '<div style="font-size:12px;color:' + (left ? 'var(--accent)' : 'var(--muted)') + '">' +
+       left + ' of ' + cfg.statPoints + ' left</div></div>' +
+       '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">(Level &minus; 1) &times; 3. Spend them now: ' +
+       'Races and Classes have Stat requirements, and the next screen checks them.</div>' +
+       '<div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:4px 8px;align-items:center">';
+  DCC_STATS.forEach(function (s) {
+    const add = (fs.points || {})[s.id] || 0;
+    const base = ((c.blocks && c.blocks.stats || {})[s.id] || {}).base || 0;
+    h += '<div style="font-size:13px">' + esc(s.name) + '</div>' +
+         '<div style="color:var(--muted);min-width:22px;text-align:right">' + base + '</div>' +
+         '<button class="btn btn-secondary btn-xs" onclick="dccStatPoint(\'' + s.id + '\',-1)">&minus;</button>' +
+         '<div style="min-width:34px;text-align:center;font-weight:700">' + (base + add) + '</div>' +
+         '<button class="btn btn-secondary btn-xs" ' + (left <= 0 ? 'disabled style="opacity:.4"' : '') +
+         ' onclick="dccStatPoint(\'' + s.id + '\',1)">+</button>';
+  });
+  h += '</div></div>';
+
+  const pop = dccModOf(c, 'CHA') * 2;
+  h += '<div class="card"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-around;text-align:center">' +
+       '<div><div style="font-size:22px;font-weight:800;color:var(--accent)">' + (fs.favor === null ? '&mdash;' : fs.favor) + '</div>' +
+       '<div class="label" style="margin:0">AI Favor</div>' +
+       '<button class="btn btn-gold btn-xs" style="margin-top:4px" onclick="dccRollFavor()">Roll 1d2</button></div>' +
+       '<div><div style="font-size:22px;font-weight:800;color:var(--accent)">' + pop + '</div>' +
+       '<div class="label" style="margin:0">Popularity</div>' +
+       '<div style="font-size:10px;color:var(--muted)">CHA Mod &times; 2</div></div></div></div>';
+
+  h += '<div class="card-sm" style="font-size:11px;color:var(--muted)">Still to come: the six Tutorial Floor ' +
+       'Experiences and your Acquired Loot, which need Tables 25&ndash;34. They are story hooks and starting ' +
+       'gear rather than Stats, so they can be added to a finished crawler later.</div>';
+  return h;
+}
+
+function dccSetFloor(n) { dccFloorStart(S.char).floor = n; save(); wizRepaint(); }
+function dccStatPoint(id, d) {
+  const c = S.char, fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+  fs.points = fs.points || {};
+  if (d > 0 && dccPointsSpent(c) >= cfg.statPoints) return;
+  const next = Math.max(0, (fs.points[id] || 0) + d);
+  fs.points[id] = next;
+  // Tutorial points raise the Enhanced layer, which is what the Mod reads.
+  c.blocks = c.blocks || {};
+  c.blocks.stats = c.blocks.stats || {};
+  const cell = c.blocks.stats[id] || { base: 0, bonus: 0 };
+  cell.bonus = next;
+  c.blocks.stats[id] = cell;
+  save(); wizRepaint();
+}
+function dccRollFavor() { dccFloorStart(S.char).favor = wizRoll(2); save(); wizRepaint(); }
+
+// +2d4 to the primary attack Skill, +1d4 to each of the other nine, capped.
+function dccRollBumps() {
+  const c = S.char, cfg = dccFloorCfg(c), primary = dccPrimaryAttack(c);
+  const d4 = function () { return wizRoll(4); };
+  const list = dccStartingSkills(c);
+  const bumps = list.map(function (s) {
+    const isPrimary = !!(primary && s.name === primary);
+    const roll = isPrimary ? d4() + d4() : d4();
+    const to = Math.min(cfg.rankCap, s.rank + roll);
+    return { name: s.name, from: s.rank, roll: roll, to: to,
+             wasted: Math.max(0, s.rank + roll - cfg.rankCap), primary: isPrimary };
+  });
+  // If the primary attack is a Spell, it is not in the Skills catalogue yet
+  // (Spells are D7), so it would silently miss its +2d4. Record it anyway,
+  // flagged, rather than quietly shortchanging the crawler.
+  if (primary && !bumps.some(function (b) { return b.primary; })) {
+    bumps.unshift({ name: primary, from: 3, roll: d4() + d4(), to: null,
+                    wasted: 0, primary: true, spell: true });
+    const b = bumps[0];
+    b.to = Math.min(cfg.rankCap, b.from + b.roll);
+    b.wasted = Math.max(0, b.from + b.roll - cfg.rankCap);
+  }
+  dccFloorStart(c).bumps = bumps;
+  save(); wizRepaint();
+}
+
+// ─── screen 8: Race & Class ─────────────────────────────────────────────────
+// Nothing is applied while you shop. The screen computes a live before/after
+// diff and the change only lands when creation finishes, so backing out is free.
+function dccPick(char) {
+  const d = dccCre(char);
+  if (!d.pick) d.pick = { race: null, cls: null, raceQuery: '', clsQuery: '' };
+  return d.pick;
+}
+
+function dccEntryCard(char, e, kind, chosen) {
+  const gate = dccMeetsPrereq(char, e);
+  const locked = gate.ok === false;
+  const bits = [];
+  if (e.size) bits.push(esc(e.size.name) + ' (' + e.size.n + ')');
+  Object.keys(e.stats || {}).forEach(function (k) {
+    bits.push((e.stats[k] > 0 ? '+' : '') + e.stats[k] + ' ' + k);
+  });
+  (e.skills || []).forEach(function (s) {
+    bits.push((s.rank > 0 ? '+' : '') + s.rank + ' ' + esc(s.skill));
+  });
+  return '<div ' + (locked ? '' : 'onclick="dccChoose(\'' + kind + '\',\'' + esc(e.id) + '\')"') +
+    ' style="padding:6px 8px;border-radius:6px;margin-bottom:3px;cursor:' + (locked ? 'not-allowed' : 'pointer') +
+    ';opacity:' + (locked ? '.45' : '1') + ';background:' + (chosen ? 'var(--surface3)' : 'transparent') +
+    ';border:1px solid ' + (chosen ? 'var(--accent)' : 'var(--border)') + '">' +
+    '<div style="display:flex;justify-content:space-between;gap:6px">' +
+    '<div style="font-size:13px;font-weight:600">' + esc(e.name) + (locked ? ' &#128274;' : '') + '</div>' +
+    (e.classType ? '<div style="font-size:10px;color:var(--muted)">' + esc(e.classType) + '</div>' : '') + '</div>' +
+    (bits.length ? '<div style="font-size:11px;color:var(--muted)">' + bits.join(' &middot; ') + '</div>' : '') +
+    (locked ? '<div style="font-size:10px;color:var(--accent)">' + esc(gate.why) + '</div>' : '') +
+    (e.needsReview ? '<div style="font-size:10px;color:var(--muted)">Some benefit text is incomplete &mdash; see p.' +
+      e.page + ' of the book.</div>' : '') + '</div>';
+}
+
+function dccRcFilter(pool, q) {
+  const s = (q || '').toLowerCase();
+  if (!s) return pool;
+  return pool.filter(function (e) {
+    return e.name.toLowerCase().indexOf(s) >= 0 ||
+           (e.classType || '').toLowerCase().indexOf(s) >= 0;
+  });
+}
+
+function dccScreenRaceClass(ctx) {
+  const c = ctx.char, p = dccPick(c);
+  let h = '<div class="card-sm" style="font-size:11px;color:var(--muted)">The AI offers you three of each. ' +
+    'This shows all of them, with anything you do not qualify for locked and the reason given. ' +
+    'Nothing changes on your sheet until you finish &mdash; the preview below is what it would do.</div>';
+
+  h += '<div class="card"><div class="pg-title" style="font-size:16px">Race</div>' +
+    '<input id="rc-race-q" placeholder="Search ' + DCC_RACES.length + ' Races" value="' + esc(p.raceQuery || '') +
+    '" oninput="dccRcQuery(\'race\',this.value)" style="margin-bottom:6px">' +
+    '<div id="rc-race-list" style="max-height:210px;overflow-y:auto">' +
+    dccRcFilter(DCC_RACES, p.raceQuery).map(function (e) {
+      return dccEntryCard(c, e, 'race', p.race === e.id);
+    }).join('') + '</div></div>';
+
+  h += '<div class="card"><div class="pg-title" style="font-size:16px">Class</div>' +
+    '<input id="rc-cls-q" placeholder="Search ' + DCC_CLASSES.length + ' Classes" value="' + esc(p.clsQuery || '') +
+    '" oninput="dccRcQuery(\'cls\',this.value)" style="margin-bottom:6px">' +
+    '<div id="rc-cls-list" style="max-height:210px;overflow-y:auto">' +
+    dccRcFilter(DCC_CLASSES, p.clsQuery).map(function (e) {
+      return dccEntryCard(c, e, 'cls', p.cls === e.id);
+    }).join('') + '</div></div>';
+
+  const diff = dccRcDiff(c);
+  if (diff) {
+    h += '<div class="card" style="border-color:var(--accent)">' +
+         '<div class="pg-title" style="font-size:16px">What this would do</div>';
+    const statKeys = Object.keys(diff.stats);
+    if (statKeys.length) {
+      h += '<div class="label" style="margin:6px 0 2px">Stats</div>' +
+           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:4px">';
+      DCC_STATS.forEach(function (s) {
+        const d = diff.stats[s.id];
+        if (!d) return;
+        h += '<div style="font-size:12px">' + s.id + ' <span style="color:var(--muted)">' + d.from + '</span> &rarr; ' +
+             '<strong>' + d.to + '</strong> <span style="color:var(--accent)">(' +
+             (d.delta > 0 ? '+' : '') + d.delta + ')</span></div>';
+      });
+      h += '</div>';
+    }
+    if (diff.skills.length) {
+      h += '<div class="label" style="margin:8px 0 2px">Skills</div>';
+      diff.skills.forEach(function (s) {
+        h += '<div style="font-size:12px">' + esc(s.name) + ' <span style="color:var(--muted)">' + s.from +
+             '</span> &rarr; <strong>' + s.to + '</strong>' +
+             (s.wasted ? ' <span style="color:var(--red);font-size:10px">' + s.wasted +
+                         ' wasted at the Rank ' + DCC_RC_RANK_CAP + ' cap</span>' : '') +
+             (s.isNew ? ' <span style="font-size:9px;color:var(--accent)">NEW</span>' : '') + '</div>';
+      });
+    }
+    if (diff.notes.length) {
+      h += '<div class="label" style="margin:8px 0 2px">Also</div>';
+      diff.notes.forEach(function (n) {
+        h += '<div style="font-size:11px;color:var(--muted)">&bull; ' + esc(n) + '</div>';
+      });
+    }
+    h += '</div>';
+  }
+  return h;
+}
+
+function dccRcQuery(which, v) {
+  const p = dccPick(S.char);
+  if (which === 'race') p.raceQuery = v; else p.clsQuery = v;
+  save();
+  // Repaint ONLY the list. Repainting the screen would replace the search box
+  // mid-keystroke and drop the caret — the bug this whole project started with.
+  const el = document.getElementById(which === 'race' ? 'rc-race-list' : 'rc-cls-list');
+  if (!el) return;
+  const pool = which === 'race' ? DCC_RACES : DCC_CLASSES;
+  const sel = which === 'race' ? p.race : p.cls;
+  el.innerHTML = dccRcFilter(pool, v).map(function (e) {
+    return dccEntryCard(S.char, e, which, sel === e.id);
+  }).join('');
+}
+
+function dccChoose(kind, id) {
+  const p = dccPick(S.char);
+  if (kind === 'race') p.race = p.race === id ? null : id;
+  else p.cls = p.cls === id ? null : id;
+  save(); wizRepaint();
+}
+
+// The transaction: computed, shown, and only applied when creation finishes.
+function dccRcDiff(char) {
+  const p = dccPick(char);
+  const race = p.race ? dccRace(p.race) : null;
+  const cls = p.cls ? dccClass(p.cls) : null;
+  if (!race && !cls) return null;
+  const stats = {}, notes = [];
+  [race, cls].filter(Boolean).forEach(function (e) {
+    Object.keys(e.stats || {}).forEach(function (k) {
+      const from = dccStatOf(char, k);
+      const delta = (stats[k] ? stats[k].delta : 0) + e.stats[k];
+      stats[k] = { from: from, delta: delta, to: from + delta };
+    });
+    (e.benefits || []).forEach(function (b) { notes.push(b); });
+    (e.rank20 || []).forEach(function (b) { notes.push(b); });
+    if (e.needsReview) {
+      notes.push('Some of ' + e.name + "'s benefits are not fully captured — see p." + e.page + '.');
+    }
+  });
+  const have = dccStartingSkills(char);
+  const bumps = dccFloorStart(char).bumps || [];
+  const rankOf = function (n) {
+    const b = bumps.find(function (x) { return x.name === n; });
+    if (b) return b.to;
+    const s = have.find(function (x) { return x.name === n; });
+    return s ? s.rank : 0;
+  };
+  const skills = [];
+  [race, cls].filter(Boolean).forEach(function (e) {
+    (e.skills || []).forEach(function (g) {
+      const existing = skills.find(function (x) { return x.name === g.skill; });
+      const base = existing ? existing.to : rankOf(g.skill);
+      const raw = base + g.rank;
+      const to = Math.min(DCC_RC_RANK_CAP, raw);
+      if (existing) {
+        existing.to = to;
+        existing.wasted += Math.max(0, raw - DCC_RC_RANK_CAP);
+      } else {
+        skills.push({ name: g.skill, from: base, to: to,
+                      wasted: Math.max(0, raw - DCC_RC_RANK_CAP),
+                      isNew: rankOf(g.skill) === 0 });
+      }
+    });
+  });
+  return { race: race, cls: cls, stats: stats, skills: skills, notes: notes };
+}
+
+// ─── screen 9: review ───────────────────────────────────────────────────────
+function dccScreenReview(ctx) {
+  const c = ctx.char, d = dccCre(c);
+  const diff = dccRcDiff(c);
+  const fs = dccFloorStart(c);
+  const st = c.story || {};
+  const row = function (k, v) {
+    return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0">' +
+           '<span style="color:var(--muted)">' + k + '</span><span style="text-align:right">' + v + '</span></div>';
+  };
+  let h = '<div class="card"><div class="pg-title" style="font-size:18px">' +
+    esc(c.name || 'Unnamed') + '</div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Crawler #' +
+    esc(String(c.crawlerNumber || '')) + ' &middot; ' + (c.species === 'animal' ? 'Animal' : 'Human') +
+    ' &middot; Floor ' + fs.floor + ' &middot; Level ' + dccFloorCfg(c).level + '</div>' +
+    row('Race', diff && diff.race ? esc(diff.race.name) : '<span style="color:var(--muted)">none</span>') +
+    row('Class', diff && diff.cls ? esc(diff.cls.name) : '<span style="color:var(--muted)">none</span>') +
+    '</div>';
+
+  h += '<div class="card"><div class="label">Stats</div>' +
+       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px;text-align:center">';
+  DCC_STATS.forEach(function (s) {
+    const after = diff && diff.stats[s.id] ? diff.stats[s.id].to : dccStatOf(c, s.id);
+    h += '<div><div style="font-size:20px;font-weight:800">' + after + '</div>' +
+         '<div style="font-size:11px;color:var(--accent)">+' + dccStatMod(after) + '</div>' +
+         '<div class="label" style="margin:0">' + s.id + '</div></div>';
+  });
+  h += '</div></div>';
+
+  h += '<div class="card"><div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:space-around;text-align:center">' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">10 &times; ' + dccModOf(c, 'CON') + '</div>' +
+       '<div class="label" style="margin:0">Health Bar</div></div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + dccStatOf(c, 'INT') + '</div>' +
+       '<div class="label" style="margin:0">Mana</div></div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">+' + dccModOf(c, 'DEX') + '</div>' +
+       '<div class="label" style="margin:0">Evade</div></div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + (fs.favor === null ? '—' : fs.favor) + '</div>' +
+       '<div class="label" style="margin:0">AI Favor</div></div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + (dccModOf(c, 'CHA') * 2) + '</div>' +
+       '<div class="label" style="margin:0">Popularity</div></div></div></div>';
+
+  const final = dccFinalSkills(c);
+  h += '<div class="card"><div class="label">Skills (' + final.length + ')</div>' +
+       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:2px 10px">';
+  final.slice().sort(function (a, b) { return b.rank - a.rank || a.name.localeCompare(b.name); })
+    .forEach(function (s) {
+      h += '<div style="font-size:12px;display:flex;justify-content:space-between">' +
+           '<span>' + esc(s.name) + '</span><span style="font-weight:700">' + s.rank +
+           ' <span style="color:var(--muted);font-weight:400">' + (s.stat || '—') + '</span></span></div>';
+    });
+  h += '</div></div>';
+
+  h += '<div class="card"><div class="label">Scars</div>' +
+       row('Past Trauma', esc(st.pastTrauma || '—')) +
+       row('Loose End', esc(st.looseEnd || '—')) +
+       row('Regret', esc(st.regret || '—'));
+  if (st.linesNotToCross) {
+    h += '<div style="margin-top:6px;padding:6px;border:1px solid var(--accent);border-radius:6px;font-size:11px">' +
+         '<strong style="color:var(--accent)">Lines not to cross:</strong> ' + esc(st.linesNotToCross) + '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+// The Skills a finished crawler ends up with: background and combat picks, then
+// the tutorial-floor bumps, then whatever Race and Class grant. Recomputed from
+// the choices rather than accumulated, so going back and changing one is safe.
+function dccFinalSkills(char) {
+  const out = dccStartingSkills(char).map(function (s) { return Object.assign({}, s); });
+  (dccFloorStart(char).bumps || []).forEach(function (b) {
+    if (b.spell) return;                 // Spells are not Skills; D7 will carry them
+    const s = out.find(function (x) { return x.name === b.name; });
+    if (s) s.rank = b.to;
+  });
+  const diff = dccRcDiff(char);
+  if (diff) {
+    diff.skills.forEach(function (g) {
+      const s = out.find(function (x) { return x.name === g.name; });
+      if (s) { s.rank = g.to; return; }
+      const cat = dccSkillByName(g.name);
+      out.push({ name: g.name, rank: g.to, stat: cat ? cat.stat : null,
+                 checkType: cat ? cat.checkType : null,
+                 passive: !!(cat && cat.passive), source: 'raceclass', marked: false });
+    });
+  }
+  return out;
+}

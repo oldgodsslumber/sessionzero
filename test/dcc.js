@@ -429,7 +429,7 @@ function boot(entry) {
   check('[wizard] a fresh crawler starts in the wizard, not on the sheet', () =>
     ev("!!document.getElementById('wiz-body')") &&
     ev("document.getElementById('hero-sheet').style.display") === 'none');
-  eq(ev('SYS.creation.length'), 6, '[wizard] six screens implemented so far');
+  eq(ev('SYS.creation.length'), 9, '[wizard] all nine screens implemented');
 
   // screen 1
   check('[wizard] screen 1 blocks until species, name and number are set', () =>
@@ -550,6 +550,111 @@ function boot(entry) {
   eq(ev('S.char.creation.step'), 5, '[wizard] advanced to What you brought');
   ev("dccStoreGear('clothes','Jeans and a hoodie');dccStoreGear('item','A crowbar')");
 
+  // screens 7-9
+  ev('wizNext()');
+  eq(ev('S.char.creation.step'), 6, '[wizard] advanced to The tutorial floors');
+  check('[tutorial] blocks until the Skill Ranks are rolled', () => {
+    const v = ev('wizValidate(S.char,6)');
+    return (v !== true && /Skill Ranks/i.test(String(v))) || 'got ' + v;
+  });
+  ev('dccRollBumps()');
+  check('[tutorial] the primary attack Skill gets 2d4, the others 1d4', () => {
+    const b = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.bumps)'));
+    const prim = b.filter(x => x.primary);
+    if (prim.length !== 1) return prim.length + ' primaries';
+    // this crawler took the Spell route, so its primary is flagged as a Spell
+    if (!prim[0].spell) return 'expected the Spell route to flag its primary';
+    if (prim[0].roll < 2 || prim[0].roll > 8) return 'primary roll ' + prim[0].roll;
+    const others = b.filter(x => !x.primary);
+    const bad = others.filter(x => x.roll < 1 || x.roll > 4);
+    return bad.length ? 'a 1d4 rolled ' + bad[0].roll : true;
+  });
+  check('[tutorial] nothing passes the Rank 10 cap, and waste is reported', () => {
+    const b = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.bumps)'));
+    const over = b.filter(x => x.to > 10);
+    if (over.length) return over[0].name + ' reached ' + over[0].to;
+    const bad = b.filter(x => x.wasted !== Math.max(0, x.from + x.roll - 10));
+    return bad.length ? 'waste miscounted on ' + bad[0].name : true;
+  });
+  ev('dccRollFavor()');
+  check('[tutorial] AI Favor is 1d2', () => {
+    for (let i = 0; i < 60; i++) {
+      ev('dccRollFavor()');
+      const f = ev('S.char.dcc.floorStart.favor');
+      if (f !== 1 && f !== 2) return 'rolled ' + f;
+    }
+    return true;
+  });
+  check('[tutorial] blocks while Stat points are unspent', () => {
+    const v = ev('wizValidate(S.char,6)');
+    return (v !== true && /Stat points/.test(String(v))) || 'got ' + v;
+  });
+  check('[tutorial] a Floor 3 crawler gets exactly 27 points', () => {
+    ev("for(let i=0;i<40;i++)dccStatPoint('CON',1)");
+    const spent = ev('dccPointsSpent(S.char)');
+    return spent === 27 || 'spent ' + spent;
+  });
+  check('[tutorial] tutorial points raise the Enhanced layer, not the base', () => {
+    const base = ev("S.char.blocks.stats.CON.base");
+    const bonus = ev("S.char.blocks.stats.CON.bonus");
+    return (bonus === 27 && base !== 27) || 'base=' + base + ' bonus=' + bonus;
+  });
+  eq(ev('wizValidate(S.char,6)'), true, '[tutorial] satisfied');
+
+  // screen 8 — Race & Class
+  ev('wizNext()');
+  eq(ev('S.char.creation.step'), 7, '[wizard] advanced to Race & Class');
+  check('[raceclass] blocks until both are chosen', () => {
+    const v = ev('wizValidate(S.char,7)');
+    return (v !== true && /Race/.test(String(v))) || 'got ' + v;
+  });
+  check('[raceclass] a locked entry cannot be chosen and says why', () => {
+    // Amazonian needs a STR or DEX Skill at Rank 5+
+    const gate = JSON.parse(ev("JSON.stringify(dccMeetsPrereq(S.char,dccRace('amazonian')))"));
+    const html = ev("dccEntryCard(S.char,dccRace('amazonian'),'race',false)");
+    if (gate.ok === false && !/onclick/.test(html)) return true;
+    if (gate.ok === true) return true;      // this crawler happens to qualify
+    return 'locked entry was still clickable';
+  });
+  check('[raceclass] nothing is applied while you shop', () => {
+    const before = ev("JSON.stringify(S.char.blocks.stats)");
+    ev("dccChoose('race','human');dccChoose('cls','boring-ol-fighter')");
+    const after = ev("JSON.stringify(S.char.blocks.stats)");
+    return before === after || 'the sheet changed before finishing';
+  });
+  check('[raceclass] the diff previews the Stat change', () => {
+    const d = ev("JSON.stringify(dccRcDiff(S.char))");
+    const o = JSON.parse(d);
+    if (!o || !o.race) return 'no diff';
+    const keys = Object.keys(o.stats);
+    if (!keys.length) return 'no stat deltas for Human (+2 to all)';
+    const one = o.stats[keys[0]];
+    return one.to === one.from + one.delta || 'diff arithmetic wrong: ' + JSON.stringify(one);
+  });
+  check('[raceclass] deselecting clears the diff', () => {
+    ev("dccChoose('race','human')");
+    const gone = ev('dccRcDiff(S.char)') === null || !JSON.parse(ev("JSON.stringify(dccRcDiff(S.char))")).race;
+    ev("dccChoose('race','human')");
+    return gone || 'race stayed selected';
+  });
+  check('[raceclass] searching repaints only the list, never the input', () => {
+    ev("renderWizard('hero-creation')");
+    ev("document.getElementById('rc-race-q').setAttribute('data-probe','1')");
+    ev("dccRcQuery('race','elf')");
+    const kept = ev("document.getElementById('rc-race-q').getAttribute('data-probe')") === '1';
+    const rows = ev("document.getElementById('rc-race-list').children.length");
+    return (kept && rows > 0 && rows < 30) || 'kept=' + kept + ' rows=' + rows;
+  });
+  eq(ev('wizValidate(S.char,7)'), true, '[raceclass] satisfied with both chosen');
+
+  // screen 9 — review, then finish
+  ev('wizNext()');
+  eq(ev('S.char.creation.step'), 8, '[wizard] advanced to Review');
+  check('[review] the review names the crawler, Race and Class', () => {
+    const html = ev("SYS.creation[8].render({char:S.char,floor:3})");
+    return (/Keisha/.test(html) && /Human/.test(html)) || 'review missing identity';
+  });
+
   // finishing turns the choices into a real sheet
   ev('wizNext()');
   eq(ev('S.char.creation.complete'), true, '[wizard] creation is marked complete');
@@ -557,13 +662,26 @@ function boot(entry) {
     const n = ev('S.char.blocks.skills.skills.length');
     return n === 9 || n === 10 || 'got ' + n + ' skills';
   });
-  check('[wizard] the free combat Skill is there at Rank 3', () => {
-    const s = ev("JSON.stringify(S.char.blocks.skills.skills.find(x=>x.name==='Unarmed Combat')||null)");
-    return /"rank":3/.test(s) || 'got ' + s;
+  // Before the tutorial floors, the free combat Skill is Rank 3 and a childhood
+  // Skill is Rank 1. On the finished sheet both carry their +1d4 bump, so the
+  // pre-bump values are checked at the source and the sheet is checked against
+  // the rolls that were actually made.
+  check('[wizard] starting Ranks are right before the tutorial floors', () => {
+    const base = JSON.parse(ev('JSON.stringify(dccStartingSkills(S.char))'));
+    const unarmed = base.find(x => x.name === 'Unarmed Combat');
+    const street = base.find(x => x.name === 'Streetwise');
+    if (!unarmed || unarmed.rank !== 3) return 'Unarmed Combat: ' + JSON.stringify(unarmed);
+    if (!street || street.rank !== 1) return 'Streetwise: ' + JSON.stringify(street);
+    return true;
   });
-  check('[wizard] background Skills carry the Rank their stage grants', () => {
-    const s = ev("JSON.stringify(S.char.blocks.skills.skills.find(x=>x.name==='Streetwise')||null)");
-    return /"rank":1/.test(s) || 'got ' + s;
+  check('[wizard] the finished sheet shows the bumped Ranks', () => {
+    const bumps = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.bumps)'));
+    const sheet = JSON.parse(ev('JSON.stringify(S.char.blocks.skills.skills)'));
+    const bad = bumps.filter(b => !b.spell).filter(b => {
+      const s = sheet.find(x => x.name === b.name);
+      return !s || s.rank < b.to;      // Race/Class may push it higher still
+    });
+    return bad.length ? bad[0].name + ' should be at least ' + bad[0].to : true;
   });
   check('[wizard] every starting Skill resolves in the catalogue', () => {
     const bad = ev("JSON.stringify(S.char.blocks.skills.skills.filter(s=>!dccSkillByName(s.name)).map(s=>s.name))");
@@ -571,7 +689,11 @@ function boot(entry) {
   });
   eq(ev('S.char.blocks.mana.current'), ev("dccStatOf(S.char,'INT')"),
      '[wizard] Mana starts full, at Enhanced INT');
-  eq(ev('S.char.blocks.aiFavor.current'), 1, '[wizard] a human starts with 1 AI Favor');
+  check('[wizard] AI Favor is the human 1 plus the tutorial-floor roll', () => {
+    const rolled = ev('S.char.dcc.floorStart.favor');
+    const have = ev('S.char.blocks.aiFavor.current');
+    return have === 1 + rolled || 'have ' + have + ' from a roll of ' + rolled;
+  });
   check('[wizard] finishing lands you on the sheet', () => {
     ev('renderHero()');
     return ev("document.getElementById('hero-sheet').style.display") === 'block' || 'still in the wizard';
