@@ -56,6 +56,9 @@ registerSystem({
   // ─── the crawler sheet ────────────────────────────────────────────────────
   schema: {
     identity: ['name', 'crawlerNumber', 'race', 'class', 'level'],
+    // Which of those are actually numbers. Race and Class are free text, and a
+    // crawler is perfectly entitled to call their Race "007".
+    numericIdentity: ['crawlerNumber', 'level'],
     blocks: [
       {
         id: 'stats', type: 'traitGrid', label: 'The Five Core Stats',
@@ -144,6 +147,8 @@ registerSystem({
 
   creation: DCC_SCREENS,
   finishCreation: dccFinishCreation,
+  // Prose the block schema has nowhere to put: Race and Class benefits.
+  sheetExtra: dccSheetTraits,
 
   // ─── formulas ─────────────────────────────────────────────────────────────
   // Pure: take the character, return a number. Called on every render.

@@ -240,7 +240,16 @@ function dccScreenCombat(ctx) {
 }
 
 function dccSetRoute(r) { const d = dccCre(S.char); d.combat = { route: d.combat.route === r ? null : r }; save(); wizRepaint(); }
-function dccSetWeapon(n) { dccCre(S.char).combat.weaponSkill = n; save(); wizRepaint(); }
+function dccSetWeapon(n) {
+  const cm = dccCre(S.char).combat;
+  // The nickname belongs to the weapon you named it for. Keeping "Tire Iron"
+  // after switching from Club to Axe left the sheet listing a weapon whose
+  // Skill underneath had quietly changed, contradicting the rename field's own
+  // promise that it still works as a Club.
+  if (cm.weaponSkill !== n) delete cm.weaponName;
+  cm.weaponSkill = n;
+  save(); wizRepaint();
+}
 function dccSetSpell(n) { dccCre(S.char).combat.spell = n; save(); wizRepaint(); }
 function dccSetH2H(n) { dccCre(S.char).combat.h2h = n; save(); wizRepaint(); }
 function dccStoreCombat(k, v) { dccCre(S.char).combat[k] = v; save(); }
@@ -507,6 +516,15 @@ function dccFinishCreation(char) {
   dccFloorStart(char).rcApplied = true;
   dccApplyStatBonuses(char, true);
   if (diff) {
+    // The benefits and drawbacks the review screen previewed. They used to be
+    // dropped here, so everything a player wrote into a custom Race or Class —
+    // the whole point of building your own — vanished at the finish line, and
+    // printed entries lost their rules text the same way.
+    char.dcc.traits = {
+      race: diff.race ? { name: diff.race.name, custom: !!diff.race.custom } : null,
+      cls: diff.cls ? { name: diff.cls.name, custom: !!diff.cls.custom } : null,
+      notes: (diff.notes || []).slice(),
+    };
     if (diff.race) char.race = diff.race.name;
     if (diff.cls) char.class = diff.cls.name;
     if (diff.race && diff.race.size) char.size = diff.race.size.n;
@@ -1336,3 +1354,19 @@ function dccChooseCustom(kind) {
   p[key] = p[key] === 'custom-' + kind ? null : 'custom-' + kind;
   save(); wizRepaint();
 }
+
+// Rendered on the finished sheet, under the identity header. The block schema
+// has nowhere to put prose, and the Race/Class text is prose.
+function dccSheetTraits(char) {
+  const t = char && char.dcc && char.dcc.traits;
+  if (!t || !(t.notes || []).length) return '';
+  const who = [t.race && t.race.name, t.cls && t.cls.name].filter(Boolean).join(' · ');
+  let h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+    '<div class="label" style="margin:0">Race &amp; Class</div>' +
+    '<div style="font-size:11px;color:var(--muted)">' + esc(who) + '</div></div>';
+  t.notes.forEach(function (n) {
+    h += '<div style="font-size:12px;padding:3px 0;border-top:1px solid var(--border)">' + esc(n) + '</div>';
+  });
+  return h + '</div>';
+}
+

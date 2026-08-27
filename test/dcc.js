@@ -891,6 +891,87 @@ function boot(entry) {
     return ev("dccPrereqSkills(S.char).length") > 0 || 'the live Skill list is empty during creation';
   });
   // ── the tutorial-floor budget and its snapshot ───────────────────────────
+  // ── things the playtest agents found by driving the real UI ──────────────
+  check('[sheet] the finished sheet is not a one-way door', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");
+    const h = ev("document.getElementById('hero-sheet').innerHTML");
+    const want = ['sysReopenCreation', 'exportJSON', 'sysNewCharacter'];
+    const missing = want.filter(f => h.indexOf(f) < 0);
+    return missing.length ? 'the sheet offers no way to ' + missing.join(', ') : true;
+  });
+  check('[sheet] a free-text identity field is not coerced to a number', () => {
+    ev("sysIdentitySet('race','007');");
+    if (ev("S.char.race") !== '007') return 'stored as ' + JSON.stringify(ev('S.char.race'));
+    ev("sysIdentitySet('crawlerNumber','600000');");
+    return ev("typeof S.char.crawlerNumber") === 'number' || 'the Crawler Number stopped being numeric';
+  });
+  check('[sheet] Race and Class benefits reach the finished sheet', () => {
+    ev("S.char=SYS.newCharacter();dccChooseCustom('race');dccCustomSet('race','name','Trash Panda');" +
+       "dccCustomSet('race','notes','MARKER-BENEFIT-XYZ');dccChooseCustom('class');" +
+       "dccCustomSet('class','name','Dumpster Diver');dccFinishCreation(S.char);" +
+       "S.char.creation={step:0,complete:true};renderHero();");
+    const h = ev("document.getElementById('hero-sheet').innerHTML");
+    return h.indexOf('MARKER-BENEFIT-XYZ') >= 0
+      || 'what the player wrote into their custom Race never reached the sheet';
+  });
+  check('[sheet] editing a Stat does not destroy a pending damage entry', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");
+    ev("var d=document.getElementById('dmg-health');d.value='37';d.focus();");
+    ev("traitSet('stats','CON','base','7');");
+    const v = ev("(document.getElementById('dmg-health')||{}).value");
+    return v === '37' || 'the damage box was wiped by an unrelated repaint: ' + JSON.stringify(v);
+  });
+  check('[sheet] a pool clamps when its derived maximum falls', () => {
+    ev("traitSet('stats','INT','base',10);for(var i=0;i<40;i++)poolAdj('mana',1);");
+    ev("traitSet('stats','INT','base',2);blockRepaint('mana');");
+    const cur = ev("S.char.blocks.mana.current");
+    ev("poolAdj('mana',1);");
+    const after = ev("S.char.blocks.mana.current");
+    if (cur > 2) return 'Mana stayed out of range at ' + cur;
+    return after >= cur || 'pressing + reduced Mana from ' + cur + ' to ' + after;
+  });
+  check("[dice] the Dice tab uses the pack's dice, not Fate", () => {
+    ev("showTab('dice')");
+    const h = ev("document.getElementById('dice-content').innerHTML");
+    if (/Fate Dice/.test(h)) return 'the Fate roller is still being rendered';
+    if (/\[object Object\]/.test(h)) return 'the Skill list is rendering objects';
+    return /1d20/.test(h) || 'no d20 roller';
+  });
+  check('[dice] rolling works and adds Rank, Stat Mod and modifier', () => {
+    ev("S.char.blocks.skills={skills:[{name:'Club',stat:'STR',rank:6}]};" +
+       "S.char.blocks.stats={STR:{base:6,bonus:10}};showTab('dice');");
+    ev("document.getElementById('sd-skill').value='Club';document.getElementById('sd-mod').value='2';sysDoRoll();");
+    const d = JSON.parse(ev('JSON.stringify(S.dice)'));
+    const mod = ev("dccStatMod(dccStatOf(S.char,'STR'))");
+    return d.total === d.nat + 6 + mod + 2
+      || 'total ' + d.total + ' != nat ' + d.nat + ' + rank 6 + mod ' + mod + ' + 2';
+  });
+  check('[combat] a Dying combatant stops at zero instead of counting on', () => {
+    ev("S.char=SYS.newCharacter();dccCombatEnd();dccCombatStart();");
+    ev("S.conflict.combatants.push({name:'Donut',side:'crawler',actions:2,maxActions:2,debuffs:['Dying'],dying:2});");
+    for (let r = 0; r < 6; r++) ev("S.conflict.step=4;dccCombatNext();");
+    const d = ev("S.conflict.combatants[0].dying");
+    if (d < 0) return 'counted down to ' + d;
+    const log = ev("JSON.stringify(S.conflict.log)");
+    const times = (log.match(/run out of rounds/g) || []).length;
+    return times === 1 || 'logged "run out of rounds" ' + times + ' times';
+  });
+  check("[combat] dropping crawlers brings the Boss's spent Actions down too", () => {
+    ev("dccCombatEnd();dccCombatStart();");
+    ev("['A','B','C','D'].forEach(function(n){S.conflict.combatants.push({name:n,side:'crawler',actions:2,maxActions:2,debuffs:[],dying:null})});");
+    ev("document.getElementById('dcc-cb-name').value='Boss';document.getElementById('dcc-cb-side').value='boss';dccCombatAdd();");
+    ev("dccCombatDrop(0);dccCombatDrop(0);dccCombatDrop(0);");
+    const boss = JSON.parse(ev("JSON.stringify(S.conflict.combatants.filter(function(m){return m.side==='boss'})[0])"));
+    return boss.actions <= boss.maxActions
+      || 'the Boss has ' + boss.actions + ' Actions left out of a maximum of ' + boss.maxActions;
+  });
+  check('[gear] renaming a weapon does not survive changing the weapon', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccStoreCombat('weaponName','Tire Iron');");
+    ev("dccSetWeapon('Axe');");
+    const cm = JSON.parse(ev("JSON.stringify(dccCre(S.char).combat)"));
+    return !cm.weaponName || 'an Axe is still called ' + JSON.stringify(cm.weaponName);
+  });
+
   check('[floor] dropping to a lower floor gives back the points it does not grant', () => {
     ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');");
     ev("dccSetFloor(4);for(var i=0;i<57;i++)dccStatPoint('CON',1);");

@@ -31,6 +31,22 @@ function renderHero(){
   else{creation.style.display='block';sheet.style.display='none';renderCreationStep();}
 }
 
+
+// Reopening creation replays the finish step on the way back out, and that step
+// is idempotent now, so nothing stacks. Confirm anyway: the wizard is a long
+// way to walk by accident.
+function sysReopenCreation(){
+  if(!confirm('Go back into character creation?\n\nYour choices are kept \u2014 you can walk through and change them, then finish again.'))return;
+  wizReopen();
+}
+
+function sysNewCharacter(){
+  const nm=sysCharName(S.char);
+  if(!confirm('Start a new '+lex('hero')+'?\n\n'+(nm?'"'+nm+'" will be replaced in this slot. Export it first if you want to keep it.':'The current sheet will be replaced.')))return;
+  S.char=SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}};
+  save();renderHero();
+}
+
 // The block-driven sheet: an identity header the pack declares, then its blocks.
 function renderSysSheet(){
   const el=document.getElementById('hero-sheet');if(!el)return;
@@ -38,7 +54,17 @@ function renderSysSheet(){
   const LABELS={name:'Name',crawlerNumber:'Crawler Number',race:'Race',class:'Class',level:'Level'};
   let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
   h+=`<div class="pg-title">${esc(lexU('sheet'))}</div>`;
-  h+=`<div style="font-size:11px;color:var(--muted)">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${S.floor||3}</div></div>`;
+  // The sheet used to be a one-way door: once creation finished there was no
+  // control anywhere to export, start another character, or fix a choice —
+  // wizReopen() existed and nothing called it.
+  h+=`<div style="display:flex;gap:4px;align-items:center">`;
+  if((SYS.creation||[]).length){
+    h+=`<button class="btn btn-secondary btn-xs" onclick="sysReopenCreation()" title="Go back and change your creation choices">Edit creation</button>`;
+  }
+  h+=`<button class="btn btn-secondary btn-xs" onclick="exportJSON()" title="Download this ${esc(lex('hero'))} as JSON">Export</button>`;
+  h+=`<button class="btn btn-secondary btn-xs" onclick="sysNewCharacter()" title="Start a new ${esc(lex('hero'))}">New</button>`;
+  h+=`</div></div>`;
+  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${S.floor||3}</div>`;
   h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
   ids.forEach(f=>{
     h+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;
@@ -48,14 +74,20 @@ function renderSysSheet(){
   h+=`<div class="card-sm" style="border-color:var(--accent);font-size:11px;color:var(--muted);margin-bottom:8px">
       <strong style="color:var(--accent)">Preview.</strong> ${esc(SYS.name)} is not on the save-file system yet
       &mdash; this sheet autosaves to its own scratch slot and never touches your ${esc(lex('saves'))}.</div>`;
+  // A pack may have prose that no block type covers.
+  if(typeof SYS.sheetExtra==='function'){try{h+=SYS.sheetExtra(ch)||'';}catch(e){}}
   h+=`<div id="sys-blocks"></div>`;
   el.innerHTML=h;
   renderBlockSheet(ch,'sys-blocks');
 }
 function sysIdentitySet(field,v){
   if(!S.char)return;
+  // Only coerce the fields the pack says are numbers. Coercing anything that
+  // looked like digits turned a Race named "007" into the number 7 and redrew
+  // the field with the leading zeros gone.
+  const numeric=(SYS.schema&&SYS.schema.numericIdentity)||[];
   const n=Number(v);
-  S.char[field]=(v!==''&&!isNaN(n)&&/^[0-9]+$/.test(v))?n:v;
+  S.char[field]=(numeric.indexOf(field)>=0&&v!==''&&!isNaN(n))?n:v;
   save();
 }
 

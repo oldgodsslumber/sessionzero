@@ -1,4 +1,98 @@
+// The Fate dice roller below belongs to Daring Comics. A pack that declares its
+// own dice contract (SYS.dice) gets a roller built from that instead — before
+// this, Dungeon Crawler Carl's Dice tab rendered "Fate Dice — 4dF", listed its
+// Skills as "[object Object] (+0)", showed `undefined` Fate Points, and threw
+// `ladderName is not defined` the moment you pressed ROLL.
 function renderDice(){
+  const el=document.getElementById('dice-content');
+  if(SYS&&SYS.dice&&typeof SYS.dice.resolve==='function'){el.innerHTML=sysDiceHTML();sysRenderRoll();return;}
+  return renderDiceFate();
+}
+
+// The Skills a pack roller can offer: whatever the character actually has.
+function sysDiceSkills(){
+  const ch=S.char;
+  if(!ch||!ch.blocks)return [];
+  const out=[];
+  ['skills','spells'].forEach(function(id){
+    const b=ch.blocks[id];
+    if(!b||!Array.isArray(b.skills))return;
+    b.skills.forEach(function(sk){
+      if(sk&&sk.name)out.push({name:String(sk.name),rank:sk.rank||0,stat:sk.stat||''});
+    });
+  });
+  return out.sort(function(a,b){return a.name.localeCompare(b.name);});
+}
+
+function sysDiceHTML(){
+  const d=SYS.dice,kinds=d.checkKinds||[];
+  const list=sysDiceSkills();
+  let h='<div class="pg-title">'+esc(lexU('roll'))+'</div><div class="pg-sub">'+esc(d.formula||'')+
+    ' + Rank + Stat Mod</div><div class="card"><div class="grid-2 mb-2">'+
+    '<div class="form-group"><label>'+esc(lexU('skill'))+'</label>'+
+    '<select id="sd-skill"><option value="">— Flat roll —</option>'+
+    list.map(function(sk){
+      return '<option value="'+esc(sk.name)+'">'+esc(sk.name)+' (Rank '+sk.rank+
+        (sk.stat?', '+esc(sk.stat):'')+')</option>';
+    }).join('')+'</select></div>'+
+    '<div class="form-group"><label>Modifier</label><input type="number" id="sd-mod" value="0"></div>'+
+    '</div><div class="grid-2 mb-2">';
+  if(kinds.length){
+    h+='<div class="form-group"><label>Check</label><select id="sd-kind">'+
+      kinds.map(function(k){return '<option value="'+esc(k.id)+'">'+esc(k.name||k.id)+'</option>';}).join('')+
+      '</select></div>';
+  }
+  h+='<div class="form-group"><label>Advantage</label><select id="sd-adv">'+
+    '<option value="0">Straight</option><option value="1">Advantage</option>'+
+    '<option value="-1">Disadvantage</option></select></div></div>'+
+    '<div class="tac"><button class="roll-btn" onclick="sysDoRoll()">ROLL</button></div></div>'+
+    '<div id="sd-result"></div>';
+  return h;
+}
+
+function sysDoRoll(){
+  const name=(document.getElementById('sd-skill')||{}).value||'';
+  const sk=sysDiceSkills().find(function(x){return x.name===name;});
+  const mod=parseInt((document.getElementById('sd-mod')||{}).value,10)||0;
+  const kind=(document.getElementById('sd-kind')||{}).value||undefined;
+  const adv=parseInt((document.getElementById('sd-adv')||{}).value,10)||0;
+  // The Stat Mod comes from the pack's own table, applied to the character's
+  // Enhanced score for that Stat.
+  let statMod=0;
+  if(sk&&sk.stat){
+    const f=sysDerive('statMod');
+    if(f&&typeof dccStatOf==='function')statMod=f(dccStatOf(S.char,sk.stat))||0;
+    else if(f)statMod=f(S.char,sk.stat)||0;
+  }
+  const r=SYS.dice.resolve({rank:sk?sk.rank:0,statMod:statMod,bonus:mod,adv:adv,
+                            kind:kind,floor:S.floor||3});
+  S.dice=Object.assign({},r,{label:sk?sk.name:'Flat roll',mod:mod,systemId:SYS.id});
+  save();sysRenderRoll();
+}
+
+function sysRenderRoll(){
+  const area=document.getElementById('sd-result');
+  if(!area)return;
+  const d=S.dice;
+  if(!d||!d.dice||d.systemId!==SYS.id){area.innerHTML='';return;}
+  const dice=d.dice.map(function(v){
+    const used=v===d.nat;
+    return '<span class="fate-die '+(used?'plus':'blank')+'" style="width:38px;height:38px;font-size:18px;border-radius:8px">'+v+'</span>';
+  }).join('');
+  const deg=d.degree||{};
+  area.innerHTML='<div class="card tac">'+
+    '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">'+dice+'</div>'+
+    '<div style="font-size:11px;color:var(--muted)">'+esc(d.label||'')+
+    (d.mod?' | Mod '+(d.mod>=0?'+':'')+d.mod:'')+
+    (d.difficulty!==undefined?' | vs '+d.difficulty:'')+'</div>'+
+    '<div style="font-size:32px;font-weight:900;font-family:var(--font-title);color:var(--accent);margin:4px 0">'+
+    d.total+'</div>'+
+    (deg.name?'<div style="font-size:16px;font-weight:700;color:'+(deg.color||'var(--text)')+'">'+esc(deg.name)+'</div>':'')+
+    (deg.desc?'<div style="font-size:11px;color:var(--muted)">'+esc(deg.desc)+'</div>':'')+
+    '</div>';
+}
+
+function renderDiceFate(){
   const el=document.getElementById('dice-content'),ch=S.char;
   const ex=S.team?.expanded;const exSkills=ex?['Combat','Expertise','Social','Undercover']:[];
   let h=`<div class="pg-title">Fate Dice</div><div class="pg-sub">4dF + Skill + Modifier</div><div class="card"><div class="grid-2 mb-2"><div class="form-group"><label>Skill</label><select id="d-sk" onchange="updateDP()"><option value="">— None —</option>${sysList('SKILLS','skills').map(sk=>`<option value="${sk}">${sk} (+${ch?.skills?.[sk]||0})</option>`).join('')}${exSkills.length?`<optgroup label="Team: ${esc(S.team.name)}">${exSkills.map(sk=>`<option value="team:${sk}">${sk} (+${ex.skills[sk]||0})</option>`).join('')}</optgroup>`:''}</select></div><div class="form-group"><label>Modifier</label><input type="number" id="d-mod" value="0" onchange="updateDP()"></div></div><div id="d-preview" class="tac text-muted mb-2" style="font-size:12px"></div><div class="tac"><button class="roll-btn" onclick="doRoll()">ROLL</button></div></div><div id="d-result"></div>`;

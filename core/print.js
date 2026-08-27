@@ -246,7 +246,9 @@ function prCatalog(){
   const mine=n=>!n.fromHero;
   const heroDens=['full','half','card'];
   if(S.char)cats.push({key:'hero',label:'Hero',hint:'The hero in this save slot',dens:heroDens,def:'full',
-    items:[{id:'@self',name:S.char.costumedName||'Unnamed Hero',sub:S.char.civilianName||''}]});
+    // sysCharName reads whichever identity field the pack declares, so a
+    // crawler stops printing as "Unnamed Hero".
+    items:[{id:'@self',name:(typeof sysCharName==='function'&&sysCharName(S.char))||S.char.costumedName||('Unnamed '+(typeof lexU==='function'?lexU('hero'):'Hero')),sub:S.char.civilianName||''}]});
   // Heroes parked in other save slots bound to the same universe
   const others=(S.universeId?listSaves(S.universeId):listSaves()).filter(s=>s.started&&s.id!==currentSaveId);
   if(others.length)cats.push({key:'slot',label:'Other heroes',hint:'Other save slots in this universe — printed with their own tone',dens:heroDens,def:'full',

@@ -162,7 +162,23 @@ function traitSet(blockId, traitId, layer, v) {
     if (tot) tot.textContent = total;
     if (md) md.textContent = (mod >= 0 ? '+' : '') + mod;
   }
-  (block.affects || []).forEach(blockRepaint);   // e.g. stats -> health, mana, evade
+  // e.g. stats -> health, mana, evade. Repainting a block replaces its markup,
+  // so if the player is part-way through typing into one of those blocks — the
+  // Health track carries a damage input — their number is destroyed and the
+  // focus falls to <body>. Skip any block that currently holds the caret.
+  (block.affects || []).forEach(function (id) {
+    if (blockHoldsFocus(id)) return;
+    blockRepaint(id);
+  });
+}
+
+// Is the caret inside this block right now? Repainting it would take the
+// element out from under the player mid-keystroke.
+function blockHoldsFocus(id) {
+  const el = document.getElementById('blk-' + id);
+  const a = document.activeElement;
+  if (!el || !a || a === document.body) return false;
+  return el.contains(a);
 }
 
 // On blur, redraw the grid once so anything else it shows is normalised.
@@ -280,6 +296,9 @@ registerBlockType('pool', {
   render(ctx) {
     const b = ctx.block, d = ctx.data;
     const max = b.max === undefined ? null : blockValue(b.max, ctx, null);
+    // Bring a stale value back into range as the block draws, so a pool whose
+    // derived max has fallen reads "5/5" rather than "13/5".
+    if (max !== null && (d.current || 0) > max) d.current = max;
     const cur = d.current || 0;
     return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
       <div><div class="pg-title" style="font-size:18px">${esc(b.label || b.id)}</div>
@@ -296,6 +315,10 @@ function poolAdj(id, delta) {
   const block = sysBlock(id); if (!block) return;
   const ctx = blockCtx(block, char);
   const max = block.max === undefined ? null : blockValue(block.max, ctx, null);
+  // Clamp what is already stored before adjusting. A derived max can fall after
+  // the pool was filled — drop INT and Mana read "13/5" — and starting from the
+  // stale value made "+" reduce it by 8.
+  if (max !== null && (ctx.data.current || 0) > max) ctx.data.current = max;
   let v = (ctx.data.current || 0) + delta;
   if (v < 0) v = 0;
   if (max !== null && v > max) v = max;

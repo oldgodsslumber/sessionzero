@@ -184,10 +184,27 @@ function dccCombatAdd() {
   if (el) el.value = '';
   _cbSave();
 }
+// How long a Dying combatant has: CON Mod rounds (p. 94). A mob on the tracker
+// has no Stat block, so fall back to the crawler-sheet default of 3.
+function dccDyingRounds(m) {
+  if (m && m.side === 'crawler' && typeof S !== 'undefined' && S && S.char) {
+    const n = dccModOf(S.char, 'CON');
+    if (n > 0) return n;
+  }
+  return 3;
+}
+
 function dccCombatDrop(i) {
   const c = _cb(); if (!c) return;
   c.combatants.splice(i, 1);
-  c.combatants.forEach(m => { if (m.side === 'boss') m.maxActions = dccActionsFor('boss', c); });
+  c.combatants.forEach(m => {
+    if (m.side !== 'boss') return;
+    m.maxActions = dccActionsFor('boss', c);
+    // Dropping crawlers lowers the Boss's Action count, so what it has left has
+    // to come down with it — otherwise it draws one pip and two unspent
+    // backgrounds, with actions above maxActions until the round rolls over.
+    if ((m.actions || 0) > m.maxActions) m.actions = m.maxActions;
+  });
   _cbSave();
 }
 // Clicking a pip spends down to it, or gives one back.
@@ -216,7 +233,9 @@ function dccCombatDebuff(i) {
   if (at >= 0) m.debuffs.splice(at, 1);
   else m.debuffs.push(label);
   // Dying is a Debuff with a countdown attached (p. 94).
-  if (label === 'Dying') m.dying = m.debuffs.indexOf('Dying') >= 0 ? (m.dying || 3) : null;
+  // The book gives you CON Mod rounds (p. 94) — which is what the Health track's
+  // own empty-warning says too. The hardcoded 3 disagreed with both.
+  if (label === 'Dying') m.dying = m.debuffs.indexOf('Dying') >= 0 ? (m.dying || dccDyingRounds(m)) : null;
   _cbSave();
 }
 function dccCombatGoto(i) {
@@ -235,9 +254,15 @@ function dccCombatNext() {
   c.combatants.forEach(m => {
     m.actions = m.maxActions || dccActionsFor(m.side, c);
     if (m.dying !== null && m.dying !== undefined) {
-      m.dying--;
-      if (m.dying <= 0) ticked.push(m.name + ' has run out of rounds.');
-      else ticked.push(m.name + ' is Dying: ' + m.dying + ' left.');
+      // Stop at zero and say so once. It used to count on into the negatives,
+      // rendering "DYING - -2 rounds" and repeating the same line every round
+      // for the rest of the fight.
+      if (m.dying > 0) {
+        m.dying--;
+        ticked.push(m.dying <= 0
+          ? m.name + ' has run out of rounds.'
+          : m.name + ' is Dying: ' + m.dying + ' left.');
+      }
     }
   });
   c.log = (c.log || []).concat(['Round ' + c.round + ' begins.']).concat(ticked).slice(-40);
