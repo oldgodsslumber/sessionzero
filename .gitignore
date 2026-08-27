@@ -7,3 +7,14 @@
 firebase-config.js
 
 node_modules/
+
+# Extraction intermediates. These hold raw text pulled straight out of the
+# rulebook PDF on the way to building a pack's data files, which is prose that
+# does not belong in the repo — the packs ship mechanics, not the book.
+.*.json
+.*.txt
+.skills*
+.creation*
+.rc*
+.spells*
+.vocab*
