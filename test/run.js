@@ -11,7 +11,7 @@ const SUITES = [
   ['mp',     'Multiplayer: sync, GM secret isolation, collaboration'],
   ['dcc',    'Dungeon Crawler Carl: rules maths, blocks, system selection'],
   ['rules',  'Database rules: GM boundary invariants, doc/file agreement'],
-  ['focus',  'Focus discipline: no oninput handler repaints its own input']
+  ['focus',  'Focus + markup: no handler repaints its own input or breaks its own tag']
 ];
 
 // The suites share nothing — each is its own node process with its own JSDOM

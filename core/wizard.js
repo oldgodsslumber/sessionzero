@@ -62,8 +62,13 @@ function renderWizard(targetEl) {
     <div style="display:flex;gap:3px">`;
   steps.forEach((s, n) => {
     const done = n < i, here = n === i;
-    h += `<div title="${esc(s.label || s.id)}" ${n < i ? `onclick="wizGoto(${n})" style="cursor:pointer;"` : 'style="'}
-      flex:1;height:5px;border-radius:3px;background:${here ? 'var(--accent)' : done ? 'var(--accent2)' : 'var(--surface3)'}"></div>`;
+    // One style attribute, opened and closed in one place. The old ternary put
+    // a closing quote inside the "done" branch and the rest of the declarations
+    // outside it, so every completed segment parsed as a junk attribute and
+    // rendered with no flex, no height and no colour.
+    const bg = here ? 'var(--accent)' : done ? 'var(--accent2)' : 'var(--surface3)';
+    h += `<div title="${esc(s.label || s.id)}"${done ? ` onclick="wizGoto(${n})"` : ''}` +
+      ` style="${done ? 'cursor:pointer;' : ''}flex:1;height:5px;border-radius:3px;background:${bg}"></div>`;
   });
   h += `</div></div><div id="wiz-body"></div>`;
   el.innerHTML = h;
@@ -133,6 +138,6 @@ function wizOptions(rows, sel, onPick, labelOf) {
     const v = labelOf ? labelOf(r) : r;
     const on = String(sel) === String(r.roll !== undefined ? r.roll : v);
     return `<button class="btn btn-xs ${on ? 'btn-primary' : 'btn-secondary'}"
-      style="margin:0 4px 4px 0" onclick="${onPick}(${r.roll !== undefined ? r.roll : JSON.stringify(v)})">${esc(v)}</button>`;
+      style="margin:0 4px 4px 0" onclick="${onPick}(${r.roll !== undefined ? r.roll : jsArg(v)})">${esc(v)}</button>`;
   }).join('');
 }

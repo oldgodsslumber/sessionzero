@@ -405,15 +405,23 @@ function openUniverseSetup(required,editId){
   _uniRequired=!!required;
   const ed=editId?getUniverse(editId):null;
   const cur=(ed&&ed.series)||{};
+  // Tone and level are Daring Comics' world settings, not the shell's. A pack
+  // that has no series model (Dungeon Crawler Carl) supplies neither list, and
+  // rendering the empty grids anyway left the first-run gate with nothing to
+  // click and no way to satisfy it — the app could not be started at all.
+  const tones=sysList('SERIES_TONES'),levels=sysList('SERIES_LEVELS');
+  const hasSeries=tones.length>0&&levels.length>0;
   let h=`<div class="card"><div class="pg-title" style="font-size:22px">${ed?'Universe Settings':(required?'Name Your Universe':'New Universe')}</div>`;
-  h+=`<div style="font-size:12px;color:var(--muted);margin:6px 0 12px">A universe is your shared game world (like "Marvel"). Every hero, NPC, villain and wiki entry in it is shared. Its tone and power level apply to every hero here.</div>`;
+  h+=`<div style="font-size:12px;color:var(--muted);margin:6px 0 12px">A ${lex('universe')} is your shared game world. Every ${lex('hero')}, ${lex('npc')} and wiki entry in it is shared.${hasSeries?' Its tone and power level apply to every '+lex('hero')+' here.':''}</div>`;
   h+=`<div class="form-group"><label>Universe Name</label><input id="uni-name" value="${esc(ed?ed.name:'')}" placeholder="e.g. Marvel, My City, Earth-27" onkeydown="if(event.key==='Enter')submitUniverseSetup('${editId||''}')"><\/div>`;
+  if(hasSeries){
   h+=`<div class="label">Series Tone</div><div class="grid-3 mb-3">`;
   sysList('SERIES_TONES').forEach(function(t){h+=`<div class="game-opt ${cur.tone===t.id?'selected':''}" onclick="_uniPick('tone','${t.id}','${editId||''}')"><div class="opt-title">${t.name}<\/div><div class="opt-desc">${t.desc}<\/div><div class="opt-stats">Refresh ${t.refresh} | ${2+t.stressBonus} Stress Boxes<\/div><\/div>`;});
   h+=`<\/div><div class="label">Series Level (Base Hero Points)</div><div class="grid-2 mb-3">`;
   sysList('SERIES_LEVELS').forEach(function(l){h+=`<div class="game-opt ${cur.level===l.id?'selected':''}" onclick="_uniPick('level','${l.id}','${editId||''}')"><div class="opt-title">${l.name}<\/div><div class="opt-desc">${l.desc}<\/div><div class="opt-stats">${l.baseHP} HP<\/div><\/div>`;});
   h+=`<\/div>`;
   h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Each hero still picks their own Experience Level during character creation.<\/div>`;
+  }
   h+=`<div style="display:flex;gap:8px;margin-top:8px">`;
   if(!required)h+=`<button class="btn btn-secondary" style="flex:1" onclick="closeUniverseModal()">Cancel<\/button>`;
   h+=`<button class="btn btn-primary" style="flex:1" onclick="submitUniverseSetup('${editId||''}')">${ed?'Save Changes':'Create Universe'}<\/button><\/div>`;
@@ -441,13 +449,15 @@ function submitUniverseSetup(editId){
   if(editId){
     const u=getUniverse(editId);if(!u)return;
     u.name=name;u.series=u.series||{};
-    if(!u.series.tone||!u.series.level)return alert('Pick a series tone and level.');
+    if(sysList('SERIES_TONES').length&&(!u.series.tone||!u.series.level))return alert('Pick a series tone and level.');
     saveUniverses();closeUniverseModal();
     if(typeof mpPushUniverseSeries==='function')mpPushUniverseSeries();
     openUniverseManager();refreshUniverseUI();
     return;
   }
-  if(!_uniDraft.tone||!_uniDraft.level)return alert('Pick a series tone and level — they apply to every hero in this universe.');
+  // Only demand a tone and level from a pack that actually offers them.
+  const needSeries=sysList('SERIES_TONES').length>0&&sysList('SERIES_LEVELS').length>0;
+  if(needSeries&&(!_uniDraft.tone||!_uniDraft.level))return alert('Pick a series tone and level — they apply to every hero in this universe.');
   const firstEver=loadUniverses().universes.length===0;
   const u=createUniverse(name,{tone:_uniDraft.tone,level:_uniDraft.level});
   _uniDraft={tone:'',level:''};

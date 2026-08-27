@@ -107,6 +107,14 @@ function lex(key) {
 function lexU(key) { const s = lex(key); return s.charAt(0).toUpperCase() + s.slice(1); }
 function lexL(key) { return lex(key).toLowerCase(); }
 
+// A value as a JavaScript literal, safe to embed in a DOUBLE-QUOTED HTML
+// attribute. JSON.stringify alone is NOT safe here: it emits its own double
+// quotes, which terminate the attribute early. That mistake silently killed
+// every handler on the custom Race/Class card — the markup parsed, so nothing
+// threw; the buttons simply did nothing. Use this for any argument that is not
+// a bare number.
+function jsArg(v) { return JSON.stringify(v).replace(/"/g, '&quot;'); }
+
 // Per-system storage namespace, replacing the flat dc_* keys (Phase 5).
 function sysKey(name) { return 'rpg:' + (SYS ? SYS.id : 'default') + ':' + name; }
 

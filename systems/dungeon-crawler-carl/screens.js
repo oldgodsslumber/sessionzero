@@ -151,7 +151,7 @@ function dccScreenBackground(ctx) {
         const dis = !!lockedBy || full;
         h += `<button class="btn btn-xs ${chosen ? 'btn-primary' : 'btn-secondary'}"
           style="margin:0 4px 4px 0;${dis ? 'opacity:.4' : ''}"
-          ${dis ? '' : `onclick="dccPickSkill('${stage}',${JSON.stringify(x.s).replace(/"/g, '&quot;')})"`}
+          ${dis ? '' : `onclick="dccPickSkill('${stage}',${jsArg(x.s)})"`}
           title="${lockedBy ? 'Already taken from your ' + DCC_STAGE_LABELS[lockedBy].toLowerCase() : ''}">
           ${esc(x.s)} <span style="opacity:.7">(${esc(x.st)})</span>${lockedBy ? ' 🔒' : ''}</button>`;
       });
@@ -208,7 +208,7 @@ function dccScreenCombat(ctx) {
         const s = dccSkillByName(n) || {};
         return `<button class="btn btn-xs ${cm.weaponSkill === n ? 'btn-primary' : 'btn-secondary'}"
           style="margin:0 4px 4px 0" title="${esc(s.baseDamage || '')}"
-          onclick="dccSetWeapon(${JSON.stringify(n).replace(/"/g, '&quot;')})">${esc(n)}</button>`;
+          onclick="dccSetWeapon(${jsArg(n)})">${esc(n)}</button>`;
       }).join('');
     });
     if (cm.weaponSkill) {
@@ -222,7 +222,7 @@ function dccScreenCombat(ctx) {
 
   if (cm.route === 'spell') {
     h += DCC_STARTING_SPELLS.map(n => `<button class="btn btn-xs ${cm.spell === n ? 'btn-primary' : 'btn-secondary'}"
-      style="margin:0 4px 4px 0" onclick="dccSetSpell(${JSON.stringify(n).replace(/"/g, '&quot;')})">${esc(n)}</button>`).join('');
+      style="margin:0 4px 4px 0" onclick="dccSetSpell(${jsArg(n)})">${esc(n)}</button>`).join('');
     h += `<div style="font-size:11px;color:var(--accent);margin-top:6px">
       Needs Intelligence ${DCC_STARTING_SPELL_MIN_INT}+, which you set on the next screen.
       You also get ${DCC_STARTING_SPELL_POTIONS} Standard Mana Potions in one Hotlist slot.</div>`;
@@ -230,7 +230,7 @@ function dccScreenCombat(ctx) {
 
   if (cm.route === 'handtohand') {
     h += DCC_HAND_TO_HAND.map(p => `<button class="btn btn-xs ${cm.h2h === p.skill ? 'btn-primary' : 'btn-secondary'}"
-      style="margin:0 4px 4px 0" onclick="dccSetH2H(${JSON.stringify(p.skill).replace(/"/g, '&quot;')})">
+      style="margin:0 4px 4px 0" onclick="dccSetH2H(${jsArg(p.skill)})">
       ${esc(p.skill)} <span style="opacity:.7">+ ${esc(p.damageEffect)}</span></button>`).join('');
     h += `<div style="font-size:11px;color:var(--muted);margin-top:6px">
       Turning up unarmed earns an achievement and a Bronze Weapon Box — containing the weapon you
@@ -1207,13 +1207,13 @@ function dccCustomCard(char, kind, chosen) {
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">'
     + '<div style="font-size:13px;font-weight:600">Build your own ' + label + '</div>'
     + '<button class="btn btn-xs ' + (chosen ? 'btn-primary' : 'btn-secondary') + '" '
-    + 'onclick="dccChooseCustom(' + JSON.stringify(kind) + ')">'
+    + 'onclick="dccChooseCustom(' + jsArg(kind) + ')">'
     + (chosen ? 'Using this' : 'Use this') + '</button></div>'
     + '<div style="font-size:10px;color:var(--muted);margin-bottom:4px">'
     + (kind === 'race' ? '25 Race Build Points' : '30 Class Build Points')
     + ' (pp. 158-162). Work it out in the book, then record it here.</div>'
     + '<input value="' + esc(c.name || '') + '" placeholder="' + label + ' name" '
-    + 'oninput="dccCustomSet(' + JSON.stringify(kind) + ',' + JSON.stringify('name') + ',this.value)" '
+    + 'oninput="dccCustomSet(' + jsArg(kind) + ',' + jsArg('name') + ',this.value)" '
     + 'style="margin-bottom:4px">';
   if (chosen) {
     h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px">';
@@ -1222,14 +1222,14 @@ function dccCustomCard(char, kind, chosen) {
       h += '<div style="text-align:center">'
         + '<div style="font-size:10px;color:var(--muted)">' + st.id + '</div>'
         + '<div style="display:flex;align-items:center;justify-content:center;gap:2px">'
-        + '<button class="btn btn-secondary btn-xs" onclick="dccCustomStat(' + JSON.stringify(kind)
-        + ',' + JSON.stringify(st.id) + ',-1)">&minus;</button>'
+        + '<button class="btn btn-secondary btn-xs" onclick="dccCustomStat(' + jsArg(kind)
+        + ',' + jsArg(st.id) + ',-1)">&minus;</button>'
         + '<span style="min-width:20px;font-weight:700">' + (v > 0 ? '+' : '') + v + '</span>'
-        + '<button class="btn btn-secondary btn-xs" onclick="dccCustomStat(' + JSON.stringify(kind)
-        + ',' + JSON.stringify(st.id) + ',1)">+</button></div></div>';
+        + '<button class="btn btn-secondary btn-xs" onclick="dccCustomStat(' + jsArg(kind)
+        + ',' + jsArg(st.id) + ',1)">+</button></div></div>';
     });
     h += '</div><textarea rows="2" placeholder="Benefits and drawbacks, in your own words" '
-      + 'oninput="dccCustomSet(' + JSON.stringify(kind) + ',' + JSON.stringify('notes') + ',this.value)">'
+      + 'oninput="dccCustomSet(' + jsArg(kind) + ',' + jsArg('notes') + ',this.value)">'
       + esc(c.notes || '') + '</textarea>';
   }
   return h + '</div>';

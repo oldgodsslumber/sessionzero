@@ -18,6 +18,8 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
+const { JSDOM, VirtualConsole } = require('jsdom');
+const { loadAppHTML, waitReady } = require('./loadapp');
 
 // Renderers that only ever rebuild a results list, never the search box above
 // it. Splitting a renderer in two like this is the preferred fix; each entry is
@@ -109,10 +111,98 @@ check('traitSet updates the derived readouts in place rather than repainting', (
   return !/blockRepaint\(blockId\)/.test(m[0]) || 'traitSet repaints its own block';
 });
 
-if (fails.length) {
-  console.log('FAIL ' + fails.length);
-  fails.forEach(f => console.log('  x ' + f));
-  process.exit(1);
+// ── the markup a player actually clicks ─────────────────────────────────────
+// Everything above reads source. This part renders the real screens and asks
+// the HTML parser what it made of them, because the worst bug this app has
+// shipped was invisible to every source-level check: JSON.stringify('race')
+// emits its own double quotes, so `onclick="f(' + JSON.stringify(kind) + ')"`
+// terminated the attribute early. The markup still parsed, nothing threw, and
+// the entire custom Race/Class feature was simply inert. Tests that called the
+// handlers as functions all passed.
+function sweep(win, label) {
+  const bad = [];
+  win.document.querySelectorAll('*').forEach(el => {
+    for (const a of el.attributes) {
+      // An attribute NAME containing a quote or bracket is parser wreckage: it
+      // means a preceding attribute value was terminated where we did not mean
+      // it to be.
+      if (/["'()]/.test(a.name)) bad.push(label + ': junk attribute ' + JSON.stringify(a.name).slice(0, 48));
+      // A handler body that is not parseable JavaScript is a dead button.
+      else if (/^on/.test(a.name)) {
+        try { new Function(a.value); }
+        catch (e) { bad.push(label + ': <' + el.tagName.toLowerCase() + ' ' + a.name + '> is not valid JS: ' + JSON.stringify(a.value).slice(0, 48)); }
+      }
+    }
+  });
+  return bad;
 }
-console.log('PASS ' + ok.length);
-console.log('All focus-discipline checks passed.');
+
+(async () => {
+  for (const entry of ['dcc/index.html', 'daring-comics/index.html']) {
+    const vc = new VirtualConsole();
+    const dom = new JSDOM(loadAppHTML(entry), {
+      runScripts: 'dangerously', pretendToBeVisual: true,
+      url: 'http://localhost/' + entry, virtualConsole: vc,
+    });
+    const w = dom.window;
+    w.alert = () => {}; w.confirm = () => true;
+    await waitReady(w);
+    const game = entry.split('/')[0];
+
+    // The first-run gate, which is the very first markup a new player meets.
+    check('[' + game + '] the first-run universe gate is well formed', () => {
+      const bad = sweep(w, 'gate');
+      return bad.length ? bad.join(' | ') : true;
+    });
+    check('[' + game + '] a new player can get through the first-run gate', () => {
+      const nm = w.document.getElementById('uni-name');
+      if (!nm) return 'no name field in the gate';
+      nm.value = 'Test World';
+      // Satisfy whatever the pack asks for, by clicking what it actually drew.
+      w.document.querySelectorAll('#universe-modal-body .game-opt').forEach(o => o.click());
+      w.document.getElementById('uni-name').value = 'Test World';
+      w.eval("submitUniverseSetup('')");
+      return w.eval('loadUniverses().universes.length') === 1
+        || 'the gate could not be satisfied — the app cannot be started';
+    });
+
+    // Every creation screen, then the finished sheet, then every tab.
+    // Only a block pack builds its character through SYS; Daring Comics has its
+    // own creation flow and no newCharacter().
+    const packMakesChars = w.eval('typeof SYS.newCharacter === "function"');
+    if (packMakesChars) {
+      w.eval('S.char = SYS.newCharacter(); S.char.creation = {step:0, complete:false}; renderHero();');
+    }
+    const screens = packMakesChars ? w.eval('SYS.creation ? SYS.creation.length : 0') : 0;
+    for (let i = 0; i < screens; i++) {
+      w.eval('S.char.creation.step=' + i + '; renderHero();');
+      check('[' + game + '] creation screen ' + (i + 1) + ' is well formed', () => {
+        const bad = sweep(w, 'screen ' + (i + 1));
+        return bad.length ? bad.join(' | ') : true;
+      });
+    }
+    if (packMakesChars) w.eval('S.char.creation = {step:0, complete:true}; renderHero();');
+    const tabs = w.eval("[...document.querySelectorAll('#nav [data-tab]')].map(function(n){return n.getAttribute('data-tab')})");
+    for (const tab of (tabs && tabs.length ? tabs : ['hero'])) {
+      check('[' + game + '] the ' + tab + ' tab is well formed', () => {
+        try { w.eval('showTab(' + JSON.stringify(tab) + ')'); } catch (e) { return 'showTab threw: ' + e.message; }
+        const bad = sweep(w, tab);
+        return bad.length ? bad.join(' | ') : true;
+      });
+    }
+  }
+
+  if (fails.length) {
+    console.log('FAIL ' + fails.length);
+    fails.forEach(f => console.log('  x ' + f));
+    process.exit(1);
+  }
+  console.log('PASS ' + ok.length);
+  console.log('All focus and markup checks passed.');
+})().catch(e => {
+  console.log('FAIL 1');
+  console.log('  x driver crashed: ' + e.message);
+  console.log(e.stack);
+  process.exit(1);
+});
+
