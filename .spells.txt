@@ -1,0 +1,1145 @@
+4
+Spels
+Spells are the strange, dangerous, and occasionally 
+irresponsible way crawlers bend reality. Some Spells 
+heal wounds or reshape the battlefield, and others 
+exist primarily to make something stop moving—
+permanently. Spells cannot be attempted untrained 
+except via a scroll.
+Every Spell listed in this section follows the same 
+core rules for things like casting, targeting, and spend-
+ing Mana. Spell listings include a variety of terms or 
+fields associated with them, including:
+Name: The name of the Spell appears as a headline to 
+the entry.
+Type: Whether the Spell is an Attack or Passive is noted 
+under the flavor text. The type of damage delivered 
+from Attack Spells is also listed here for quick reference. 
+Spells default to your INT Mod for to-hit and damage 
+rolls. If a different Stat is listed here, that Stat is used to 
+hit and damage, but Spells all still use Intelligence for 
+Mana. If the spell is Favored by any particular Classes, 
+other Classes pay 1 additional Mana to cast it.
+Mana Cost: The Mana cost to cast the Spell.
+Range: The range of the Spell. Melee means 5ft 
+(adjacent).
+Duration: Some Spells are not instantaneous. When 
+the duration is reached, the Spell effect wears off at 
+the end of that round.
+AI Favor: Low-damage Spells grant AI Favor to you if you 
+use such a wimpy attack for a majority of your attacks 
+during a combat that lasts for at least three rounds.
+Limitations: If there are conditions, requirements, or 
+exclusions, they go here.
+Cooldown: If the Spell has a cooldown, it is listed 
+here. You can't cast the Spell during its cooldown.
+Description: Any notes or descriptions of the general 
+effect seen when you cast the Spell are listed here. If the 
+Spell requires a Spell Check, that is also provided here.
+Base Damage: This is the damage the Spell deals with 
+1–4 Ranks in the Spell. You add your INT to the base 
+damage, unless it says otherwise. The damage type is 
+listed here as well.
+Upgrades: These are bonuses you gain when you 
+reach the listed Rank in the Spell. The first entry of
+202
+each benefit adds a damage die of the same type to 
+the base damage of the Spell. Additional damage dice 
+and effects are also listed here.
+SPELLS IN YOUR HOTLIST
+Don't forget that Spells need to be in your Hotlist 
+to cast them in combat or other stressful situations. 
+Write down the specific combat text for your Spell in 
+the “Attacks” section on the front of your character 
+sheet. When you write a Spell on your Hotlist, you 
+need only list additional notes like the Mana cost and 
+Range of the Spell.
+Attack Spells require you to make an Attack Skill 
+Check vs. the target's Evade. Spells that don't require 
+a Check to be made when cast (non-Attack Spells) 
+are tagged as Passive and simply happen, but those 
+are not marked for Skill Advancement (p. 169) when 
+used. Instead, their Ranks must be raised via magical 
+means or trained at a guild.
+CREATING YOUR OWN 
+SPELLS
+In the ways that count, Spells are just a special type 
+of Skill. Create them in the same way as you're 
+create a Skill (p. 174–175).
+LIST OF SPELLS
+AIR BUDDY
+“There's no dungeon rule that a dog can't fly.”
+Passive, Favored: Mage
+Mana Cost: 12
+Range: Self
+You launch yourself with enough force to fly, hurtling for-
+ward from your current position up to 10 × your INT Mod 
+away. You land safely if you land on solid ground; other-
+wise, you fall (see p. 76). You can cast this twice in a row 
+to “double jump” just like in platforming video games.
+UPGRADES
+Rank 5: You may choose one additional willing target 
+up to your size at touch range, who you bring with you.
+Rank 10: You can fly up to 20 × your INT Mod away 
+with this spell.
+Rank 15: You may choose up to five additional willing 
+targets up to your size at touch range to bring with you.
+ASTRAL PAW (ASTRAL HAND, ASTRAL CLAW)
+“You have summoned an Astral Paw. Yes, just the 
+paw. Budget constraints.”
+Passive
+Mana Cost: 12
+Range: 30 feet
+Duration: Until the end of combat or 5 minutes.
+You conjure a spectral hand, paw, or claw, looking 
+much like your own. You can use this astral appendage 
+to manipulate objects up to 30ft away by spending an 
+Action. You can use the Astral Paw to make Skill Checks 
+but suffer Disadvantage due to a lack of fine control.
+UPGRADES
+Rank 5: Your Pugilism and Slice Attacks with the Paw 
+add 1 Astral Paw Rank damage die.
+Rank 10: You can conjure a paw up to four size 
+categories larger than your own, and the range 
+increases to 50 feet.
+Rank 15: The caster no longer suffers Disadvantage 
+when performing suitable Skill Checks using the paw, 
+and the duration is 15 minutes.
+BAD FAITH
+“The system has classified your prayers 
+as a hostile act.”
+Attack, Necrotic, Charisma, Favored: 
+Cleric
+Mana Cost: 10
+Range: 40 feet
+An unholy pres-
+ence invades your 
+victim's mind, body, 
+and soul.
+Base Damage:
+1d8 + CHA  
+Necrotic
+UPGRADES
+Rank 5: +1d8 
+base damage, +5ft 
+Splash
+Rank 10: +1d8 base damage, 
+and end all Buffs on the victims for 
+the duration of the combat.
+Rank 15: +1d8 base damage, +5ft 
+Splash
+ter no longer suffers Disadvantage 
+suitable Skill Checks using the paw,
+s 15 minutes.
+assified your prayers
+arisma, Favored:
+r
+dy,
+ft
+ase damage, 
+on the victims for
+e combat.
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+BANG BRO
+“When you want more zing in your zinger.”
+Passive
+Mana Cost: 5
+Range: 5 feet
+Duration: 5 minutes + 1 minute per Rank
+Cooldown: 15 minutes
+Place a hot and crackling temporary enchantment on a 
+weapon you are holding.
+Your weapon deals +2 mixed Fire and Electric damage.
+UPGRADES
+Rank 5: +1d6 Fire and Electric damage
+Rank 10: +1d6 Fire and Electric damage, and on an 
+Amazing Success, the target of the weapon attack 
+gains the Burned Debuff.
+Rank 15: +1d6 Fire and Electric damage, and on an 
+Amazing Success, the target of the weapon attack also 
+gains the Shocked Debuff.
+gains the Shocked Debuff.
+CLOCKWORK TRIPLICATE
+CLOCKWORK TRIPLICATE
+“If one is good, then three is a party.”
+Passive
+“If one is good, then three is a party.”
+Passive
+Rank 10: Duration is 3 minutes per Rank.
+Rank 10: Duration is 3 minutes per Rank.
+Rank 15: When you command your pet or minion, the 
+clockwork versions follow suit.
+Rank 15: When you command your pet or minion, the
+clockwork versions follow suit.
+Mana Cost: 26
+Mana Cost: 26
+Range: 5 feet
+Range: 5 feet
+Duration: 1 minute per 
+Rank
+Duration: 1 minute per 
+Rank
+Limitations: Only castable on 
+pets and minions.
+Limitations: Only castable on
+pets and minions.
+When you cast this spell 
+upon your pet or minion, it 
+splits into three, each with 
+its full complement of 
+abilities. You must 
+spend an Action 
+making an Unopposed 
+Animal Handling 
+Skill Check to issue a new 
+command to each one separately.
+When you cast this spell
+upon your pet or minion, it
+splits into three, each with
+its full complement of
+abilities. You must
+spend an Action
+making an Unopposed 
+Animal Handling
+Skill Check to issue a new 
+command to each one separately.
+UPGRADES
+Rank 5: Duration is 2 minutes per 
+Rank.
+UPGRADES
+Rank 5: Duration is 2 minutes per
+Rank.
+1
+203
+4
+CONFUSING FOG
+“Visibility reduced. Decision-making questionable.”
+Passive
+Mana Cost: 6
+Range: 40 feet
+Duration: Until the end of two full rounds of combat 
+or 20 seconds
+Cooldown: 15 minutes
+You create a billowing cloud of fog that you, your party 
+members, and friendly NPCs can see through, but it 
+obscures the area from Mobs, making it more difficult 
+for them to attack you. Mobs attack with Disadvantage 
+(see Mob Advantage and Disadvantage, p. 60) against 
+targets in the fog.
+This fog fills a 25 × 25ft area. Smart Mobs may attempt 
+to move the combat out of the fog if able.
+UPGRADES
+Rank 5: The fog fills a 50 × 50ft area, and its duration 
+is 1 minute.
+Rank 10: The fog fills a 100 × 100ft area and lasts for 
+5 minutes.
+Rank 15: The fog fills a 500 × 500ft area and lasts for 
+15 minutes.
+DIRT CLOD
+“You have weaponized dirt.”
+Attack, Bludgeoning
+Mana Cost: 1
+Range: 100 feet
+AI Favor: 2
+You hurl a magical clod of dirt, leaving dirt and pebbles 
+strewn about near the target.
+Base Damage: 1d2 + INT Bludgeoning
+UPGRADES
+Rank 5: +2d2 base damage
+Rank 10: +1d2 base damage, and the target gains the 
+Woozy Debuff.
+Rank 15: +1d2 base damage, and 1 Rank damage die.
+DRAIN LIFE
+“Organic tether deployed. Try not to think about 
+where it's been.”
+Attack, Necrotic
+204
+Mana Cost: 14
+Range: 30 feet
+Limitations: For a brief instant, you create a disgust-
+ing blood vein that reaches out and wraps itself around 
+your target.
+Base Damage: 1d6 + INT Necrotic
+UPGRADES
+Rank 5: +1d6 base damage, and if the target loses at 
+least 3 Health Bar slots, you heal 1 Health Bar slot.
+Rank 10: +1d6 base damage, and if you heal this way, 
+heal +1 Health Bar slot.
+Rank 15: +1d6 base damage, and if you heal this way, 
+heal +1 Health Bar slot.
+EARWORM
+“Hitting every note except the right ones.”
+Attack, Sonic, Charisma, Favored: Bard
+Mana Cost: 6
+Range: 30ft
+Cooldown: Once per round.
+Sing a terrible song targeting the ear holes of a victim. 
+Yes, sing a few bars so the GM understands the pain 
+you're inflicting.
+Base Damage: 1d6 + CHA Sonic
+UPGRADES
+Rank 5: +1d6 base damage.
+Rank 10: +1d6 base damage, and the target gains the 
+Queasy Debuff.
+Rank 15: +1d6 base damage and +10ft Splash.
+FEAR
+“Run away, little piggies!”
+Attack, Mind Control
+Mana Cost: 3
+Range: 25 feet
+Limitations: Warning: Scary-ass Mobs are immune to 
+Fear effects (GM's discretion).
+Target a non-Boss Mob of half your level or less. On a 
+Standard Success, it stands its ground, but it loses its 
+DEX Mod for the duration of the combat. On a higher 
+success, it uses two of its Actions during the next 
+round to run away.
+UPGRADES
+Rank 5: +5ft Blast radius.
+Rank 10: +5ft Blast radius, and on a Critical Hit, the 
+affected creatures gain the Paralyzed Debuff.
+Rank 15: +5ft Blast radius.
+FIREBALL
+“It almost reluctantly meanders toward you. Then 
+your world explodes.”
+Attack, Fire, Area of Effect
+Mana Cost: 45
+Range: 80 feet
+Cooldown: Once per scene
+A creeping beach ball-sized sphere of fire emanates 
+from you. Since it moves so slowly, your attack is 
+made with Disadvantage. When the impact zone has 
+been determined, each creature in a 10ft Blast radius 
+takes full damage.
+On Fail, roll 1d8 for direction (see Figure 3, p. 200). The 
+amount the Skill Check missed by is the distance away 
+in feet it impacts.
+Base Damage: 1d12 + INT Fire, 10ft Blast radius
+UPGRADES
+Rank 5: +1d12 base damage. Those who lose 1 or more 
+Health Bar slots via this attack gain the Burned Debuff.
+Rank 10: +1d12 base damage and becomes an 80ft 
+Line attack (and keeps the Blast).
+Rank 15: +1d12 base damage and +40ft Splash (on 
+the Blast).
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+FIRE FINGERS
+“Fire Fingers activated. Try not to make it weird.”
+Attack, Fire
+Mana Cost: 3
+Range: Melee
+AI Favor: 1
+Brilliant flame leaps from your fingers.
+Base Damage: 1d4 + INT Fire
+UPGRADES
+Rank 5: +1d4 base damage.
+Rank 10: +1d4 base damage, and the target gains the 
+Burned Debuff.
+Rank 15: +1d4 base damage, and your hands begin to 
+intermittently burn. Your Pugilism, Unarmed Combat, 
+and Slice Attack strikes add 1 Fire Fingers Rank dam-
+age die (Fire).
+FROST SCAR
+“Frigid status achieved; relationships may suffer.”
+Attack, Ice
+Mana Cost: 2
+Range: Melee
+AI Favor: 1
+With a slice of your frigid hand, you leave a scar of 
+rime on your target.
+Base Damage: 1d4 + INT Ice
+UPGRADES
+Rank 5: +1d4 base damage, and the target cannot 
+heal themselves in the next combat round.
+Rank 10: +1d4 base damage, and the target gains the 
+Stiff Legs Debuff.
+Rank 15: +1d4 base damage, and the target gains The 
+Taint Debuff.
+GRAND ILLUSION
+“Why, yes, that is my pet T-Rex.”
+Intelligence
+Mana Cost: 7
+Range: 40 feet
+Duration: 2 minutes
+Cooldown: 15 minutes
+You create an illusion that might trick your foes.
+1
+205
+4
+Make a single INT-Opposed Spell Check vs. foes who 
+can see it. Your same roll is used against foes who see 
+it even after the casting round.
+Mundane illusions seeking only to impress might be 
+rolled with Advantage, while complex illusions seek-
+ing a specific response or images that suddenly pop 
+up during combat might be rolled with Disadvantage 
+(GM's discretion).
+On Success, they believe your illusion.
+UPGRADES
+Rank 5: Those who believe gain the Woozy Debuff or 
+similar based on the desired response.
+Rank 10: Those who believe also gain the Queasy 
+Debuff or similar based on the desired response.
+Rank 15: Those who believe also gain the Shocked 
+Debuff or similar based on the desired response.
+HEAL
+“Congratulations on not dying… yet.”
+Heal, Interrupt, Passive
+Mana Cost: 2
+Range: Self only
+Limitations: Rank 1 maximum
+Heal 2 Health Bar slots.
+UPGRADES
+None
+HEAL CRITTER
+“Your pet has been restored to 
+maximum cuddle capacity.”
+Heal, Interrupt, Passive
+Mana Cost: 8
+Range: 30 feet
+Limitations: May only be cast on 
+pets and minions (sorry, Donut).
+The target glows as they heal 
+back to 100% Health Bar.
+UPGRADES
+Rank 5: The target mends a 
+Minor Injury Debuff.
+Rank 10: The target mends 
+a Major Injury Debuff.
+Rank 15: The target 
+regrows all lost appendages.
+206
+HEAL OTHERS
+“Tell me you're a Cleric without…”
+Heal, Interrupt, Passive
+Mana Cost: 6
+Range: 30 feet
+Limitations: You can't cast this Spell on yourself, 
+pets, or minions.
+A wave of positive vibes engulfs the target. They heal 
+1d4 Health Bar slots.
+UPGRADES
+Rank 5: The target heals 1d6 Health Bar slots.
+Rank 10: The target heals 2d6 Health Bar slots.
+Rank 15: Instead of a single target, all party members 
+within a 20ft Burst radius are healed.
+HEAL SELF
+“Way easier than manually shoving your guts back in!”
+Heal, Interrupt, Passive
+Mana Cost: 1
+Range: Self only
+Limitations: You can only case this Spell on yourself.
+You center yourself, using magic to make yourself 
+whole. You heal 1d4 Health Bar slots.
+UPGRADES
+Rank 5: You heal 1d6 Health Bar slots and mend a 
+Minor Injury, Poison, or Disease Debuff.
+Rank 10: You heal 2d6 Health Bar slots and 
+mend a Major Injury or other Debuff.
+Rank 15: You heal to full and gain the 
+benefits of a short rest.
+HOLE
+“It's a hole. This will 
+absolutely be misused.”
+Passive
+Mana Cost: 12
+Range: 10 feet
+Duration: Until the end of the 
+combat or 5 minutes.
+Limitations: Can't be used 
+on saferoom doors or 
+living things.
+You create a temporary cylindrical hole in a surface 
+or material within range, to a depth of 1 inch per Spell 
+Rank and a diameter of 2ft. Anything that can fit in the 
+hole can pass through it if the hole is deep enough to 
+penetrate to the other side of the surface.
+UPGRADES
+Rank 5: You can reduce the diameter of the hole to a 
+smaller size when cast.
+Rank 10: You can widen the hole's diameter by 1 inch 
+for every inch of depth you sacrifice when cast.
+Rank 15: The caster may end the spell with a thought 
+(like an Interrupt, but it doesn't cost an Action). Any-
+thing in the hole at that time is destroyed.
+HOLY AURA
+“Look who's all high and mighty.”
+Attack, Holy, Area of Effect, Charisma, Favored: Cleric & 
+Paladin
+Mana Cost: 7
+Range: 5ft Burst radius
+Cooldown: Once per round
+You channel your deity and emanate their essence to 
+hurt only the enemies around you.
+Base Damage: 1d4 + CHA Holy, 5ft Burst radius
+UPGRADES
+Rank 5: +1d4 base damage, and affected undead 
+Mobs take double damage.
+Rank 10: +1d4 base damage and +5ft Burst radius.
+Rank 15: +1d4 base damage and +5ft Burst radius.
+HOT STUFF AURA
+“Bask in the warm glow of my machismo!”
+Passive, Area of Effect, Favored: Bard
+Mana Cost: 8
+Range: 5ft Burst radius
+Duration: 2 rounds
+Cooldown: 5 minutes
+You create a shield of pure sex appeal around you 
+against all damage types with a number of Health Bar 
+slots equal to your CHA Mod, and a 2 in each slot. It 
+also protects all allies within the radius. When deplet-
+ed, it disappears. These slots cannot be healed.
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+UPGRADES
+Rank 5: Increase the Health to 4 in each slot.
+Rank 10: +5ft Burst radius, with a 6 in each slot.
+Rank 15: +10ft Burst radius, with a 8 in each slot.
+ICE BLAST
+“Hope they brought a jacket.”
+Attack, Ice
+Mana Cost: 9
+Range: 40 feet
+With the howl of blizzard winds, you let loose a com-
+pact pocket of freezing cold and ice.
+Base Damage: 1d8 + INT Ice
+UPGRADES
+Rank 5: +1d8 base damage.
+Rank 10: +1d8 base damage, and the target is pushed 
+10 feet away from you.
+Rank 15: +1d8 base damage, and you can change the 
+range to a 15ft Cone Attack.
+ICICLES
+“Did you know that icicles are the #1 cause of home 
+head impalements?”
+Attack, Ice
+Mana Cost: 19
+Range: 60 feet
+Seizing upon the ice that runs through your veins, 
+icicle projectiles shoot forth from your palms towards 
+distant foes.
+Base Damage: 1d12 + INT Ice
+UPGRADES
+Rank 5: +1d12 base damage.
+Rank 10: +1d12 base damage, and the target gains 
+the Stiff Legs Debuff.
+Rank 15: +1d12 base damage, and the damage is 
+Armor-Piercing.
+“It's pretty cool. | saw 
+you shooting icicles 
+out of your hand.”
+—Carl
+1
+207
+4
+INTIMATE TOUCHES
+“Show me on the doll where they healed you.”
+Heal, Passive, Favored: Cleric & Paladin
+Mana Cost: 8
+Range: 5 feet
+Limitations: Unlike most healing, this spell is not an 
+Interrupt.
+You lay hands on the target (which could be you), who 
+heals Health Bar slots equal to your CHA Mod.
+UPGRADES
+Rank 5: The target also heals a Minor Injury Debuff.
+Rank 10: The target also heals a Major Injury Debuff.
+Rank 15: The target also heals all Poison & Disease 
+Debuffs.
+LIGHTNING BOLT
+“Bolt released, viewership spike detected.”
+Attack, Electric
+Mana Cost: 15
+Range: 100 feet
+With a thunderous clap, you let loose a bolt of lightning.
+Base Damage: 1d10 + INT Electric
+UPGRADES
+Rank 5: +1d10 base damage.
+Rank 10: +1d10 base damage and becomes a 100ft 
+Line Attack.
+Rank 15: +1d10 base damage. The lightning bolt 
+forks, and you may choose to apply your Attack 
+against any number of additional targets within 15 
+feet of the previous target (within the range limit). 
+Each successful Attack (including against the primary 
+target), deals half damage.
+MAGIC MISSILE
+“Standard Spell detected. Viewers appreciate the 
+nostalgia.”
+Attack, Force
+Mana Cost: 5
+Range: Within your line of sight
+AI Favor: 1
+From glowing eyes, fingers, or whatever, a streak of 
+pure force shoots out.
+Base Damage: 1d4 + INT Force
+208
+UPGRADES
+Rank 5: +1d4 base damage, and you can cast the 
+Spell at a higher or lower Mana cost.
+3 Mana: −4 damage
+4 Mana: −2 damage
+6 Mana: Add 1 Rank damage die
+Rank 10: +1d4 base damage, and the missiles deal 
+Force and Fire damage. The target gains the Burned 
+Debuff.
+Rank 15: This attack deals base damage ×3.
+MIND TICKLE
+“Don't think of an elephant.”
+Attack, Psychic, Charisma, Favored: Cleric
+Mana Cost: 2
+Range: 40 feet
+AI Favor: 2
+You infect your target with a small headache.
+Base Damage: 1d2 + CHA Psychic
+UPGRADES
+Rank 5: +1d2 base damage.
+Rank 10: +1d2 base damage, and the target gains the 
+Sore as Shit Debuff.
+Rank 15: +1d2 base damage, and the target gains the 
+Muted Debuff.
+MINION ARMY
+“No army can triumph when subjected to 
+internecine conflict.”
+Intelligence, Area of Effect, Mind Control
+Mana Cost: 50
+Range: 50ft Burst radius
+Duration: 2 minutes
+Cooldown: 5 hours
+Limitations: 5-minute casting time, and the caster 
+cannot move while casting. Only works against Mobs 
+with an Intelligence of 2+.
+When you cast this spell, choose a target within range. 
+On a Standard Success, 1 in 50 Mobs in the affected 
+area (min 1) become an ally and fight for you without 
+needing to command them. Higher levels of success 
+can turn additional Mobs into allies (GM's discretion).
+UPGRADES
+Rank 5: The casting time is 4 minutes. Duration is 5 
+minutes.
+Rank 10: Add your Charisma Stat to the Burst radius. 
+Duration is 10 minutes.
+Rank 15: Add your Charisma Stat to the Burst radius. 
+Duration is 15 minutes.
+NATURE'S BREATH
+“This recycled dungeon air is bad for my 
+complexion.”
+Heal, Interrupt, Passive, Favored: Druid
+Mana Cost: 6
+Range: 5 feet
+You blow cool, fresh air over the target's wounds (could 
+be yourself), healing them. Roll a Nature's Breath Rank 
+damage die. That is how many Health Bar slots the 
+target heals. May also target pets and minions.
+UPGRADES
+Rank 5: Add 1 to your die roll.
+Rank 10: Add 1 to your die roll, and remove a Minor 
+Injury Debuff.
+Rank 15: Add 1 to your die roll, and remove a Major 
+Injury Debuff.
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+OAKHIDE
+“My bark is worse than my bite.”
+Passive, Favored: Druid
+Mana Cost: 5
+Range: Self
+Duration: 2 minutes
+Cooldown: 10 minutes
+Your skin turns into solid wood, giving you great 
+protection. You have +2 Damage Resistance for the 
+duration of this spell.
+UPGRADES
+Rank 5: +2 DR. Duration is 3 minutes.
+Rank 10: +2 DR. You may target party members and 
+NPCs up to 10 feet away with this spell.
+Rank 15: +2 DR. Duration is 4 minutes.
+PALADIN'S SMITE
+“Repent or die!”
+Attack, Holy, Charisma, Favored: Paladin
+Mana Cost: 11
+Range: 30 feet
+You channel a torrent of divine wrath toward a soon-
+to-be repentant foe.
+Base Damage: 1d8 + CHA Holy
+UPGRADES
+Rank 5: +1d8 base damage.
+Rank 10: +1d8 base damage, and the target gains the 
+Take Down Debuff.
+Rank 15: +1d8 base damage, and the damage is Ar-
+mor-Piercing (ignores DR).
+PANTY DROPPER
+“You know what's on the menu? Me-n-u.”
+Charisma, Mind Control, Favored: Bard
+Mana Cost: 10
+Range: 10 feet
+Duration: 2 minutes or until you finish
+Cooldown: 5 minutes
+Make an INT-Opposed Spell Check against a non-Boss 
+target, even in combat. Fighting's just another form of 
+penetration, after all.
+1
+209
+4
+On Success, the target wants to jump your bones and 
+won't let anyone stop them (they cease attacking or 
+doing other things).
+UPGRADES
+Rank 5: The duration is 5 minutes.
+Rank 10: The duration is 10 minutes.
+Rank 15: The duration is 15 minutes.
+PING
+“Here piggy, piggy.”
+Passive, Area of Effect
+Mana Cost: 5
+Range: 1 mile Burst radius
+Cooldown: 5 minutes
+Sends out an audible ping that gives the distance and 
+location of all non-crawlers and non-red-tagged Mobs 
+in a circle around you. It will mark targets beyond the 
+range of your map. You receive information about the 
+Mobs that is “somewhat complete.”
+Targets hit with Ping will hear an audible ping noise, 
+but they will not know where the ping originated. 
+Environmental factors and obstacles may increase or 
+decrease range.
+UPGRADES
+Rank 5: If you know the Fear Spell (see p. 204), you 
+may cast it at no Action cost to affect all eligible Mobs 
+within the Ping range. You only pay the Mana.
+Rank 10: Environmental factors and obstacles no 
+longer decrease the range, and you receive “mostly 
+complete” information.
+Rank 15: You pay no Mana to add the Fear Spell, and 
+you receive “entirely complete” information.
+PROTECTIVE SHELL
+“Hope activated. Try not to waste it.”
+Interrupt, Passive, Area of Effect
+Mana Cost: None
+Range: 10ft Burst radius
+Duration: 5 seconds (only long enough to push foes 
+away and protect against a single physical attack)
+Cooldown: 30 hours
+Limitations: Spell must be imbued onto something 
+you are wearing. The shell cannot be moved by any 
+means.
+210
+You create a 10 + INT-foot Burst radius magic shell 
+around yourself and nearby party members.
+This shell pushes away all Mobs in its Area, which is 
+the shell's radius + 5ft. Mobs cannot enter the shell 
+(unless non-corporeal) or physically attack those in-
+side. The shell does not protect against magic effects. 
+Crawlers inside may attack as usual.
+UPGRADES
+Rank 5: Duration is 10 seconds. In addition to knock-
+ing enemies away, it protects the occupants from all 
+non-Spell attacks originating from outside the shell 
+until the end of the current combat round.
+Rank 10: Duration is 20 seconds or two rounds.
+Rank 15: Duration is 30 seconds or three rounds.
+PUDDLE JUMPER
+“Teleportation doesn't suck.”
+Passive
+Mana Cost: 20
+Range: Line-of-sight to the destination surface
+Limitations: There is a 10-second delay before the 
+effect takes place.
+Cooldown: 5 hours
+You and up to 3 party members of your choice teleport 
+to another location. Everyone feels a tingling sensation 
+while waiting for the effect to resolve.
+UPGRADES
+Rank 5: The delay is 2 seconds, and the destination 
+doesn't have to be a surface.
+Rank 10: The delay is 1 second, and the destination 
+can be anywhere within 1,000 yards in any direction, 
+even if the exact destination cannot be seen.
+Rank 15: There is no delay, and the destination can 
+be anywhere within 1 mile in any direction, even if the 
+exact destination cannot be seen.
+RISE, DEAD MINION!
+“The bigger they are, the deeper they're buried.”
+Attack, Favored: Necromancer
+Mana Cost: 10
+Range: 30 feet
+Duration: 1 round
+At your command, a Medium (4) size skeleton emerges 
+from the ground to attack your foe in melee combat, 
+dealing 1d8 + INT Necrotic damage. After the Attack, 
+the skeleton collapses, creating difficult terrain in the 
+space it occupied.
+UPGRADES
+Rank 5: The skeleton attacks twice before collapsing.
+Rank 10: The skeleton increases to size Large (5), and 
+its Attack range is 10 feet. +1d8 base damage.
+Rank 15: The skeleton increases to size Colossal (7), 
+and its Attack range is 15 feet. Add one Rise, Dead 
+Minion! Rank damage die to the damage.
+ROOTFOOT
+“The ground is never empty. It is only sleeping.”
+Attack, Favored: Druid
+Mana Cost: 5
+Range: 30 feet
+Duration: 2 rounds
+Roots reach up from the ground to ensnare a victim of 
+up to Size 4 (Medium).
+On Success, the victim gains the Held Debuff. The 
+Rank of this Spell is used in the Opposed Difficulty to 
+escape, instead of the default STR.
+UPGRADES
+Rank 5: Can target victims up to size Large (5). 
+Duration is 3 rounds.
+Rank 10: Can target victims up to size Huge (6). 
+Duration is 4 rounds.
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+Rank 15: Can target victims up to size Colossal (7). 
+The victim also gains the Poisoned Debuff.
+SECOND CHANCE
+“Everyone deserves one. Except for Phil. Never Phil.”
+Passive
+Mana Cost: 10
+Range: 10 feet
+Duration: 1 minute
+You raise a Mob with a level lower than your own from 
+the dead. The Mob temporarily becomes your Undead 
+Minion with half of its original Health Bar slots.
+You spend one Action to command it, then it acts 
+independently with 1 Move Action and 1 other Action 
+(usually an Attack) until given new instructions.
+UPGRADES
+Rank 5: The Mob can be up to 5 levels higher than 
+you, and the duration is 5 minutes.
+Rank 10: The Mob can be up to 10 levels higher than 
+the caster, with a duration of 15 minutes.
+Rank 15: The Mob can be up to 15 levels higher than 
+the caster, with a duration of 45 minutes.
+SHIELD
+“Enjoy the illusion of safety.”
+Interrupt, Passive
+Mana Cost: 8
+Range: Self
+Duration: 5 minutes
+You are surrounded by a translucent force field that 
+moves with you and reduces non-magic damage you 
+take. The Shield has 2 Health Bar slots, each with your 
+CON Mod. When you take damage, reduce these Health 
+Bar slots first. The Spell ends early if the shield loses all 
+its Health Bar slots. You can't heal a Shield.
+UPGRADES
+Rank 5: The Shield has 5 Health Bar slots.
+Rank 10: The Shield has 10 Health Bar slots.
+Rank 15: The Shield has 15 Health Bar slots.
+1
+211
+4
+SHOCK TREATMENT
+“Electrical therapy initiated; consent not required.”
+Attack, Electric
+Mana Cost: 2
+Range: 30 feet
+AI Favor: 2
+Like a deranged emperor, bolts of electricity shoot out 
+from your fingers.
+Base Damage: 1d2 + INT Electric
+UPGRADES
+Rank 5: +1d2 base damage, and you may choose to 
+afflict the target with the Stunned Debuff instead of 
+dealing damage.
+Rank 10: +1d2 base damage, and add 1 Rank damage 
+die (Electric) at the end of the round.
+Rank 15: +1d2 base damage, and if you make this 
+attack at melee range, you deal ×5 the total damage.
+SOLSPLASH
+“The sun is merely a star close enough to hate us.”
+Attack, Fire, Constitution, Favored: Druid
+Mana Cost: 13
+Range: 30 feet
+Beams of concentrated “sunlight” fall upon the victim 
+and those around them. Sunscreen's not gonna help.
+Base Damage: 1d8 + CON Fire
+UPGRADES
+Rank 5: +1d8 base damage, +5ft Splash.
+Rank 10: +1d8 base damage and +10ft Splash. Each 
+affected entity who loses at least 3 Health Bar slots 
+this way gains the Burned Debuff.
+Rank 15: +1d8 base damage and +15ft Splash.
+SOUL COLLECTOR
+“This soul appears… reusable.”
+Attack, Necrotic
+Mana Cost: 4
+Range: 50 feet
+AI Favor: 1
+With a twist of your hand, you siphon the spirit from 
+your target.
+Base Damage: 1d4 + INT Necrotic
+212
+UPGRADES
+Rank 5: +1d4 base damage, and if this Spell deals the 
+killing blow to a foe of at least half your level, it deals 
++1 bonus damage until you complete a long rest. This 
+damage bonus is cumulative up to the Spell's Rank.
+Rank 10: +1d4 base damage, and the bonus contin-
+ues for one week.
+Rank 15: +1d4 base damage, and the bonus contin-
+ues for as long as you remain on your current floor.
+THUNDERLASH
+“Loud noises and bad decisions go hand-in-hand.”
+Attack, Sonic
+Mana Cost: 12
+Range: 50 feet
+You unleash a whip-like emanation of pure sound 
+which thunders through the air.
+Base Damage: 1d10 + INT Sonic
+UPGRADES
+Rank 5: +1d10 base damage.
+Rank 10: +1d10 base damage, and this attack deals 
+Armor-Piercing damage (ignores DR).
+Rank 15: +1d10 base damage, and you can change 
+the range to a 15ft Cone attack.
+TORCH
+“Congratulations. You can now see what's trying to 
+kill you.”
+Passive
+Mana Cost: 1
+Range: Self
+Duration: Until you enter a saferoom or descend to a 
+new floor.
+You create a magical orb of light that follows slightly 
+above and behind you. It provides bright light for a 20ft 
+radius and dim light for a 20ft radius past that.
+UPGRADES
+Rank 5: You can move the orb up to 20 feet away 
+from you.
+Rank 10: You can move the orb up to 60 feet away 
+from you and can double the radius of the brightness 
+with a thought.
+Rank 15: You can move the orb up to 100 feet away 
+from you and attach it to a surface as an Action.
+TRIPPER
+“Let's see if they know we're coming.”
+Passive, Area of Effect
+Mana Cost: None
+Range: 30ft Burst radius
+Limitations: Does not detonate traps with very specif-
+ic triggers. Must be imbued onto something you are 
+wearing.
+Cooldown: 5 hours
+With a snap of your fingers, every movement, heat, 
+and weight-triggered trap in the area “goes off.” 
+Blades swing, bombs blow, and creatures are released.
+UPGRADES
+Rank 5: +Intelligence Burst radius.
+Rank 10: +Intelligence Burst radius.
+Rank 15: +Intelligence Burst radius, and all damage 
+taken is considered Splash (half damage).
+TURN UNDEAD
+“What is dead should stay dead… and far away.”
+Attack, Area of Effect, Favored: Bard, Cleric, & Paladin
+Mana Cost: 9
+Range: 10ft Cone
+Duration: 3 rounds
+Limitations: Does not work against Bosses.
+Cooldown: 5 minutes
+Make a single CHA-Opposed Spell Check vs. the Un-
+dead Mobs in the affected area.
+On Success, the Undead Mob runs away for the dura-
+tion of the Spell.
+UPGRADES
+Rank 5: +5ft Cone. Duration is 5 rounds.
+Rank 10: +10ft Cone. Duration is 10 rounds.
+Rank 15: +15ft Cone. Duration is 15 rounds. On an 
+Amazing Success or better, the Undead Mob is de-
+stroyed.
+TWINKLE TOES
+“Fly my pretties, fly!”
+Intelligence, Passive
+Mana Cost: 2
+Range: 5 feet
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+Duration: A number of seconds equal to your 
+Intelligence.
+Target a pet or minion within range. It has Move ×2 for 
+the duration.
+UPGRADES
+Rank 5: The pet or minion has Move ×3 for the duration.
+Rank 10: The pet or minion has Move ×4 for the duration.
+Rank 15: The pet or minion has Move ×5 for the duration.
+UNNECESSARY FORCE
+“Excessive force authorized. Paperwork waived.”
+Attack, Force
+Mana Cost: 13
+Range: 40 feet
+A shockwave akin to that of an A-bomb crashes over 
+your target.
+Base Damage: 1d12 + INT Force
+UPGRADES
+Rank 5: +1d12 base damage.
+Rank 10: +1d12 base damage, and the target is 
+pushed 10 feet.
+Rank 15: +1d12 base damage, and the target is 
+pushed 15 feet.
+VINE PORN
+“It's like tentacle porn, but with vines… sorry, Mom.”
+Attack, Piercing, Constitution, Favored: Druid
+Mana Cost: 3
+Range: 20 feet
+AI Favor: 1
+Magical vines with pulsating veins shoot up from the 
+ground or sprout from the target's own body to rip and 
+tear and smack them around a bit.
+Base Damage: 1d4 + CON Piercing
+UPGRADES
+Rank 5: +1d4 base damage.
+Rank 10: +1d4 base damage, and this Attack deals 
+Armor-Piercing damage (ignores DR).
+Rank 15: +1d4 base damage. On a Critical Hit, the 
+target takes ×4 damage.
+1
+213
+4
+WALL OF FIRE
+“You're gonna fall in… to a burnin' ring of fire.”
+Passive, Fire
+Mana Cost: 15
+Range: 30 feet
+Duration: 2 rounds
+Creates a 30ft-long × 7ft-high × 2ft-thick wall of fire.
+Base Damage: 1d2 Fire for every 1ft of wall the victim 
+passes through, and they gain the Burned Debuff.
+UPGRADES
+Rank 5: +1d2 base damage. The wall can be turned 
+into a ring of fire. Duration is 5 rounds.
+Rank 10: +1d2 base damage. Creates a 50ft-long × 
+10ft-high × 3ft-thick wall. Duration is 10 rounds.
+Rank 15: +1d2 base damage. Creates a 100ft-long × 
+20ft-high × 5ft-thick wall. Duration is 15 rounds.
+WATER BREATHING
+“It's okay to inhale.”
+Intelligence, Passive
+Mana Cost: 2
+Range: Self
+Duration: A number of seconds equal to the caster's 
+Intelligence ×3.
+The target can breathe underwater without issue.
+UPGRADES
+Rank 5: You may now cast this upon others at a range 
+of 5 feet.
+Rank 10: The targets roll Swimming Skill Checks with 
+Advantage.
+Rank 15: You can target any or all individuals within a 
+15ft Burst radius.
+WEB
+“Blast your goo onto foes!”
+Attack, Intelligence
+Mana Cost: 6
+Range: 20ft Cone
+Duration: 2 rounds
+A cone of sticky webbing shoots from your fingers.
+Make a single Spell Attack Skill Check vs. each friend 
+and foe's Evade (if any).
+214
+On Success, that entity gains the Held Debuff. The 
+Rank of this spell is used in the Opposed Difficulty to 
+escape, instead of STR.
+UPGRADES
+Rank 5: +5ft Cone. Duration is 5 rounds.
+Rank 10: +5ft Cone. Duration is 10 rounds.
+Rank 15: +5ft Cone. Duration is 15 rounds.
+WILBUR'S SLOWBUILD FIREBLAST
+“Hold. Hold! HOLD!”
+Attack, Fire
+Mana Cost: 60
+Range: 50 feet
+Base Damage: 1d8 + INT Fire, and the target gains the 
+Burned Debuff.
+This Spell can be cast and held as a swirling ring of fire 
+around your ring finger until you unleash it. Only one ring 
+may be held at a time. The next time you perform an Attack 
+Action, it must be this Spell (at no additional Mana cost).
+If anyone touches the ring with the intent to diffuse it (you 
+may oppose that Action), the Attack hits them for half dam-
+age. The appendage they touched you with smolders, use-
+less for a number of rounds equal to the damage inflicted.
+UPGRADES
+Rank 5: +1d8 base damage. For each full day you hold 
+the spell, +1d8 Fire damage.
+Rank 10: +1d8 base damage and +5ft Splash.
+Rank 15: +1d8 base damage and +5ft Splash.
+WISP ARMOR
+“Empty minds are surprisingly easy to protect.”
+Passive
+Mana Cost: 5
+Range: Self
+Duration: 5 minutes
+Cooldown: 5 minutes
+You conjure a protective barrier that reduces all magic 
+damage (typically Spells) down to its Rank 1 base dam-
+age (1 die + Stat Mod) without any Upgrades or other bo-
+nuses. This Spell also makes you immune to Mind Control.
+UPGRADES
+Rank 5: The duration is 10 minutes.
+Rank 10: The duration is 15 minutes.
+Rank 15: The duration is 20 minutes.
+Lot
+When you get a loot box, it'll be full of all kinds of 
+useful items. Maybe not useful to you, but our many 
+merchants will be happy to take it off your hands so 
+you can spend that gold on something you do want. 
+Or trade it to a party member and see what the AI 
+thinks of that.
+Of course, a box isn't the only way to get sweet 
+gear. You're gonna kill a lot of monsters or die trying, 
+and almost every bastard you take out has something 
+on them. Once they're dead, you can loot them and 
+pull all their shit into your Inventory. It's like a box of 
+chocolates—you never know what you're gonna get. 
+The most common stuff you'll find is Misc. Junk.
+LOOTING MOBS
+Once a combat is over, dead Mobs are ripe for the 
+picking. How pleasant! The armor pieces and weap-
+ons they carry are typically of lesser quality than even 
+the mundane items crawlers find in Loot boxes, but 
+might last for a day or two in a pinch. Each dead Mob 
+carries 1d6 Misc. Junk and some amount of gold as 
+well, based on which floor they are on. Roll once for 
+Misc. Junk and gold, and then multiply the result by 
+the number of bodies.
+- First Floor: Nuthin'
+- Second Floor: 1d6 gold
+- Third Floor: 2d4 gold
+- Fourth Floor: 2d6 gold
+- Fifth Floor: 2d8 gold
+LOOTING BOSSES
+I lied—you always know one thing you're gonna get 
+from a Boss: a map. The map's quality depends on 
+the Boss, and no matter what type of map it is, it's 
+bound to help you get around the area easier.
+Neighborhod Map
+Acquired by defeating a Neighborhood Boss. This adds 
+a map of the Boss's Neighborhood to a crawler's mini-
+map, as well as all Mobs within that Neighborhood. 
+Mobs appear as simple colored dots, but the 
+Neighborhood Map does not provide further details.
+Neighborhood Maps make Grinding more efficient. 
+Because you can avoid lulls in the action, if you Grind
+4
+CHAPTER 4: SKILLS, SPELLS, & GEAR
+for 5 or more hours, add 1 hour to your Grinding time. 
+This allows you to Grind for 5 hours (the typical limit 
+per day) and receive credit for 6 (See Grinding, p. 259).
+Borough Field Guide
+Acquired by defeating a Borough Boss. It will add 
+an outline to individual quadrants within a borough, 
+although details such as hallways or rooms will remain 
+obscured. Focusing on a specific area will trigger a 
+tooltip box to open, revealing the Mob level range 
+and type (For example: Mob Level 15–24, Goblin 
+Type). The Borough Field Guide does not fill in 
+Neighborhood details like a Neighborhood Map.
+1
+215

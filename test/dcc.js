@@ -892,6 +892,91 @@ function boot(entry) {
       || 'a container is missing from the rendered block';
   });
 
+  // ── Spells (D7) ──────────────────────────────────────────────────────────
+  eq(ev('DCC_SPELLS.length'), 54, '[spells] 54 Spells');
+  check('[spells] every Spell has an id, a name and a Mana cost', () => {
+    const bad = ev(`JSON.stringify(DCC_SPELLS.filter(s=>!s.id||!s.name||
+      (s.mana===undefined&&!s.manaText)).map(s=>s.name))`);
+    return bad === '[]' || bad;
+  });
+  check('[spells] ids are unique', () =>
+    ev('new Set(DCC_SPELLS.map(s=>s.id)).size') === 54 || 'duplicates');
+  check('[spells] a quote attribution was not mistaken for a Spell', () => {
+    const bad = ev(`JSON.stringify(DCC_SPELLS.filter(s=>/^[\\u2014-]/.test(s.name)||/carl$/i.test(s.name)).map(s=>s.name))`);
+    return bad === '[]' || bad;
+  });
+  check('[spells] an attack Spell is one with Base Damage, and only those', () => {
+    const bad = ev(`JSON.stringify(DCC_SPELLS.filter(s=>
+      (s.kind==='attack')!==!!s.baseDamage).map(s=>s.name))`);
+    return bad === '[]' || bad;
+  });
+  eq(ev("dccSpell('fire-fingers').mana"), 3, '[spells] Fire Fingers costs 3 Mana');
+  eq(ev("dccSpell('fire-fingers').baseDamage"), '1d4 + INT Fire',
+     '[spells] ...and deals 1d4 + INT Fire');
+  eq(ev("dccSpell('heal').kind"), 'utility', '[spells] Heal is not an attack Spell');
+  eq(ev("dccSpell('heal').limitations"), 'Rank 1 maximum', '[spells] Heal caps at Rank 1');
+
+  // the seven the creation wizard offers, and Table 27's random Spells
+  check('[spells] every Spell the wizard offers on screen 3 exists', () => {
+    const bad = ev(`JSON.stringify(DCC_STARTING_SPELLS.filter(n=>!dccSpellByName(n)))`);
+    return bad === '[]' || 'not in the catalogue: ' + bad;
+  });
+  check('[spells] Heal exists, which every crawler learns on entry', () =>
+    !!ev("dccSpellByName('Heal')") || 'missing');
+
+  // ── the Spell route is no longer a dead end ──────────────────────────────
+  check('[spells] a Spell-route crawler ends up knowing their Spell', () => {
+    ev("S.char=SYS.newCharacter();");
+    ev("dccSetSpecies('human');dccStore('name','Wren');dccRollCrawlerNumber();");
+    ev(`['childhood','adolescence','career','hobby'].forEach(function(st){
+          dccPickBackground(st,1);
+          var row=dccStages(S.char)[st].rows.find(function(r){return r.roll===1;});
+          var taken=dccTakenSkills(S.char,st);
+          row.skills.filter(function(x){return !taken[x.s];}).slice(0,2)
+             .forEach(function(x){dccPickSkill(st,x.s);});
+        });`);
+    ev("dccSetRoute('spell');dccSetSpell('Fire Fingers');");
+    ev("dccStatMethod('array');dccAssignStat('INT',6);dccAssignStat('CON',5);" +
+       "dccAssignStat('DEX',4);dccAssignStat('CHA',3);dccAssignStat('STR',2);");
+    ev("dccStoreStory('pastTrauma','x');dccStoreStory('looseEnd','y');dccStoreStory('regret','z');");
+    ev("dccRollBumps();dccRollFavor();for(let i=0;i<40;i++)dccStatPoint('CON',1);");
+    ev("dccChoose('race','human');dccChoose('cls','boring-ol-mage');");
+    ev("dccFinishCreation(S.char);");
+    const spells = JSON.parse(ev('JSON.stringify(S.char.blocks.spells.skills)'));
+    const ff = spells.find(s => s.name === 'Fire Fingers');
+    const heal = spells.find(s => s.name === 'Heal');
+    if (!ff) return 'Fire Fingers missing: ' + JSON.stringify(spells.map(s => s.name));
+    if (!heal) return 'Heal missing';
+    return true;
+  });
+  check('[spells] the chosen Spell carries its tutorial-floor bump', () => {
+    const b = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.bumps)'));
+    const bump = b.find(x => x.name === 'Fire Fingers');
+    const spell = JSON.parse(ev('JSON.stringify(S.char.blocks.spells.skills)'))
+      .find(s => s.name === 'Fire Fingers');
+    if (!bump) return 'no bump recorded for the Spell';
+    if (!bump.primary) return 'the Spell was not treated as the primary attack';
+    return spell.rank === bump.to || 'rank ' + spell.rank + ' but bump said ' + bump.to;
+  });
+  check('[spells] a Spell bump does not create a phantom Skill', () => {
+    const skills = JSON.parse(ev('JSON.stringify(S.char.blocks.skills.skills)'));
+    return !skills.some(s => s.name === 'Fire Fingers') || 'the Spell leaked into Skills';
+  });
+  check('[spells] the Hotlist is seeded with the Spell, Heal and the Mana Potions', () => {
+    const hot = JSON.parse(ev('JSON.stringify(S.char.blocks.gear.hotlist)'));
+    const names = hot.map(h => h.name);
+    if (names.indexOf('Fire Fingers') < 0) return 'no Spell: ' + names.join(', ');
+    if (names.indexOf('Heal') < 0) return 'no Heal';
+    const pot = hot.find(h => /Mana Potion/.test(h.name));
+    return (pot && pot.qty === 5) || 'Mana Potions: ' + JSON.stringify(pot);
+  });
+  check('[spells] a weapon-route crawler gets Heal but no attack Spell', () => {
+    ev("S.char=SYS.newCharacter();dccSetSpecies('human');dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("dccFinishCreation(S.char);");
+    const names = JSON.parse(ev('JSON.stringify(S.char.blocks.spells.skills)')).map(s => s.name);
+    return (names.length === 1 && names[0] === 'Heal') || 'got ' + names.join(', ');
+  });
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>

@@ -98,6 +98,14 @@ registerSystem({
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
       {
+        id: 'spells', type: 'skillList', label: 'Spells',
+        hint: 'A Spell has to be in your Hotlist to cast it under pressure. Spells cannot be '
+            + 'attempted untrained, except from a scroll.',
+        statMod: 'derive.spellStatMod',
+        advanceRoll: 'derive.advanceSkill',
+        rankCap: DCC_SKILL_RANK_SOFT_CAP,
+      },
+      {
         id: 'gear', type: 'inventory', label: 'Gear',
         hint: 'Only what is in a Gear Slot gives you anything. The Hotlist is for reach, not bonuses '
             + '— an item put back into it turns its benefits off. Inventory is weightless; the '
@@ -171,6 +179,7 @@ registerSystem({
   // ─── content the shell can already use ────────────────────────────────────
   catalogs: {
     skills: DCC_SKILLS,
+    spells: DCC_SPELLS,
     races: DCC_RACES,
     classes: DCC_CLASSES,
     backgrounds: DCC_BACKGROUNDS,

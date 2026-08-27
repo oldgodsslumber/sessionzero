@@ -320,9 +320,11 @@ Two things are deliberately deferred rather than faked:
 - **The six Tutorial Floor Experiences and Acquired Loot** need Tables 25–34.
   They are story hooks and starting gear rather than Stats, so they can be added
   to a finished crawler later. Screen 7 says so on the screen.
-- **A Spell-route crawler's primary attack is a Spell**, and Spells are D7. The
-  +2d4 is still rolled and shown, flagged as a Spell, rather than being silently
-  skipped — and it does not create a phantom Skill on the sheet.
+- ~~A Spell-route crawler's primary attack is a Spell, and Spells are D7.~~
+  **Closed.** The Spell catalogue landed in D7, so that route now produces a real
+  Spell at Rank 3 carrying its +2d4 bump, Heal alongside it, and a Hotlist seeded
+  with both plus the five Mana Potions. The Spell still does not leak into the
+  Skills list — Spells and Skills are separate catalogues, and a test asserts it.
 
 **Nothing is applied while you shop on screen 8.** The diff is computed live and
 the transaction only lands in `dccFinishCreation`, so backing out is free and

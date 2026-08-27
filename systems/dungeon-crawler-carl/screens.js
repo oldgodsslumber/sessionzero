@@ -463,6 +463,9 @@ function dccFinishCreation(char) {
   }
 
   char.blocks.skills = { skills: dccFinalSkills(char) };
+  char.blocks.spells = { skills: dccStartingSpells(char) };
+  char.blocks.gear = char.blocks.gear || blockCtx(sysBlock('gear'), char) && char.blocks.gear;
+  if (char.blocks.gear) char.blocks.gear.hotlist = dccStartingHotlist(char);
   char.blocks.mana = { current: dccStatOf(char, 'INT') };
   char.blocks.health = { marked: 0 };
   char.level = dccFloorCfg(char).level;
@@ -704,12 +707,14 @@ function dccRollBumps() {
   // If the primary attack is a Spell, it is not in the Skills catalogue yet
   // (Spells are D7), so it would silently miss its +2d4. Record it anyway,
   // flagged, rather than quietly shortchanging the crawler.
+  // A Spell-route crawler's primary attack is a Spell, which lives in its own
+  // catalogue rather than among the Skills, so it needs its bump adding here.
   if (primary && !bumps.some(function (b) { return b.primary; })) {
-    bumps.unshift({ name: primary, from: 3, roll: d4() + d4(), to: null,
-                    wasted: 0, primary: true, spell: true });
-    const b = bumps[0];
-    b.to = Math.min(cfg.rankCap, b.from + b.roll);
-    b.wasted = Math.max(0, b.from + b.roll - cfg.rankCap);
+    const roll = d4() + d4();
+    const to = Math.min(cfg.rankCap, 3 + roll);
+    bumps.unshift({ name: primary, from: 3, roll: roll, to: to,
+                    wasted: Math.max(0, 3 + roll - cfg.rankCap),
+                    primary: true, spell: !!dccSpellByName(primary) });
   }
   dccFloorStart(c).bumps = bumps;
   save(); wizRepaint();
@@ -970,6 +975,42 @@ function dccFinalSkills(char) {
                  checkType: cat ? cat.checkType : null,
                  passive: !!(cat && cat.passive), source: 'raceclass', marked: false });
     });
+  }
+  return out;
+}
+
+
+// ─── the Spells a new crawler knows ─────────────────────────────────────────
+// Everyone learns Heal on entering the dungeon (p. 111). A crawler who took the
+// Spell route on screen 3 also has that Spell at Rank 3, plus whatever the
+// tutorial floors added to it.
+function dccStartingSpells(char) {
+  const out = [];
+  const add = function (name, rank) {
+    const cat = dccSpellByName(name);
+    if (!cat) return;
+    const found = out.find(function (x) { return x.name === cat.name; });
+    if (found) { found.rank = Math.max(found.rank, rank); return; }
+    out.push({ name: cat.name, rank: rank, stat: 'INT', checkType: cat.kind === 'attack' ? 'evade' : 'unopposed',
+               passive: false, source: 'start', marked: false, mana: cat.mana });
+  };
+  add('Heal', 1);                                  // Rank 1 maximum, per the entry
+  const cm = dccCre(char).combat;
+  if (cm.route === 'spell' && cm.spell) {
+    const bump = (dccFloorStart(char).bumps || []).find(function (b) { return b.name === cm.spell; });
+    add(cm.spell, bump ? bump.to : 3);
+  }
+  return out;
+}
+
+// Everything a Spell-route crawler should be carrying in the Hotlist at the
+// start: their attack Spell, Heal, and the five Mana Potions the book grants.
+function dccStartingHotlist(char) {
+  const cm = dccCre(char).combat;
+  const out = [{ name: 'Heal', qty: 1 }];
+  if (cm.route === 'spell' && cm.spell) {
+    out.push({ name: cm.spell, qty: 1 });
+    out.push({ name: 'Standard Mana Potion', qty: DCC_STARTING_SPELL_POTIONS });
   }
   return out;
 }

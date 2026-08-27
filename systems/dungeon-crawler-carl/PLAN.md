@@ -301,7 +301,7 @@ several headings are mis-levelled. Consequences:
 | **D4** | Inventory / Hotlist / Gear Slots. **done** |
 | **D5** | Creation wizard — nine screens, both phases. See [CREATION.md](CREATION.md). **Depends on D3.** |
 | **D6** | Races & Classes as a transactional diff, with prerequisite gating. |
-| **D7** | Spells, loot, crafting, pets/mounts/minions. |
+| **D7** | Spells **done** (54). Loot, crafting, pets/mounts/minions still to do. |
 | **D8** | Combat tracker (5-step round) + Debuff durations. |
 | **D9** | Bestiary + mob/boss/encounter generators. |
 | **D10** | Fame: Popularity checklist, AI Favor, Achievements, Sponsors. Floor Clock. |
