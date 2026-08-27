@@ -207,3 +207,73 @@ const DCC_CREATION_STEPS = [
   { id: 'raceclass', label: 'Race & Class' },
   { id: 'review', label: 'Review' },
 ];
+
+// ─── Acquired Loot and the Tutorial Floor Experiences (pp. 115-127) ────────
+//
+// Tables 25-27 are short and mechanical, so they are here in full.
+//
+// Tables 29-34 are NOT. Their third column is narrative — story hooks the GM is
+// told to bring back later — and copying several pages of it into a fan tool is
+// neither necessary nor right. The app rolls on them and records WHICH table and
+// result you got, with a page number; you read the hook in your own book.
+
+// 1d4. Each row is the tier spread across weapon, armor, item and consumable.
+const DCC_LOOT_SPREAD = [
+  { roll: 1, text: 'Platinum Weapon/Spells, Gold Armor/Spells, Silver Item/Spells, Bronze Consumable' },
+  { roll: 2, text: 'Bronze Weapon/Spells, Platinum Armor/Spells, Gold Item/Spells, Silver Consumable' },
+  { roll: 3, text: 'Silver Weapon/Spells, Bronze Armor/Spells, Platinum Item/Spells, Gold Consumable' },
+  { roll: 4, text: 'Gold Weapon/Spells, Silver Armor/ Spells, Bronze Item/Spells, Platinum Consumable Optional Rule: For more creativity and randomness, the GM may prefer that everyone gain multiple loot boxes and randomized magic items (see Loot, p. 215). This may be more fun when creating Third Floor crawlers as a group during session zero (p. 246). Example: You roll a 3 on Table 25 and choose a Silver-value Weapon (instead of Spells), Bronze Armor (instead of Spells), and Platinum Spells (instead of an Item). Then you also get a Gold Consumable. Weapon You can choose a new weapon or upgrade your orig- inal one. Either way, it might gain some bonuses. Its tier (Bronze, Silver, Gold, or Platinum) tells you how good it is. - Bronze: A funny-looking d6 damage non-magical weapon that amuses the AI such as a Bow, Axe, or Quarterstaff with “AI Favor: 2 when fighting Bosses” - Silver: +1 Skill in the Weapon, and a +1 damage Buff - Gold: +1 Skill in the Weapon, and a Scroll of Upgrade for it (see Table 26) - Platinum: +2 Skill in the Weapon, +3 to Strength or Dexterity, and a Scroll of Upgrade for it (see Table 26) You can abbreviate an Amazing Success triggered effect in the Effects area of your Attack by writing it as: AS: Target gains NAME OF DEBUFF. You might also use “+F dmg” as that is the default Amazing Success bonus (see p. 79) even if you don\'t have an upgrad- ed weapon. If you don\'t like the name addition for your upgrade, make up your own, or you can simply add the word “Enchanted” in front of it, like “Enchanted Rapier.” Spels Spells can be chosen instead of a Weapon, Armor, or Item option, but not Consumables. You\'re stuck with those, Gandalf. You learn a number of Spells based on the tier of your Starting Loot (see above). If you don\'t start with enough Mana to cast the Spell, you receive it in tome form, which can later be read to learn the Spell, traded, or sold. Use Table 27. If you roll a Spell you already know, add 1d2+1 Ranks to it. - Bronze: One Spell at Rank 1d4 and 1 Mana Potion - Silver: One Spell at Rank 2d4 and 2 Mana Potions or two Spells at Rank 1d4 - Gold: Three Spells at Rank 1d4 and 3 Mana Potions - Platinum: Two Spells at Rank 2d4 and 4 Mana Potions or four Spells at Rank 1d4 When making a Fourth or Fifth Floor crawler, if you roll a Spell you already have, you may substitute it for one found in this book. Armor Choose a single piece to fill any gear slot you like, with the following benefits based on quality. - Bronze: Mundane Armor of your choice, but awkward: hockey pads, a heavy winter coat, trash- can lid shield. Grants +1 Damage Resistance - Silver: +2 DR, with the Anti-Piercing Benefit (see p. 95) - Gold: +3 DR, with Resistance to an uncommon damage type (see Table 10, p. 93) - Platinum: +4 DR, +5 Constitution, and +3 to Catcher or Taunt Skills Items These are things that you use to help you with various challenges in the dungeon. Pull them out of your Inventory only when needed. You must be holding or wearing it to gain any Skill bonuses it grants. - Bronze: Your choice of 50 feet of rope, a bicycle, a canoe and paddle, or hang glider - Silver: Friendship Bracelet of [Race] kind (see p. 217) - Gold: A shiny accessory that grants +3 to your choice of Strength and Climbing Skill; Dexterity and' },
+];
+
+// The four things a spread hands you, in order. Spells may replace any of the
+// first three, but never the consumable (p. 116).
+const DCC_LOOT_SLOTS = [
+  { id: 'weapon', label: 'Weapon', spellsInstead: true },
+  { id: 'armor', label: 'Armor', spellsInstead: true },
+  { id: 'item', label: 'Item', spellsInstead: true },
+  { id: 'consumable', label: 'Consumable', spellsInstead: false },
+];
+const DCC_LOOT_TIERS = ['Bronze', 'Silver', 'Gold', 'Platinum'];
+
+// 1d12, for a Gold or Platinum weapon (Table 26).
+const DCC_WEAPON_UPGRADES = [
+  { roll:  1, text: 'Blazing… …of Burning On an Amazing Success, the target gains the Burned Debuff.' },
+  { roll:  2, text: 'Chilly Goat\'s… On an Amazing Success, the target gains the Stiff Legs Debuff. Weapon is frosty and cold.' },
+  { roll:  3, text: 'Potion Overload… On an Amazing Success, the target gains the Poisoned Debuff.' },
+  { roll:  4, text: '…of the Gods On an Amazing Success, the target gains the Woozy Debuff. Weapon grants access to Club Vanquisher.' },
+  { roll:  5, text: 'Screaming Caprid… On an Amazing Success, the target gains the Terrified Debuff. Weapon has a goat motif.' },
+  { roll:  6, text: 'Third Rail Special… On an Amazing Success, the target gains the Stunned Debuff. Weapon resembles train tracks.' },
+  { roll:  7, text: 'Telekinetic pea-shooting… On an Amazing Success, push the target 10 feet. Weapon has brain-patterns in it.' },
+  { roll:  8, text: 'Brain Boiling… On an Amazing Success, the target gains the Queasy Debuff. You sometimes hear a victim\'s dying thoughts.' },
+  { roll:  9, text: 'Skin-Slougher 5000… On an Amazing Success, the target gains the Blood Trail Debuff.' },
+  { roll: 10, text: 'Krakaren\'s Deluxe… You can spend AI Favor in combat for an additional attack with the weapon, but lose 1 Health Bar slot the first time you do it on the Floor, 2 HB slots the second time, 3 HB slots the third… you get it. This resets at the start of each Floor.' },
+  { roll: 11, text: 'Tongue Tied… On an Amazing Success, the target gains the Muted Debuff. The weapon looks like a tongue and you now have perpetually pruney hands.' },
+  { roll: 12, text: 'Accordion-Folding… On an Amazing Success, the (non-Boss) target suffers the Take Down Debuff. Lockpicking Skill; Intelligence and Fabricate Skill, Constitution and Survival Skill; or Charisma and Streetwise Skill - Platinum: +3 Skill Potion (permanent). Choose a Skill and gain 3 Ranks in it Consumables Consumables give a little more utility to your crawler, but only a few times. - Bronze: Your choice of 10 Healing Potions (heal 5 Health Bar slots), 10 Bandages (spend an Action to remove the Blood Trail Debuff), or 10 Torches (provides bright light for 20 feet and dim light for another 20 feet. It burns out in about an hour), or 1 stick of basic dynamite (1d6 Bludgeoning damage, 0ft Blast radius +5ft Splash) - Silver: Your choice of two Poison Antidotes, one Good Healing Potion (Heals 6 Health Bar slots), or one Stick of Good Goblin Dynamite (2d6 Bludgeoning damage, 5ft Blast radius +5ft Splash)' },
+];
+
+// 1d12 (Table 27). Every name here resolves in DCC_SPELLS; a test asserts it.
+const DCC_RANDOM_SPELLS = [
+  { roll:  1, spell: 'Astral Paw' },
+  { roll:  2, spell: 'Confusing Fog' },
+  { roll:  3, spell: 'Drain Life' },
+  { roll:  4, spell: 'Heal Others' },
+  { roll:  5, spell: 'Hole' },
+  { roll:  6, spell: 'Ice Blast' },
+  { roll:  7, spell: 'Lightning Bolt' },
+  { roll:  8, spell: 'Magic Missile' },
+  { roll:  9, spell: 'Puddle Jumper' },
+  { roll: 10, spell: 'Second Chance' },
+  { roll: 11, spell: 'Shield' },
+  { roll: 12, spell: 'Wisp Armor' },
+];
+
+// 1d6 picks the table, then 1d12 on it. Six times (p. 115).
+const DCC_EXPERIENCE_TABLES = [
+  { roll: 1, table: 29, title: 'Interactions with Other Crawlers', rolls: 12, page: 118 },
+  { roll: 2, table: 30, title: 'Twists of Fate', rolls: 12, page: 119 },
+  { roll: 3, table: 31, title: 'Mobs & Boss Battles', rolls: 12, page: 120 },
+  { roll: 4, table: 32, title: 'Strange Places', rolls: 12, page: 121 },
+  { roll: 5, table: 33, title: 'Traps & Accidents', rolls: 12, page: 122 },
+  { roll: 6, table: 34, title: 'Interview Show Experiences', rolls: 12, page: 123 },
+];
+const DCC_EXPERIENCE_COUNT = 6;

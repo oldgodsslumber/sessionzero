@@ -412,10 +412,16 @@ const DCC_SCREENS = [
     render: dccScreenTutorial,
     validate(c) {
       const fs = dccFloorStart(c), cfg = dccFloorCfg(c);
+      // Same order as the screen, so the message names the first thing you
+      // still have to do rather than something further down.
       if (!fs.bumps) return 'Roll your tutorial-floor Skill Ranks.';
-      if (fs.favor === null) return 'Roll your AI Favor.';
       const left = cfg.statPoints - dccPointsSpent(c);
       if (left > 0) return left + ' Stat points still unspent — Races and Classes check these.';
+      if (fs.favor === null) return 'Roll your AI Favor.';
+      if (!(fs.loot && fs.loot.spread)) return 'Roll for your Acquired Loot.';
+      if ((fs.experiences || []).length !== DCC_EXPERIENCE_COUNT) {
+        return 'Roll your six Tutorial Floor Experiences.';
+      }
       return true;
     },
   },
@@ -669,9 +675,7 @@ function dccScreenTutorial(ctx) {
        '<div class="label" style="margin:0">Popularity</div>' +
        '<div style="font-size:10px;color:var(--muted)">CHA Mod &times; 2</div></div></div></div>';
 
-  h += '<div class="card-sm" style="font-size:11px;color:var(--muted)">Still to come: the six Tutorial Floor ' +
-       'Experiences and your Acquired Loot, which need Tables 25&ndash;34. They are story hooks and starting ' +
-       'gear rather than Stats, so they can be added to a finished crawler later.</div>';
+  h += dccScreenLoot(ctx);
   return h;
 }
 
@@ -1013,4 +1017,143 @@ function dccStartingHotlist(char) {
     out.push({ name: 'Standard Mana Potion', qty: DCC_STARTING_SPELL_POTIONS });
   }
   return out;
+}
+
+// ─── screen 7, continued: Acquired Loot and the Tutorial Floor Experiences ──
+// What the Tutorial Floors left you holding, and what happened to you there.
+// The Experiences are rolled and recorded — table, result and page — but their
+// narrative stays in the book, which is where a story hook belongs.
+function dccLoot(char) {
+  const fs = dccFloorStart(char);
+  if (!fs.loot) fs.loot = { spread: null, slots: {}, upgrade: null };
+  if (!fs.experiences) fs.experiences = [];
+  return fs;
+}
+
+// A spread row reads "Platinum Weapon/Spells, Gold Armor/Spells, …". Pull the
+// tier out for each of the four slots rather than making the player parse it.
+function dccSpreadTiers(text) {
+  const out = {};
+  DCC_LOOT_SLOTS.forEach(slot => {
+    const re = new RegExp('(' + DCC_LOOT_TIERS.join('|') + ')\\s+' + slot.label, 'i');
+    const m = re.exec(text || '');
+    if (m) out[slot.id] = m[1];
+  });
+  return out;
+}
+
+function dccScreenLoot(ctx) {
+  const c = ctx.char, fs = dccLoot(c);
+  const spread = fs.loot.spread ? DCC_LOOT_SPREAD.find(r => r.roll === fs.loot.spread) : null;
+  const tiers = spread ? dccSpreadTiers(spread.text) : {};
+
+  let h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">' +
+    '<div class="pg-title" style="font-size:16px">Acquired Loot</div>' +
+    '<button class="btn btn-gold btn-xs" onclick="dccRollSpread()">' +
+    (spread ? 'Roll again' : 'Roll 1d4') + '</button></div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">' +
+    'What you were carrying when you reached the stairs. Spells can replace the weapon, ' +
+    'armor or item, but never the consumable.</div>';
+
+  if (!spread) {
+    h += '<div style="font-size:12px;color:var(--muted)">Not rolled yet.</div></div>';
+  } else {
+    h += '<div style="font-size:12px;margin-bottom:8px">' + esc(spread.text) + '</div>';
+    DCC_LOOT_SLOTS.forEach(slot => {
+      const tier = tiers[slot.id] || '—';
+      const val = (fs.loot.slots || {})[slot.id] || '';
+      h += '<div style="display:flex;gap:8px;align-items:center;padding:3px 0">' +
+        '<div style="width:88px;flex-shrink:0"><div style="font-size:12px;font-weight:700">' + esc(slot.label) + '</div>' +
+        '<div style="font-size:10px;color:var(--accent)">' + esc(tier) + '</div></div>' +
+        '<input style="flex:1" value="' + esc(val) + '" placeholder="What you took" ' +
+        'oninput="dccStoreLoot(\'' + slot.id + '\',this.value)">';
+      if (slot.spellsInstead) {
+        h += '<button class="btn btn-secondary btn-xs" onclick="dccRollLootSpell(\'' + slot.id + '\')">Spell instead</button>';
+      }
+      h += '</div>';
+    });
+    h += '<div style="font-size:10px;color:var(--muted);margin-top:4px">' +
+      'What each tier grants is on p.116 of the book.</div>';
+    const wt = (tiers.weapon || '').toLowerCase();
+    if (wt === 'gold' || wt === 'platinum') {
+      h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<div style="font-size:12px;font-weight:700">Scroll of Upgrade</div>' +
+        '<button class="btn btn-gold btn-xs" onclick="dccRollUpgrade()">Roll 1d12</button></div>' +
+        '<div style="font-size:10px;color:var(--muted)">A ' + esc(tiers.weapon) +
+        ' weapon comes with one (Table 26).</div>';
+      if (fs.loot.upgrade) {
+        const u = DCC_WEAPON_UPGRADES.find(x => x.roll === fs.loot.upgrade);
+        if (u) h += '<div style="font-size:12px;margin-top:4px">' + esc(u.text) + '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  // ── the six Experiences ──────────────────────────────────────────────────
+  const exp = fs.experiences || [];
+  h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">' +
+    '<div class="pg-title" style="font-size:16px">Tutorial Floor Experiences</div>' +
+    '<button class="btn btn-gold btn-xs" onclick="dccRollExperiences()">' +
+    (exp.length ? 'Roll again' : 'Roll all six') + '</button></div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">' +
+    'Six things that happened to you down there. 1d6 picks the table, 1d12 picks the result. ' +
+    'The app records which — read what it says in your book, and tell your GM: these are ' +
+    'the hooks they are meant to bring back.</div>';
+  if (!exp.length) {
+    h += '<div style="font-size:12px;color:var(--muted)">Not rolled yet.</div>';
+  } else {
+    exp.forEach((e, i) => {
+      h += '<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="width:22px;color:var(--muted);font-size:11px">' + (i + 1) + '</div>' +
+        '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">' + esc(e.title) + '</div>' +
+        '<div style="font-size:10px;color:var(--muted)">Table ' + e.table + ', roll ' + e.result +
+        ' &middot; p.' + e.page + '</div></div>' +
+        '<button class="btn btn-secondary btn-xs" onclick="dccRerollExperience(' + i + ')">Reroll</button></div>';
+    });
+    h += '<div style="font-size:10px;color:var(--muted);margin-top:6px">' +
+      'Some of these grant a Skill. Add it on the sheet once you have read the entry.</div>';
+  }
+  return h + '</div>';
+}
+
+function dccRollSpread() {
+  const fs = dccLoot(S.char);
+  fs.loot.spread = wizRoll(DCC_LOOT_SPREAD.length);
+  fs.loot.upgrade = null;
+  save(); wizRepaint();
+}
+function dccStoreLoot(slot, v) {            // store only; never repaint on typing
+  const fs = dccLoot(S.char);
+  fs.loot.slots = fs.loot.slots || {};
+  fs.loot.slots[slot] = v;
+  save();
+}
+function dccRollLootSpell(slot) {
+  const fs = dccLoot(S.char);
+  const row = DCC_RANDOM_SPELLS[Math.floor(Math.random() * DCC_RANDOM_SPELLS.length)];
+  fs.loot.slots = fs.loot.slots || {};
+  fs.loot.slots[slot] = row.spell + ' (Spell)';
+  save(); wizRepaint();
+}
+function dccRollUpgrade() {
+  dccLoot(S.char).loot.upgrade = wizRoll(DCC_WEAPON_UPGRADES.length);
+  save(); wizRepaint();
+}
+function dccRollOneExperience() {
+  const t = DCC_EXPERIENCE_TABLES[Math.floor(Math.random() * DCC_EXPERIENCE_TABLES.length)];
+  return { table: t.table, title: t.title, page: t.page, result: wizRoll(t.rolls || 12) };
+}
+function dccRollExperiences() {
+  const fs = dccLoot(S.char);
+  fs.experiences = [];
+  for (let i = 0; i < DCC_EXPERIENCE_COUNT; i++) fs.experiences.push(dccRollOneExperience());
+  save(); wizRepaint();
+}
+function dccRerollExperience(i) {
+  const fs = dccLoot(S.char);
+  if (!fs.experiences[i]) return;
+  fs.experiences[i] = dccRollOneExperience();
+  save(); wizRepaint();
 }

@@ -311,15 +311,18 @@ truncation.
 | 4 Stats | done |
 | 5 Scars | done |
 | 6 What you brought | done |
-| 7 The tutorial floors | done, except the six Experiences and Acquired Loot (Tables 25–34) |
+| 7 The tutorial floors | **done**, including Acquired Loot and the six Experiences |
 | 8 Race & Class | done — 30 Races, 52 Classes, prerequisite-gated, with a diff preview |
 | 9 Review | done |
 
 Two things are deliberately deferred rather than faked:
 
-- **The six Tutorial Floor Experiences and Acquired Loot** need Tables 25–34.
-  They are story hooks and starting gear rather than Stats, so they can be added
-  to a finished crawler later. Screen 7 says so on the screen.
+- ~~The six Tutorial Floor Experiences and Acquired Loot need Tables 25–34.~~
+  **Done.** Tables 25–27 are in the pack in full. Tables 29–34 are deliberately
+  **not**: their third column is narrative, and copying several pages of story
+  hooks into a fan tool is neither necessary nor right. The app rolls on them and
+  records which table, which result and which page; you read the hook in your own
+  book. A test asserts that only `table`, `title`, `result` and `page` are stored.
 - ~~A Spell-route crawler's primary attack is a Spell, and Spells are D7.~~
   **Closed.** The Spell catalogue landed in D7, so that route now produces a real
   Spell at Rank 3 carrying its +2d4 bump, Heal alongside it, and a Hotlist seeded

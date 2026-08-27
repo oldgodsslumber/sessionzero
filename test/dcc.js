@@ -599,6 +599,72 @@ function boot(entry) {
     const bonus = ev("S.char.blocks.stats.CON.bonus");
     return (bonus === 27 && base !== 27) || 'base=' + base + ' bonus=' + bonus;
   });
+  // ── Acquired Loot and the six Experiences ────────────────────────────────
+  check('[loot] the screen blocks until loot is rolled', () => {
+    const v = ev('wizValidate(S.char,6)');
+    return (v !== true && /Acquired Loot/i.test(String(v))) || 'got ' + v;
+  });
+  ev('dccRollSpread()');
+  check('[loot] a spread names a tier for all four slots', () => {
+    const roll = ev('S.char.dcc.floorStart.loot.spread');
+    const row = ev(`JSON.stringify(DCC_LOOT_SPREAD.find(r=>r.roll===${roll}))`);
+    const tiers = JSON.parse(ev(`JSON.stringify(dccSpreadTiers(${JSON.stringify(JSON.parse(row).text)}))`));
+    const missing = ['weapon', 'armor', 'item', 'consumable'].filter(k => !tiers[k]);
+    return missing.length ? 'no tier for ' + missing.join(', ') : true;
+  });
+  check('[loot] the four tiers on a spread are all different', () => {
+    for (let r = 1; r <= 4; r++) {
+      const row = JSON.parse(ev(`JSON.stringify(DCC_LOOT_SPREAD.find(x=>x.roll===${r}))`));
+      const t = JSON.parse(ev(`JSON.stringify(dccSpreadTiers(${JSON.stringify(row.text)}))`));
+      const vals = Object.keys(t).map(k => t[k]);
+      if (new Set(vals).size !== 4) return 'spread ' + r + ' repeats a tier: ' + vals.join(',');
+    }
+    return true;
+  });
+  check('[loot] rolling a Spell instead lands a real Spell in the slot', () => {
+    ev("dccRollLootSpell('item')");
+    const v = ev("S.char.dcc.floorStart.loot.slots.item");
+    const name = String(v).replace(' (Spell)', '');
+    return ev('!!dccSpellByName(' + JSON.stringify(name) + ')') || 'not a Spell: ' + v;
+  });
+  check('[loot] every Table 27 Spell resolves in the catalogue', () => {
+    const bad = ev(`JSON.stringify(DCC_RANDOM_SPELLS.filter(r=>!dccSpellByName(r.spell)).map(r=>r.spell))`);
+    return bad === '[]' || bad;
+  });
+  eq(ev('DCC_RANDOM_SPELLS.length'), 12, '[loot] Table 27 is a 1d12');
+  eq(ev('DCC_WEAPON_UPGRADES.length'), 12, '[loot] Table 26 is a 1d12');
+  eq(ev('DCC_LOOT_SPREAD.length'), 4, '[loot] Table 25 is a 1d4');
+
+  check('[experiences] the screen blocks until all six are rolled', () => {
+    const v = ev('wizValidate(S.char,6)');
+    return (v !== true && /Experiences/i.test(String(v))) || 'got ' + v;
+  });
+  ev('dccRollExperiences()');
+  check('[experiences] six are rolled, each naming a real table and page', () => {
+    const e = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.experiences)'));
+    if (e.length !== 6) return 'got ' + e.length;
+    const known = JSON.parse(ev('JSON.stringify(DCC_EXPERIENCE_TABLES.map(t=>t.table))'));
+    const bad = e.filter(x => known.indexOf(x.table) < 0 || !x.page || x.result < 1 || x.result > 12);
+    return bad.length ? 'bad entry: ' + JSON.stringify(bad[0]) : true;
+  });
+  check('[experiences] a reroll changes only the one you rerolled', () => {
+    const before = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.experiences)'));
+    ev('dccRerollExperience(2)');
+    const after = JSON.parse(ev('JSON.stringify(S.char.dcc.floorStart.experiences)'));
+    const changedElsewhere = before.filter((x, i) =>
+      i !== 2 && JSON.stringify(x) !== JSON.stringify(after[i]));
+    return changedElsewhere.length ? 'reroll disturbed entry ' + changedElsewhere.length : true;
+  });
+  eq(ev('DCC_EXPERIENCE_TABLES.length'), 6, '[experiences] 1d6 picks between six tables');
+  check('[experiences] the tables are 29 to 34', () =>
+    ev('DCC_EXPERIENCE_TABLES.map(t=>t.table).join(",")') === '29,30,31,32,33,34'
+    || ev('DCC_EXPERIENCE_TABLES.map(t=>t.table).join(",")'));
+  check('[experiences] no narrative prose was copied out of the book', () => {
+    // Only the table, its title, the roll and a page number are stored.
+    const keys = ev(`JSON.stringify(Object.keys(S.char.dcc.floorStart.experiences[0]).sort())`);
+    return keys === '["page","result","table","title"]' || 'stored: ' + keys;
+  });
+
   eq(ev('wizValidate(S.char,6)'), true, '[tutorial] satisfied');
 
   // screen 8 — Race & Class

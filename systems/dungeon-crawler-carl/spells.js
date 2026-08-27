@@ -15,7 +15,7 @@
 const DCC_SPELLS = [
   { id: 'air-buddy', name: 'Air Buddy', kind: 'utility', mana: 12, range: 'Self ward from your current position up to 10 × your INT Mod away. You land safely if you land on solid ground; other- wise, you fall (see p. 76). You can cast this twice in a row to “double jump” just like in platforming video games.', typeLine: 'Passive, Favored: Mage', needsReview: true, page: 202,
     upgrades: { 5: 'You may choose one additional willing target up to your size at touch range, who you bring with you.', 10: 'You can fly up to 20 × your INT Mod away with this spell.', 15: 'You may choose up to five additional willing targets up to your size at touch range to bring with you.' } },
-  { id: 'astral-paw-astral-hand-astral-claw', name: 'Astral Paw (Astral Hand, Astral Claw)', kind: 'utility', mana: 12, range: '30 feet', duration: 'Until the end of combat or 5 minutes. much like your own. You can use this astral appendage to manipulate objects up to 30ft away by spending an but suffer Disadvantage due to a lack of fine control.', page: 203,
+  { id: 'astral-paw', name: 'Astral Paw', aka: ['Astral Hand', 'Astral Claw'], kind: 'utility', mana: 12, range: '30 feet', duration: 'Until the end of combat or 5 minutes. much like your own. You can use this astral appendage to manipulate objects up to 30ft away by spending an but suffer Disadvantage due to a lack of fine control.', page: 203,
     upgrades: { 5: 'Your Pugilism and Slice Attacks with the Paw add 1 Astral Paw Rank damage die.', 10: 'You can conjure a paw up to four size categories larger than your own, and the range increases to 50 feet.', 15: 'The caster no longer suffers Disadvantage when performing suitable Skill Checks using the paw, and the duration is 15 minutes.' } },
   { id: 'bad-faith', name: 'Bad Faith', kind: 'utility', mana: 10, range: '40 feet ence invades your victim\'s mind, body, and soul.', typeLine: 'Attack, Necrotic, Charisma, Favored:', page: 203,
     upgrades: { 5: '+1d8 base damage, +5ft', 10: '+1d8 base damage, and end all Buffs on the victims for the duration of the combat.', 15: '+1d8 base damage, +5ft ter no longer suffers Disadvantage suitable Skill Checks using the paw, s 15 minutes. assified your prayers arisma, Favored: r dy, ft ase damage, on the victims for e combat.' } },
@@ -126,5 +126,6 @@ const DCC_SPELLS = [
 function dccSpell(id) { return DCC_SPELLS.find(s => s.id === id) || null; }
 function dccSpellByName(name) {
   const n = String(name || '').toLowerCase();
-  return DCC_SPELLS.find(s => s.name.toLowerCase() === n) || null;
+  return DCC_SPELLS.find(s => s.name.toLowerCase() === n
+    || (s.aka || []).some(a => a.toLowerCase() === n)) || null;
 }
