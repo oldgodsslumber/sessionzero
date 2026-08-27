@@ -3,7 +3,7 @@
 // (Royal Court Edition) with the page noted, so a failure means either the pack
 // is wrong or the book was misread — not that the test drifted.
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { loadAppHTML } = require('./loadapp');
+const { loadAppHTML, waitReady } = require('./loadapp');
 const CREATION_SKILLS = require('./fixtures-creation-skills');
 
 const fails = [], ok = [];
@@ -39,7 +39,7 @@ function boot(entry) {
     url: 'http://localhost/' + entry, virtualConsole: vc,
   });
   dom.window.alert = () => {}; dom.window.confirm = () => true;
-  return new Promise(res => setTimeout(() => res({ w: dom.window, errs }), 500));
+  return waitReady(dom.window).then(w => ({ w, errs }));
 }
 
 (async function () {
@@ -895,11 +895,18 @@ function boot(entry) {
     return n === 10 || 'Hotlist holds ' + n;
   });
   check('[gear] a Hotlist stack tops out at 999 and never drops below 1', () => {
-    ev("S.char.blocks.gear.hotlist=[{name:'Healing Potion',qty:1}];");
-    ev("for(let i=0;i<1200;i++)invQty('gear','hotlist',0,1);");
-    if (ev('S.char.blocks.gear.hotlist[0].qty') !== 999) return 'max is ' + ev('S.char.blocks.gear.hotlist[0].qty');
-    ev("for(let i=0;i<1200;i++)invQty('gear','hotlist',0,-1);");
-    return ev('S.char.blocks.gear.hotlist[0].qty') === 1 || 'min is ' + ev('S.char.blocks.gear.hotlist[0].qty');
+    // Driven at the boundaries. This used to walk the whole 1..999 range twice,
+    // 2,400 real invQty() calls each doing a save and a repaint — 12.4s, a
+    // sixth of the entire suite, to prove nothing the boundary values do not.
+    ev("S.char.blocks.gear.hotlist=[{name:'Healing Potion',qty:998}];");
+    ev("invQty('gear','hotlist',0,1);");
+    if (ev('S.char.blocks.gear.hotlist[0].qty') !== 999) return 'did not reach 999';
+    ev("invQty('gear','hotlist',0,1);");
+    if (ev('S.char.blocks.gear.hotlist[0].qty') !== 999) return 'went past 999';
+    ev("S.char.blocks.gear.hotlist[0].qty=2;invQty('gear','hotlist',0,-1);");
+    if (ev('S.char.blocks.gear.hotlist[0].qty') !== 1) return 'did not reach 1';
+    ev("invQty('gear','hotlist',0,-1);");
+    return ev('S.char.blocks.gear.hotlist[0].qty') === 1 || 'dropped below 1';
   });
 
   // list: unbounded

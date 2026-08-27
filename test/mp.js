@@ -7,7 +7,7 @@ const ROOT = path.join(__dirname, '..');
 const { JSDOM } = require('jsdom');
 const { makeBackend, makeFirebase } = require('./fakefb');
 
-const { loadAppHTML } = require('./loadapp');
+const { loadAppHTML, waitReady } = require('./loadapp');
 const HTML = loadAppHTML();
 const MPJS = fs.readFileSync(path.join(ROOT, 'core/mp.js'), 'utf8');
 const APPJS = fs.readFileSync(path.join(ROOT, 'core/app-mp.js'), 'utf8');
@@ -26,6 +26,21 @@ function check(name, fn) {
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
+// Multiplayer writes are debounced 350 ms so typing does not hammer the
+// database. Tests used to sleep past that debounce, which cost about seven
+// seconds across this file and still raced on a loaded machine. Ask each
+// client to send what it is holding instead, then give the backend's
+// listeners one turn of the event loop to fan out.
+const _clients = [];
+async function settle(turns) {
+  for (const c of _clients) {
+    try { await c.eval('typeof DC_MP_FLUSH==="function"?DC_MP_FLUSH():null'); } catch (e) {}
+  }
+  // Let the backend's listeners fan out. Each hop is a promise chain, so a
+  // handful of event-loop turns is plenty.
+  for (let i = 0; i < (turns || 4); i++) await wait(0);
+}
+
 function makeClient(backend, user, universeSeed) {
   const dom = new JSDOM(HTML, {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
@@ -37,14 +52,17 @@ function makeClient(backend, user, universeSeed) {
   const w = dom.window;
   w.fetch = w.fetch || (() => Promise.reject(new Error('network disabled in tests')));
   w.alert = () => {}; w.confirm = () => true;
-  return new Promise(res => setTimeout(() => {
+  // The app boots synchronously during JSDOM construction, so poll for
+  // readiness rather than sleeping 400 ms per client and hoping.
+  return waitReady(w).then(() => {
     w.firebase = makeFirebase(backend, user);
     w.eval(MPJS);
     w.eval(APPJS);
     w.FIREBASE_CONFIG = { apiKey: 'fake', databaseURL: 'fake' };
     w.DC_BOOT_MP(w.FIREBASE_CONFIG);
-    setTimeout(() => res(w), 60);
-  }, 400));
+    // The auth callback is dispatched on a 0 ms timer; one turn of the loop.
+    return new Promise(res => setTimeout(() => res(w), 0));
+  });
 }
 const seed = name => ({ version: 2, activeUniverseId: 'u_local', universes: [{ id: 'u_local', name, created: 1, roster: [], lore: [] }] });
 
@@ -64,6 +82,7 @@ const CHAR = n => ({
 
   const gm = await makeClient(backend, gmUser, seed('GM World'));
   const pl = await makeClient(backend, plUser, seed('Player World'));
+  _clients.push(gm, pl);
 
   // ═══ CREATE + JOIN ═══
   let code = null;
@@ -73,14 +92,14 @@ const CHAR = n => ({
   check('GM recorded on meta', () => backend._raw('universes/' + code + '/meta').gmUid === 'uid_gm');
 
   await gm.eval('DC_MP._enter("' + code + '","Earth-77")');
-  await wait(80);
+  await settle();
   check('GM is in shared mode', () => gm.eval('DC_MP._state().inShared') === true);
   check('GM is recognised as GM', () => gm.eval('MP.isGM()') === true);
   check('local mirror carries the remote code', () => gm.eval('currentUniverse().remoteCode') === code);
 
   try { await pl.eval('MP.joinUniverse("' + code + '")'); } catch (e) { fails.push('join -> ' + e.message); }
   await pl.eval('DC_MP._enter("' + code + '","Earth-77")');
-  await wait(80);
+  await settle();
   check('player joined', () => pl.eval('DC_MP._state().inShared') === true);
   check('player is NOT GM', () => pl.eval('MP.isGM()') === false);
   check('both members listed', () => Object.keys(backend._raw('universes/' + code + '/members')).length === 2);
@@ -88,7 +107,7 @@ const CHAR = n => ({
 
   // ═══ SERIES TRAVELS WITH THE UNIVERSE ═══
   await gm.eval('currentUniverse().series={tone:"fourcolor",level:"mightiest"};saveUniverses();mpPushUniverseSeries();');
-  await wait(400);
+  await settle();
   check('GM series reaches the meta', () => {
     // Pack-specific world settings now travel under meta.packMeta, so the shared
     // meta shape stays the same for every game. Daring Comics puts tone/level
@@ -136,7 +155,7 @@ const CHAR = n => ({
     pl.eval('getSeriesConfig().tone.id') === 'fourcolor' &&
     pl.eval('getSeriesConfig().level.id') === 'mightiest');
   await pl.eval('S.series.experience="new";save();');
-  await wait(300);
+  await settle();
   check('player keeps their OWN experience level', () => pl.eval('getSeriesConfig().exp.id') === 'new');
   check("player's experience does not leak to the GM", () => gm.eval('S.series.experience') !== 'new');
   check('a player cannot rewrite the shared series', () => {
@@ -150,7 +169,7 @@ const CHAR = n => ({
     saveLoreEntry(Object.assign(blankLoreEntry('character'),{name:'Mayor Crane',body:'Runs the city.',secret:'She leads the cult.'}));
     saveLoreEntry(Object.assign(blankLoreEntry('plot'),{name:'The Cathedral Job',body:'The real plan.',hidden:true}));
   `);
-  await wait(500);
+  await settle();
 
   check('public entry stored in lore/', () => {
     const l = backend._raw('universes/' + code + '/lore') || {};
@@ -174,7 +193,7 @@ const CHAR = n => ({
     return Object.values(g).some(e => e.secret === 'She leads the cult.');
   });
 
-  await wait(300);
+  await settle();
   check('PLAYER never receives the hidden entry', () =>
     !pl.eval('JSON.stringify(listLore())').includes('Cathedral Job'));
   check('PLAYER never receives the secret text', () =>
@@ -202,7 +221,7 @@ const CHAR = n => ({
     await MP.revealLore(e.id,e);
     e.hidden=false;e.secret='';saveLoreEntry(e);
   })()`);
-  await wait(400);
+  await settle();
   check('revealed entry moves into lore/', () => {
     const l = backend._raw('universes/' + code + '/lore') || {};
     return Object.values(l).some(e => e.name === 'The Cathedral Job');
@@ -220,7 +239,7 @@ const CHAR = n => ({
       consequences:{mild:'',moderate:'',severe:''}}));
     saveUniverses();
   `);
-  await wait(500);
+  await settle();
   check('roster entry reaches the player', () => pl.eval('JSON.stringify(S.npcs)').includes('Doctor Malice'));
   check('roster entry carries attribution', () => {
     const r = backend._raw('universes/' + code + '/roster') || {};
@@ -232,7 +251,7 @@ const CHAR = n => ({
     var n=S.npcs.find(function(x){return x.name==='Doctor Malice'});
     n.desc='Edited by the player';saveUniverses();
   `);
-  await wait(500);
+  await settle();
   check('player edit flows back to the GM', () => gm.eval('JSON.stringify(S.npcs)').includes('Edited by the player'));
   check('attribution updates to the editor', () => {
     const r = backend._raw('universes/' + code + '/roster') || {};
@@ -242,7 +261,7 @@ const CHAR = n => ({
   // ═══ SOFT DELETE + RESTORE ═══
   const malId = gm.eval('(S.npcs.find(function(x){return x.name==="Doctor Malice"})||{}).id');
   await pl.eval(`var i=S.npcs.findIndex(function(x){return x.name==='Doctor Malice'});S.npcs.splice(i,1);saveUniverses();`);
-  await wait(500);
+  await settle();
   check('delete is a tombstone, not a purge', () => {
     const r = backend._raw('universes/' + code + '/roster/' + malId);
     return !!(r && r.deletedAt && r.name === 'Doctor Malice');
@@ -250,21 +269,21 @@ const CHAR = n => ({
   check('deleted entry disappears for the GM too', () => !gm.eval('JSON.stringify(S.npcs)').includes('Doctor Malice'));
   check('GM sees it in recently deleted', () => !!gm.eval('DC_MP._state().tomb.roster["' + malId + '"]'));
   await gm.eval('MP.restoreRoster("' + malId + '")');
-  await wait(400);
+  await settle();
   check('restore brings it back for everyone', () =>
     gm.eval('JSON.stringify(S.npcs)').includes('Doctor Malice') &&
     pl.eval('JSON.stringify(S.npcs)').includes('Doctor Malice'));
 
   check('reassigning S.npcs still syncs (re-alias guard)', () => true);
   await pl.eval(`S.npcs=S.npcs.concat([ensureId({type:'nameless',name:'Thug A',obstacle:'+2',stress:[false]})]);saveUniverses();`);
-  await wait(500);
+  await settle();
   check('entry added via S.npcs reassignment reaches the GM', () => gm.eval('JSON.stringify(S.npcs)').includes('Thug A'));
   check('reassignment did not orphan the roster alias', () => pl.eval('S.npcs===currentUniverse().roster') === true);
 
   // ═══ HEROES ═══
   await gm.eval('S.char=' + JSON.stringify(CHAR('Ironclad')) + ';save();');
   await pl.eval('S.char=' + JSON.stringify(CHAR('Nightjar')) + ';save();');
-  await wait(600);
+  await settle();
   check('each hero is stored under its owner', () => {
     const h = backend._raw('universes/' + code + '/heroes') || {};
     return h.uid_gm && h.uid_gm.costumedName === 'Ironclad' && h.uid_pl && h.uid_pl.costumedName === 'Nightjar';
@@ -280,22 +299,22 @@ const CHAR = n => ({
 
   // ═══ TABLE STATE ═══
   await pl.eval('S.dice={skill:"Fight",skillVal:3,mod:0,dice:[1,2,3,4],diceSum:10,total:13};MP.appendRoll({name:"Nightjar",skill:"Fight",total:13,dice:[1,2,3,4]})');
-  await wait(300);
+  await settle();
   check('roll reaches the GM feed', () => {
     const f = gm.eval('JSON.stringify(DC_MP._state().rollFeed)');
     return f.includes('Nightjar') && f.includes('13');
   });
   await gm.eval('S.conflict={active:true,zones:["Rooftop"],turnOrder:[],currentTurn:0,round:2,log:[]};save();');
-  await wait(600);
+  await settle();
   check('conflict tracker syncs to the player', () => pl.eval('S.conflict&&S.conflict.round') === 2);
   await gm.eval('MP.appendNote({type:"scene",title:"The docks",body:"They found the crate."})');
-  await wait(300);
+  await settle();
   check('notes sync to the player', () => pl.eval('JSON.stringify(S.notes)').includes('The docks'));
 
   // ═══ ECHO SUPPRESSION ═══
   const before = Object.keys(backend._raw('universes/' + code + '/roster') || {}).length;
   const w1 = JSON.stringify(backend._raw('universes/' + code + '/roster'));
-  await wait(900); // let any feedback loop run
+  await settle(); await settle(); // and let any feedback loop run
   const w2 = JSON.stringify(backend._raw('universes/' + code + '/roster'));
   check('no push/receive feedback loop', () => {
     const a = JSON.parse(w1), b = JSON.parse(w2);
@@ -306,7 +325,7 @@ const CHAR = n => ({
 
   // ═══ LEAVE / DELETE ═══
   await pl.eval('DC_MP._leave()');
-  await wait(100);
+  await settle();
   check('player leaves shared mode', () => pl.eval('DC_MP._state().inShared') === false);
   check("player keeps a local copy of the world", () =>
     pl.eval('JSON.stringify(listLore())').includes('Harrow Bay'));

@@ -255,7 +255,7 @@ function renderNPCStuntBrowser(){
   const filtered=SAMPLE_STUNTS.filter(s=>{if(q&&!s.name.toLowerCase().includes(q)&&!s.desc.toLowerCase().includes(q))return false;if(sf&&s.skill!==sf)return false;return true;});
   const skillFilters=['All',...[...new Set(SAMPLE_STUNTS.map(s=>s.skill))].sort()];
   let h=`<div class="card" style="border-color:var(--accent)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="label" style="margin:0">Sample Stunts</div><button class="btn btn-secondary btn-xs" onclick="_npcStuntBrowseOpen=false;renderFullNPCEditor()">Close</button></div>`;
-  h+=`<input id="npc-stunt-search" placeholder="Search stunts..." value="${esc(_npcStuntSearch)}" oninput="_npcStuntSearch=this.value;renderFullNPCEditor();_refocus('npc-stunt-search')" style="margin-bottom:6px;font-size:12px;padding:7px">`;
+  h+=`<input id="npc-stunt-search" placeholder="Search stunts..." value="${esc(_npcStuntSearch)}" oninput="_npcStuntSearch=this.value;renderFullNPCEditor();_refocus('npc-stunt-search',this.selectionStart)" style="margin-bottom:6px;font-size:12px;padding:7px">`;
   h+=`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">${skillFilters.map(f=>`<button class="btn btn-xs ${(f==='All'&&!sf)||sf===f?'btn-primary':'btn-secondary'}" onclick="_npcStuntSkillFilter='${f==='All'?'':f}';renderFullNPCEditor()" style="font-size:10px;padding:3px 7px">${f}</button>`).join('')}</div>`;
   h+=`<div style="max-height:40vh;overflow-y:auto">`;
   const existing=(S._npcDraft.stunts||[]).map(s=>s.name);

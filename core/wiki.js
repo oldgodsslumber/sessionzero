@@ -202,7 +202,7 @@ function renderWiki(){
   h+=`</div>`;
 
   // Browse controls
-  h+=`<input id="wiki-search" type="search" placeholder="Search names, aliases, tags, text…" value="${esc(_wikiQuery)}" oninput="_wikiQuery=this.value;renderWiki();_refocus('wiki-search')" style="margin-bottom:6px">`;
+  h+=`<input id="wiki-search" type="search" placeholder="Search names, aliases, tags, text…" value="${esc(_wikiQuery)}" oninput="_wikiQuery=this.value;renderWiki();_refocus('wiki-search',this.selectionStart)" style="margin-bottom:6px">`;
   h+=`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">`;
   h+=`<button class="btn btn-xs ${_wikiType?'btn-secondary':'btn-primary'}" onclick="_wikiType='';renderWiki()" style="font-size:10px;padding:3px 7px">All (${all.filter(e=>e.hidden?_wikiShowHidden:true).length})</button>`;
   LORE_TYPES.forEach(function(t){

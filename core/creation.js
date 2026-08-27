@@ -384,8 +384,11 @@ function pickSampleStunt(name){
   save();renderCreationStep();
 }
 
-// Restore focus + caret position to an input after a re-render replaces it
-function _refocus(id){requestAnimationFrame(()=>{const el=document.getElementById(id);if(el&&el!==document.activeElement){el.focus();const len=el.value.length;try{el.setSelectionRange(len,len);}catch(e){}}});}
+// Restore focus + caret to an input after a re-render replaced it. `pos` is the
+// caret offset read off the OLD element by the handler, before the repaint;
+// without it the caret used to snap to the end of the value, so editing a typo
+// in the middle of a search box threw you to the end on the next keystroke.
+function _refocus(id,pos){requestAnimationFrame(()=>{const el=document.getElementById(id);if(el&&el!==document.activeElement){el.focus();const at=typeof pos==='number'?Math.min(pos,el.value.length):el.value.length;try{el.setSelectionRange(at,at);}catch(e){}}});}
 
 // Resolve which skill to roll for a power. Multi-skill controlling powers
 // (e.g. "Magic/Mental/Power") use the player's chosen pw.controllingSkill,

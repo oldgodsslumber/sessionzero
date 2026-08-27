@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const { JSDOM } = require('jsdom');
-const { loadAppHTML } = require('./loadapp');
+const { loadAppHTML, waitReady } = require('./loadapp');
 const HTML = loadAppHTML();
 
 const fails = [], ok = [];
@@ -49,7 +49,7 @@ function legacySeed(ls) {
 (async () => {
   // ═══ MIGRATION ═══
   {
-    const w = mk(legacySeed); await wait(500);
+    const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'migrate');
     check('all 3 legacy slots became save files', 'return listSaves().length===3');
     check('names survived', 'var n=listSaves().map(function(s){return s.name}).sort();return n.join(",")==="Alpha,Beta,Gamma"');
@@ -68,7 +68,7 @@ function legacySeed(ls) {
 
   // ═══ FRESH INSTALL (no legacy data at all) ═══
   {
-    const w = mk(null); await wait(500);
+    const w = mk(null); await waitReady(w);
     const check = checker(w, 'fresh');
     check('universe gate shown, no saves yet', 'return listSaves().length===0');
     check('creating a universe boots cleanly', '_uniPick("tone","fourcolor","");_uniPick("level","superheroic","");document.getElementById("uni-name").value="New World";submitUniverseSetup();return loadUniverses().universes.length===1');
@@ -78,7 +78,7 @@ function legacySeed(ls) {
 
   // ═══ GROWING LIST + CRUD ═══
   {
-    const w = mk(legacySeed); await wait(500);
+    const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'crud');
     check('past 10 saves without a cap', 'for(var i=0;i<25;i++){var st=defaultState();st.universeId="u_test";st.char={costumedName:"Hero "+i,aspects:{concept:"c",motivation:"m",contingent:[{cat:"",text:""},{cat:"",text:""},{cat:"",text:""}]},consequences:{mild:"",moderate:"",severe:""},stress:{physical:[],mental:[]},supportingCast:[],roguesGallery:[],refresh:5,fatePoints:5,activeForm:0,gear:"",forms:[],skills:{},stunts:[]};createSave(st)}return listSaves().length===28');
     check('order array matches save count', 'return SV.order.length===28&&Object.keys(SV.saves).length===28');
@@ -96,7 +96,7 @@ function legacySeed(ls) {
 
   // ═══ SUMMARY ACCURACY ═══
   {
-    const w = mk(legacySeed); await wait(500);
+    const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'summary');
     check('in-creation save reports its step', 'var st=defaultState();st.universeId="u_test";st.creation.step=3;st.creation.costumedName="Halfway";var id=createSave(st);var s=getSaveSummary(id);return s.started===false&&s.step===3&&s.name==="Halfway"');
     check('creation step renders as a label', 'openSlotModal();return document.getElementById("slot-modal-body").innerHTML.indexOf("step 4 of 7 (Cast)")>=0');
@@ -108,7 +108,7 @@ function legacySeed(ls) {
 
   // ═══ INDEX DRIFT REPAIR ═══
   {
-    const w = mk(legacySeed); await wait(500);
+    const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'repair');
     check('orphan blob (import from another tab) is adopted', 'var st=defaultState();st.universeId="u_test";st.char={costumedName:"Orphan",aspects:{concept:"c",motivation:"m",contingent:[{cat:"",text:""},{cat:"",text:""},{cat:"",text:""}]},consequences:{mild:"",moderate:"",severe:""},stress:{physical:[],mental:[]},supportingCast:[],roguesGallery:[],refresh:5,fatePoints:5,activeForm:0,gear:"",forms:[],skills:{},stunts:[]};localStorage.setItem("dc_save_s_orphan",JSON.stringify(st));return saveIndexHealthy()===false');
     check('rebuild picks it up', 'rebuildSaveIndex();return listSaves().some(function(s){return s.name==="Orphan"})&&saveIndexHealthy()');
@@ -120,7 +120,7 @@ function legacySeed(ls) {
 
   // ═══ QUOTA ═══
   {
-    const w = mk(legacySeed); await wait(500);
+    const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'quota');
     w.eval('window._realSet=Storage.prototype.setItem;window._full=function(k,v){if(String(k).indexOf("dc_save_")===0){var e=new Error("full");e.name="QuotaExceededError";throw e}return window._realSet.call(this,k,v)};');
     check('write failure returns false, not a false success', 'Storage.prototype.setItem=window._full;var r=writeSave(currentSaveId,S);Storage.prototype.setItem=window._realSet;return r===false');
@@ -132,7 +132,7 @@ function legacySeed(ls) {
 
   // ═══ UNIVERSE INTERPLAY + NPC EXPORT + IMPORT ═══
   {
-    const w = mk(legacySeed); await wait(500);
+    const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'universe');
     check('list scopes to the current universe', 'var u2=createUniverse("Other");var st=defaultState();st.universeId=u2.id;st.char={costumedName:"Elsewhere",aspects:{concept:"c",motivation:"m",contingent:[{cat:"",text:""},{cat:"",text:""},{cat:"",text:""}]},consequences:{mild:"",moderate:"",severe:""},stress:{physical:[],mental:[]},supportingCast:[],roguesGallery:[],refresh:5,fatePoints:5,activeForm:0,gear:"",forms:[],skills:{},stunts:[]};createSave(st);return listSaves("u_test").length===3&&listSaves(u2.id).length===1');
     check('modal footnote counts other universes', 'openSlotModal();return /1 more character/.test(document.getElementById("slot-modal-body").innerHTML)');

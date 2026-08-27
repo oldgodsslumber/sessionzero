@@ -8,7 +8,13 @@ function renderConflict(){
       S.conflict=SYS.combat.init?SYS.combat.init():{systemId:SYS.id,active:false};
       S.conflict.systemId=SYS.id;
     }
+    // Every pip click repaints the whole tab. Rebuilding the markup resets the
+    // scroll position, which in a long fight throws the reader back to the top
+    // of the combatant list on each spent Action — so put it back.
+    const top=el.scrollTop,ptop=(el.parentElement||{}).scrollTop;
     el.innerHTML=SYS.combat.render({state:S.conflict,floor:S.floor||3});
+    el.scrollTop=top;
+    if(el.parentElement)el.parentElement.scrollTop=ptop;
     return;
   }
   const c=S.conflict;

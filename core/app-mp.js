@@ -464,7 +464,7 @@
       if(u&&typeof S!=='undefined'&&S&&Array.isArray(S.npcs)&&S.npcs!==u.roster){
         u.roster=S.npcs;
       }
-      clearTimeout(_pushT);_pushT=setTimeout(function(){_pushShared(false);},350);
+      clearTimeout(_pushT);_pushT=setTimeout(function(){_pushT=null;_pushShared(false);},350);
     };
 
     // save() covers the hero sheet plus the shared table state.
@@ -474,10 +474,28 @@
       if(!inShared||_applyingRemote)return;
       clearTimeout(_heroT);
       _heroT=setTimeout(function(){
+        _heroT=null;
         _pushHero();
         if(S.conflict)MP.writeConflict(S.conflict).catch(function(){});
         if(S.regions)MP.writeRegions(S.regions,S.activeRegion).catch(function(){});
       },350);
+    };
+
+    // Send whatever the 350 ms debounce is still holding, right now, and hand
+    // back a promise that settles once those writes are through. Tests await
+    // this instead of sleeping past the debounce; it is also the honest thing
+    // to call if we ever wire up a beforeunload handler.
+    window.DC_MP_FLUSH=function(){
+      const jobs=[];
+      const swallow=function(p){return p&&p.catch?p.catch(function(){}):Promise.resolve();};
+      if(_pushT){clearTimeout(_pushT);_pushT=null;jobs.push(swallow(_pushShared(false)));}
+      if(_heroT){
+        clearTimeout(_heroT);_heroT=null;
+        jobs.push(swallow(_pushHero()));
+        if(S.conflict)jobs.push(swallow(MP.writeConflict(S.conflict)));
+        if(S.regions)jobs.push(swallow(MP.writeRegions(S.regions,S.activeRegion)));
+      }
+      return Promise.all(jobs);
     };
 
     // Dice → shared feed, stamped with the HERO's name rather than the Google

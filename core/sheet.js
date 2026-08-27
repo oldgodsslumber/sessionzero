@@ -107,7 +107,7 @@ function renderGB(){
   const cats=['All','Melee','Ranged','Thrown','Armor','Utility'];
   const filtered=GEAR.filter(g=>{if(cf&&g.cat!==cf)return false;if(q&&!g.name.toLowerCase().includes(q)&&!(g.desc||'').toLowerCase().includes(q))return false;return true;});
   let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="pg-title" style="font-size:20px">Gear</div><button class="btn btn-secondary btn-xs" onclick="closeGB()">Close</button></div>`;
-  h+=`<input id="gb-search" placeholder="Search gear..." value="${esc(_gbSearch)}" oninput="_gbSearch=this.value;renderGB();_refocus('gb-search')" style="margin-bottom:8px">`;
+  h+=`<input id="gb-search" placeholder="Search gear..." value="${esc(_gbSearch)}" oninput="_gbSearch=this.value;renderGB();_refocus('gb-search',this.selectionStart)" style="margin-bottom:8px">`;
   h+=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">${cats.map(c=>`<button class="btn btn-xs ${(c==='All'&&!cf)||cf===c?'btn-primary':'btn-secondary'}" onclick="_gbCat='${c==='All'?'':c}';renderGB()">${c}</button>`).join('')}</div>`;
   h+=`<div style="max-height:55vh;overflow-y:auto">`;
   filtered.forEach(g=>{

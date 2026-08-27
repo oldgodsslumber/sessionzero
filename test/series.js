@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const { JSDOM } = require('jsdom');
-const { loadAppHTML } = require('./loadapp');
+const { loadAppHTML, waitReady } = require('./loadapp');
 const HTML = loadAppHTML();
 
 const fails = [], ok = [];
@@ -39,7 +39,7 @@ const CH = { costumedName: 'Ironclad', civilianName: 'M W', heroId: 'h1',
 (async () => {
   // ═══ FIRST-RUN GATE ═══
   {
-    const w = mk(null); await wait(500);
+    const w = mk(null); await waitReady(w);
     const check = checker(w, 'gate');
     check('gate modal is open and locked', 'var m=document.getElementById("universe-modal");return m.classList.contains("open")&&m.classList.contains("locked")');
     check('gate offers a way to join a shared universe', 'return document.getElementById("universe-modal-body").innerHTML.indexOf("Join a Shared Universe")>=0');
@@ -56,7 +56,7 @@ const CH = { costumedName: 'Ironclad', civilianName: 'M W', heroId: 'h1',
 
   // ═══ SERIES RESOLUTION ═══
   {
-    const w = mk(null); await wait(500);
+    const w = mk(null); await waitReady(w);
     const check = checker(w, 'series');
     w.eval('_uniPick("tone","fourcolor","");_uniPick("level","superheroic","");document.getElementById("uni-name").value="E77";submitUniverseSetup();');
     w.eval('newSavePrompt();S.series.experience="ropes";save();');
@@ -81,7 +81,7 @@ const CH = { costumedName: 'Ironclad', civilianName: 'M W', heroId: 'h1',
 
   // ═══ CREATION STEP 0 ═══
   {
-    const w = mk(null); await wait(500);
+    const w = mk(null); await waitReady(w);
     const check = checker(w, 'step0');
     w.eval('_uniPick("tone","dark","");_uniPick("level","urban","");document.getElementById("uni-name").value="Noir";submitUniverseSetup();newSavePrompt();S.creation.step=0;renderCreationStep();');
     const html = () => w.document.getElementById('hero-creation').innerHTML;

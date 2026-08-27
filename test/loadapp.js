@@ -47,4 +47,25 @@ function loadAppHTML(entryFile) {
     });
 }
 
-module.exports = { loadAppHTML, DEFAULT_ENTRY };
+// Wait until the app is actually usable, rather than sleeping a fixed 500 ms.
+// The boot IIFE runs synchronously during JSDOM construction, so in practice
+// this returns on the first poll; the timeout only matters if that ever stops
+// being true, in which case a suite should fail loudly rather than silently
+// race.
+function waitReady(win, ready, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 500);
+  const test = ready || (w => typeof w.showTab === 'function' && !!w.document.getElementById('nav'));
+  return new Promise((resolve, reject) => {
+    (function poll() {
+      let ok = false;
+      try { ok = !!test(win); } catch (e) { ok = false; }
+      if (ok) return resolve(win);
+      if (Date.now() > deadline) {
+        return reject(new Error('app never became ready within ' + (timeoutMs || 500) + 'ms'));
+      }
+      setTimeout(poll, 5);
+    })();
+  });
+}
+
+module.exports = { loadAppHTML, DEFAULT_ENTRY, waitReady };
