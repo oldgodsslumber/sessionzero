@@ -259,6 +259,29 @@ Extends the D0–D2 crawler:
 
 ---
 
+## 6a. Errata found while extracting (D5 data)
+
+Two rows of Table 14 print a Stat that contradicts the book's own Skill entry:
+
+| Row | Table prints | Skill entry says |
+|---|---|---|
+| 6, Gig Worker — Escape Artist | STR | **DEX** |
+| 7, Teacher — Performance | INT | **CHA** |
+
+The PDF and the markdown print the same thing in both cases, so this is errata
+in the book, not extraction damage. The pack uses the **Skill entry's** Stat —
+that is where a Skill's Stat is defined; the parenthetical in a background table
+is a reminder — and keeps the printed value in a `printedStat` field so the
+discrepancy is visible rather than silently resolved. `test/dcc.js` asserts the
+errata set exactly, so a third case appearing later fails the build instead of
+slipping through.
+
+Also confirmed while extracting: **human background tables are 1d12, animal
+tables are 1d6.** Tables 16–19 have six rows each, which is the book, not a
+truncation.
+
+---
+
 ## 7. Open questions
 
 1. **Floor-1 start.** The Starter Set covers Tutorial Floors 1–2 and we don't have

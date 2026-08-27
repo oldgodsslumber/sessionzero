@@ -332,6 +332,96 @@ function boot(entry) {
     return ev('S.char.blocks.skills.skills[0].rank') === 15 || 'cap was ' + ev('S.char.blocks.skills.skills[0].rank');
   });
 
+  // ── creation tables (D5 data) ────────────────────────────────────────────
+  check('[creation] human backgrounds are 1d12, animal are 1d6', () => {
+    const bad = [];
+    ['childhood', 'adolescence', 'career', 'hobby'].forEach(st => {
+      const h = ev(`DCC_BACKGROUNDS.human.${st}.rows.length`);
+      const a = ev(`DCC_BACKGROUNDS.animal.${st}.rows.length`);
+      if (h !== 12) bad.push('human ' + st + '=' + h);
+      if (a !== 6) bad.push('animal ' + st + '=' + a);
+    });
+    return bad.length ? bad.join(', ') : true;
+  });
+  check('[creation] every background row offers exactly three Skills', () => {
+    const bad = ev(`JSON.stringify(Object.keys(DCC_BACKGROUNDS).flatMap(sp=>
+      Object.keys(DCC_BACKGROUNDS[sp]).flatMap(st=>
+        DCC_BACKGROUNDS[sp][st].rows.filter(r=>r.skills.length!==3)
+          .map(r=>sp+'/'+st+'/'+r.roll))))`);
+    return bad === '[]' || bad;
+  });
+  check('[creation] every background Skill exists in the catalogue', () => {
+    const bad = ev(`JSON.stringify([...new Set(Object.keys(DCC_BACKGROUNDS).flatMap(sp=>
+      Object.keys(DCC_BACKGROUNDS[sp]).flatMap(st=>
+        DCC_BACKGROUNDS[sp][st].rows.flatMap(r=>r.skills.map(x=>x.s)))))]
+      .filter(n=>!dccSkillByName(n)))`);
+    return bad === '[]' || 'orphans: ' + bad;
+  });
+  // Two Table 14 rows print a Stat that contradicts the book's own Skill entry.
+  // The PDF and the markdown print the same thing, so it is errata, not damage.
+  // The catalogue wins, and the printed value is kept alongside it.
+  check('[creation] rows use the catalogue Stat, recording what the book printed', () => {
+    const errata = ev(`JSON.stringify(Object.keys(DCC_BACKGROUNDS).flatMap(sp=>
+      Object.keys(DCC_BACKGROUNDS[sp]).flatMap(st=>
+        DCC_BACKGROUNDS[sp][st].rows.flatMap(r=>r.skills.filter(x=>x.printedStat)
+          .map(x=>x.s+':'+x.printedStat+'->'+x.st)))))`);
+    return errata === '["Escape Artist:STR->DEX","Performance:INT->CHA"]'
+      || 'errata set changed: ' + errata;
+  });
+  check('[creation] no row disagrees with the catalogue without being flagged', () => {
+    const bad = ev(`JSON.stringify(Object.keys(DCC_BACKGROUNDS).flatMap(sp=>
+      Object.keys(DCC_BACKGROUNDS[sp]).flatMap(st=>
+        DCC_BACKGROUNDS[sp][st].rows.flatMap(r=>r.skills.filter(x=>{
+          var c=dccSkillByName(x.s);
+          return c && c.stat && x.st!=='None' && c.stat!==x.st;
+        }).map(x=>x.s)))))`);
+    return bad === '[]' || bad;
+  });
+  eq(ev('DCC_BACKGROUNDS.human.childhood.rank'), 1, '[creation] childhood Skills start at Rank 1');
+  eq(ev('DCC_BACKGROUNDS.human.career.rank'), 3, '[creation] career Skills start at Rank 3');
+  eq(ev("DCC_BACKGROUNDS.human.childhood.rows[0].description"), 'Latchkey Kid',
+     '[creation] the first childhood row matches the book');
+
+  ['pastTrauma', 'looseEnd', 'regret'].forEach(t =>
+    eq(ev(`DCC_STORY_TABLES.${t}.length`), 12, '[creation] ' + t + ' is a 1d12 table'));
+  check('[creation] story entries are whole sentences, not fragments', () => {
+    const bad = ev(`JSON.stringify(Object.keys(DCC_STORY_TABLES).flatMap(k=>
+      DCC_STORY_TABLES[k].filter(r=>!r.text||r.text.length<10).map(r=>k+'/'+r.roll)))`);
+    return bad === '[]' || bad;
+  });
+
+  // Step 2's weapon lists must match the book exactly (p. 106).
+  eq(ev(`DCC_WEAPON_CATEGORIES.find(c=>c.category==='Bashing Weapon').skills.join(', ')`),
+     'Club, Improvised Weapons, Warhammer', '[creation] bashing weapons match the book');
+  eq(ev(`DCC_WEAPON_CATEGORIES.find(c=>c.category==='Edged Weapon').skills.join(', ')`),
+     'Axe, Dagger, Longsword, Rapier', '[creation] edged weapons match the book');
+  eq(ev(`DCC_WEAPON_CATEGORIES.find(c=>c.category==='Reach Weapon').skills.join(', ')`),
+     'Herding Weapons, Lance, Polearm, Quarterstaff', '[creation] reach weapons match the book');
+  eq(ev(`DCC_WEAPON_CATEGORIES.find(c=>c.category==='Ranged Weapon').skills.length`), 7,
+     '[creation] seven ranged weapons');
+  check('[creation] every weapon option is a real Attack Skill', () => {
+    const bad = ev(`JSON.stringify(DCC_WEAPON_CATEGORIES.flatMap(c=>c.skills)
+      .filter(n=>{var s=dccSkillByName(n);return !s||s.kind!=='attack';}))`);
+    return bad === '[]' || bad;
+  });
+  check('[creation] each hand-to-hand route pairs a real Skill with a real Damage Effect', () => {
+    const bad = ev(`JSON.stringify(DCC_HAND_TO_HAND.filter(h=>{
+      var s=dccSkillByName(h.skill), d=dccSkillByName(h.damageEffect);
+      return !s || !d || d.kind!=='damage_effect';
+    }).map(h=>h.skill))`);
+    return bad === '[]' || bad;
+  });
+  eq(ev('DCC_HAND_TO_HAND.length'), 4, '[creation] four hand-to-hand routes');
+  eq(ev('DCC_STARTING_SPELLS.length'), 7, '[creation] seven starting attack Spells');
+  eq(ev('DCC_STARTING_SPELL_MIN_INT'), 4,
+     '[creation] the Spell route needs INT 4+, set on a later screen');
+  eq(ev("DCC_FREE_COMBAT_SKILL.animal"), 'Slice Attack',
+     '[creation] animals get Slice Attack, not Unarmed Combat');
+  check('[creation] both free combat skills exist', () =>
+    ev("!!dccSkillByName(DCC_FREE_COMBAT_SKILL.human) && !!dccSkillByName(DCC_FREE_COMBAT_SKILL.animal)"));
+  eq(ev("DCC_FLOOR_START.find(f=>f.floor===3).statPoints"), 27,
+     '[creation] a Floor 3 crawler distributes 27 Stat points');
+
   // ── the sheet actually renders ───────────────────────────────────────────
   ev('renderHero()');
   check('[sheet] the block sheet rendered every declared block', () =>

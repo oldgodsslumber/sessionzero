@@ -150,6 +150,12 @@ registerSystem({
   // ─── content the shell can already use ────────────────────────────────────
   catalogs: {
     skills: DCC_SKILLS,
+    backgrounds: DCC_BACKGROUNDS,
+    storyTables: DCC_STORY_TABLES,
+    weaponCategories: DCC_WEAPON_CATEGORIES,
+    handToHand: DCC_HAND_TO_HAND,
+    startingSpells: DCC_STARTING_SPELLS,
+    floorStart: DCC_FLOOR_START,
     rankDamage: DCC_RANK_DAMAGE,
     debuffs: DCC_DEBUFFS,
     damageTypes: DCC_DAMAGE_TYPES,
