@@ -88,7 +88,8 @@ function renderThemeSwatches() {
   const themes = (SYS && SYS.themes) || [];
   if (!themes.length) { wrap.style.display = 'none'; return; }
   let active = '';
-  try { active = localStorage.getItem('dc_theme') || ''; } catch (e) {}
+  try { active = localStorage.getItem(storeKey('theme')) || ''; } catch (e) {}
+  if (!active) active = (SYS && SYS.defaultTheme) || '';
   wrap.style.padding = '8px 10px';
   wrap.style.borderTop = '1px solid var(--border)';
   let h = '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;'

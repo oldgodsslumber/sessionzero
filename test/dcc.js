@@ -60,7 +60,25 @@ function boot(entry) {
   eq(ev('SYS.id'), 'dungeon-crawler-carl', '[entry] dcc/ selects DCC');
   eq(ev('listSystems().length'), 1, '[entry] ...and does not ship the Daring Comics rules');
   eq(ev("typeof POWERS"), 'undefined', '[entry] no Daring Comics data leaked into the DCC app');
-  eq(ev("document.getElementById('theme-wrap').style.display"), 'none', '[theme] a pack with no themes gets no swatch row');
+  check('[theme] the pack picks its own look rather than inheriting the comic one', () => {
+    // The shell's :root is Daring Comics': Bangers for titles, Comic Neue for
+    // body. Neither was ever loaded, so both fell back — 'cursive' is Comic
+    // Sans on Windows, which is what a crawler sheet was actually rendering in.
+    const applied = ev("document.documentElement.getAttribute('data-theme')");
+    if (applied !== 'crawler') return 'data-theme is ' + JSON.stringify(applied);
+    const title = ev("getComputedStyle(document.documentElement).getPropertyValue('--font-title')");
+    return !/Bangers/.test(title) || 'still using the comic display face: ' + title;
+  });
+  check('[theme] the entry file actually loads the fonts it names', () => {
+    const fs2 = require('fs');
+    const path2 = require('path');
+    const bad = [];
+    ['dcc/index.html', 'daring-comics/index.html'].forEach(f => {
+      const html = fs2.readFileSync(path2.join(__dirname, '..', f), 'utf8');
+      if (!/fonts\.googleapis\.com/.test(html)) bad.push(f);
+    });
+    return bad.length ? bad.join(', ') + ' names fonts in CSS but never loads them' : true;
+  });
   eq(ev('sysUsesBlocks()'), true, '[select] DCC declares blocks -> block sheet');
   eq(ev("lex('hero')"), 'Crawler', '[lexicon] hero -> Crawler');
   eq(ev("lex('region')"), 'Neighborhood', '[lexicon] region -> Neighborhood');
@@ -519,11 +537,33 @@ function boot(entry) {
     const v = ev('wizValidate(S.char,3)');
     return (v !== true && /Intelligence/.test(String(v))) || 'got ' + v;
   });
-  ev("dccAssignStat('INT',6)");     // 6 was on STR, so STR should be cleared
-  check('[wizard] an array value can only be held by one Stat', () =>
-    ev("(S.char.blocks.stats.STR||{}).base") === 0 || 'STR still holds 6');
-  ev("dccAssignStat('STR',2)");
+  // 6 is on STR, so giving it to INT swaps the two. It used to clear STR to 0
+  // instead, which is why the grid froze once all five were assigned: every
+  // button belonging to another Stat had its handler removed.
+  ev("dccAssignStat('INT',6)");
+  check('[wizard] taking a value from another Stat swaps them', () => {
+    const st = JSON.parse(ev('JSON.stringify(S.char.blocks.stats)'));
+    if ((st.INT || {}).base !== 6) return 'INT did not take the 6';
+    return (st.STR || {}).base === 2 || "STR should have taken INT's 2, got " + (st.STR || {}).base;
+  });
+  check('[wizard] a swap leaves every array value used exactly once', () => {
+    const st = JSON.parse(ev('JSON.stringify(S.char.blocks.stats)'));
+    const vals = ev('JSON.stringify(DCC_STATS.map(function(x){return (S.char.blocks.stats[x.id]||{}).base||0}))');
+    const got = JSON.parse(vals).slice().sort().join(',');
+    const want = JSON.parse(ev('JSON.stringify(DCC_STANDARD_ARRAY)')).slice().sort().join(',');
+    return got === want || 'expected ' + want + ', got ' + got;
+  });
   eq(ev('wizValidate(S.char,3)'), true, '[wizard] screen 4 satisfied once INT is high enough');
+  check('[wizard] the array can be reset once filled', () => {
+    ev('dccResetStats()');
+    const any = ev('DCC_STATS.some(function(x){return ((S.char.blocks.stats[x.id]||{}).base||0)>0})');
+    if (any) return 'Start over left values behind';
+    // and it is genuinely re-fillable afterwards
+    ev("dccAssignStat('STR',6);dccAssignStat('INT',6);");
+    return ev("(S.char.blocks.stats.INT||{}).base") === 6 || 'could not reassign after a reset';
+  });
+  ev("dccResetStats();dccAssignStat('STR',2);dccAssignStat('INT',6);dccAssignStat('CON',5);" +
+     "dccAssignStat('DEX',4);dccAssignStat('CHA',3)");
 
   // screens 5-6, then finish
   ev('wizNext()');

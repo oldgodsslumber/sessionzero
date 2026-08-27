@@ -48,6 +48,8 @@ function openMultiplayer(){
   // Pick the active system first: every render below reads SYS and the lexicon.
   // Defaults to Daring Comics, so existing installs are untouched.
   sysActivate(null);
+  // The pack is only known now, so its default theme can only be applied here.
+  if(typeof applyStoredTheme==='function')applyStoredTheme();
   // The nav, pages and modals live in core/chrome.js now that each game has
   // its own entry file. Build them before any render touches the DOM.
   buildShellChrome();

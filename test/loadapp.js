@@ -33,9 +33,16 @@ function loadAppHTML(entryFile) {
     return fs.readFileSync(file, 'utf8');
   };
 
+  // A remote URL (the Google Fonts stylesheet) is not ours to inline. JSDOM is
+  // built from a string with no `resources:'usable'`, so the tag is simply
+  // inert, which is what we want: tests must not depend on the network.
+  const isRemote = u => /^(https?:)?\/\//.test(u);
+
   return html
-    .replace(STYLE_TAG, (m, href) => '<style>' + read(href, 'stylesheet') + '</style>')
+    .replace(STYLE_TAG, (m, href) =>
+      isRemote(href) ? m : '<style>' + read(href, 'stylesheet') + '</style>')
     .replace(SCRIPT_TAG, (m, src) => {
+      if (isRemote(src)) return m;
       const js = read(src, 'script');
       // A literal </script> inside the source would close the tag early. None of
       // the app files contain one (template literals escape it as <\/script>),

@@ -279,13 +279,21 @@ function dccScreenStats(ctx) {
       h += `<div style="font-size:13px" title="${esc(s.desc)}">${esc(s.name)} <span style="color:var(--muted)">${s.id}</span></div><div>`;
       h += DCC_STANDARD_ARRAY.map(n => {
         const takenBy = DCC_STATS.find(o => o.id !== s.id && (cur[o.id] || {}).base === n);
+        // A value held by another Stat is still clickable — it swaps the two.
+        // Removing the handler instead meant that once all five were assigned
+        // every button was dead and the grid could not be changed at all.
+        const tip = takenBy ? ' title="Swap with ' + esc(takenBy.id) + '"' : '';
         return `<button class="btn btn-xs ${v === n ? 'btn-primary' : 'btn-secondary'}"
-          style="margin:0 3px 0 0;${takenBy ? 'opacity:.35' : ''}"
-          ${takenBy ? '' : `onclick="dccAssignStat('${s.id}',${n})"`}>${n}</button>`;
+          style="margin:0 3px 0 0;${takenBy ? 'opacity:.55' : ''}"${tip}
+          onclick="dccAssignStat('${s.id}',${n})">${n}</button>`;
       }).join('');
       h += `</div>`;
     });
-    h += `</div><div style="font-size:11px;color:var(--muted);margin-top:6px">${used.length}/5 assigned</div></div>`;
+    h += `</div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">` +
+      `<div style="font-size:11px;color:var(--muted)">${used.length}/5 assigned` +
+      `${used.length === 5 ? ' — click any number to swap it' : ''}</div>` +
+      (used.length ? `<button class="btn btn-secondary btn-xs" onclick="dccResetStats()">Start over</button>` : '') +
+      `</div></div>`;
   } else if (d.statMethod === 'roll') {
     h += `<div class="card">`;
     if (!used.length) {
@@ -351,16 +359,37 @@ function dccStatMethod(m) {
   dccApplyStatBonuses(c);
   save(); wizRepaint();
 }
+// Each array value is used exactly once, so giving one Stat a value another
+// already holds SWAPS them. Clicking a Stat's own value clears it.
 function dccAssignStat(id, n) {
   const c = S.char;
   c.blocks.stats = c.blocks.stats || {};
-  // each array value is used exactly once, so clear whoever held it
+  const mine = (c.blocks.stats[id] || {}).base || 0;
+  if (mine === n) {                       // clicking your own value clears it
+    c.blocks.stats[id] = Object.assign({}, c.blocks.stats[id], { base: 0 });
+    dccApplyStatBonuses(c);
+    save(); wizRepaint();
+    return;
+  }
+  const holder = DCC_STATS.find(s => s.id !== id && (c.blocks.stats[s.id] || {}).base === n);
+  if (holder) {
+    // Hand them whatever this Stat was holding — 0 if it had nothing yet, which
+    // is just a move rather than a swap.
+    c.blocks.stats[holder.id] = Object.assign({}, c.blocks.stats[holder.id], { base: mine });
+  }
+  c.blocks.stats[id] = Object.assign({}, c.blocks.stats[id] || { bonus: 0 }, { base: n });
+  dccApplyStatBonuses(c);
+  save(); wizRepaint();
+}
+
+// Clear the array and start again. The tutorial-floor points are a separate
+// grant and are deliberately left alone.
+function dccResetStats() {
+  const c = S.char; if (!c) return;
+  c.blocks.stats = c.blocks.stats || {};
   DCC_STATS.forEach(s => {
-    if ((c.blocks.stats[s.id] || {}).base === n) c.blocks.stats[s.id] = { base: 0, bonus: 0 };
+    c.blocks.stats[s.id] = Object.assign({}, c.blocks.stats[s.id] || {}, { base: 0 });
   });
-  const cell = c.blocks.stats[id] || { base: 0, bonus: 0 };
-  cell.base = (cell.base === n) ? 0 : n;
-  c.blocks.stats[id] = cell;
   dccApplyStatBonuses(c);
   save(); wizRepaint();
 }

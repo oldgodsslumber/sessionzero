@@ -43,6 +43,15 @@ registerSystem({
   id: 'dungeon-crawler-carl',
   name: 'Dungeon Crawler Carl',
 
+  // The shell's default look is Daring Comics': a comic display face, all-caps
+  // titles, hard drop shadows. Wrong for a dungeon crawl, and the display face
+  // was never actually loaded, so it fell back to Comic Sans.
+  defaultTheme: 'crawler',
+  themes: [
+    ['crawler', 'Crawler Interface', '#f0a202,#26313d'],
+    ['dark',    'Plain dark',        '#7a8a9e,#1a2236'],
+  ],
+
   // The app is the Crawler Interface, so the words are the System AI's.
   lexicon: {
     universe: 'Crawl',        universes: 'Crawls',
@@ -250,6 +259,10 @@ registerSystem({
   newCharacter() {
     return {
       systemId: 'dungeon-crawler-carl',
+      // The identity screen draws Human as the selected option when species is
+      // unset, but its validator refused to continue until species was actually
+      // written — so the button looked chosen and you had to press it anyway.
+      species: 'human',
       name: '', crawlerNumber: 500000 + Math.floor(Math.random() * 12400000),
       race: '', class: '', level: 10,
       dr: 0, move: DCC_BASE_MOVE, step: DCC_BASE_STEP, size: 4,

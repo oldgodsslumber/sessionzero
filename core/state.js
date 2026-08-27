@@ -595,11 +595,22 @@ function renderAll(){renderHero();}
 // listener bound once at load.
 function setTheme(t){
   document.documentElement.setAttribute('data-theme',t);
-  try{localStorage.setItem('dc_theme',t);}catch(e){}
+  try{localStorage.setItem(storeKey('theme'),t);}catch(e){}
   document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.toggle('active',s.dataset.theme===t));
 }
 document.querySelectorAll('#theme-wrap .theme-swatch').forEach(b=>{b.addEventListener('click',()=>setTheme(b.dataset.theme));});
-(function(){try{const t=localStorage.getItem('dc_theme');if(t){document.documentElement.setAttribute('data-theme',t);document.querySelectorAll('.theme-swatch').forEach(b=>{b.classList.toggle('active',b.dataset.theme===t);});}}catch(e){}})();
+// Applied at boot: the player's stored choice for THIS game, or the pack's own
+// default. Without the default a pack inherited :root, which is Daring Comics'
+// comic-book look.
+function applyStoredTheme(){
+  let t='';
+  try{t=localStorage.getItem(storeKey('theme'))||'';}catch(e){}
+  if(!t&&typeof SYS!=='undefined'&&SYS&&SYS.defaultTheme)t=SYS.defaultTheme;
+  if(!t)return;
+  document.documentElement.setAttribute('data-theme',t);
+  document.querySelectorAll('.theme-swatch').forEach(b=>{b.classList.toggle('active',b.dataset.theme===t);});
+}
+applyStoredTheme();
 
 // ═══════════════════════════════════════════════════════════
 // HERO TAB
