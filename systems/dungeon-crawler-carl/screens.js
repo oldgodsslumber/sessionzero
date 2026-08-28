@@ -654,7 +654,7 @@ function dccFinishCreation(char) {
   // the top, which did nothing when the block was absent and actively kept a
   // null in place when it was null.
   blockCtx(sysBlock('gear'), char);
-  if (char.blocks.gear) char.blocks.gear.hotlist = dccStartingHotlist(char);
+  if (char.blocks.gear) dccApplyStartingGear(char.blocks.gear, char);
   char.blocks.mana = { current: dccStatOf(char, 'INT') };
   char.blocks.health = { marked: 0 };
   char.level = dccFloorCfg(char).level;
@@ -1372,10 +1372,64 @@ function dccStartingSpells(char) {
 // start: their attack Spell, Heal, and the five Mana Potions the book grants.
 function dccStartingHotlist(char) {
   const cm = dccCre(char).combat;
-  const out = [{ name: 'Heal', qty: 1 }];
+  const out = [{ name: 'Heal', qty: 1, src: 'creation' }];
   if (cm.route === 'spell' && cm.spell) {
-    out.push({ name: cm.spell, qty: 1 });
-    out.push({ name: 'Standard Mana Potion', qty: DCC_STARTING_SPELL_POTIONS });
+    out.push({ name: cm.spell, qty: 1, src: 'creation' });
+    out.push({ name: 'Standard Mana Potion', qty: DCC_STARTING_SPELL_POTIONS, src: 'creation' });
+  }
+  const g = dccGear(char);
+  if (String(g.item || '').trim()) out.push({ name: g.item.trim(), qty: 1, src: 'creation' });
+  return out;
+}
+
+// Everything creation asked you about actually reaching the sheet.
+//
+// The weapon you chose, the clothes you are standing in, the interesting item
+// and the weird stuff were all collected across two screens and then dropped:
+// the finish step only ever wrote the Hotlist, so a crawler walked out of
+// creation holding nothing. The book is specific about where they belong —
+// "If you're holding anything, especially a weapon, write that in the
+// 'Hand/Holding' slot... The rest of your stuff goes into your Hotlist or your
+// Inventory" (p. 115).
+// Creation can be re-entered and finished again, so this has to be able to run
+// twice. Anything creation put here is replaced; anything the player has picked
+// up since is left exactly where it is.
+function dccApplyStartingGear(gear, char) {
+  const mine = function (e) { return !(e && e.src === 'creation'); };
+  const kept = (gear.hotlist || []).filter(mine);
+  gear.hotlist = dccStartingHotlist(char).concat(kept);
+
+  const eq = dccStartingEquipped(char);
+  gear.equipped = gear.equipped || {};
+  DCC_GEAR_SLOTS.forEach(function (sl) {
+    const held = (gear.equipped[sl.id] || []).filter(mine);
+    gear.equipped[sl.id] = (eq[sl.id] || []).concat(held);
+  });
+
+  gear.inventory = dccStartingInventory(char).concat((gear.inventory || []).filter(mine));
+}
+
+function dccStartingEquipped(char) {
+  const cm = dccCre(char).combat;
+  const g = dccGear(char);
+  const eq = {};
+  DCC_GEAR_SLOTS.forEach(function (sl) { eq[sl.id] = []; });
+  // A weapon is a thing you hold. A Spell is not, and hand-to-hand is your own
+  // hands, so neither of those puts anything here.
+  if (cm.route === 'weapon' && (cm.weaponName || cm.weaponSkill)) {
+    eq.hands.push({ name: cm.weaponName || cm.weaponSkill, src: 'creation' });
+  }
+  if (String(g.clothes || '').trim()) eq.torso.push({ name: g.clothes.trim(), src: 'creation' });
+  return eq;
+}
+
+function dccStartingInventory(char) {
+  const g = dccGear(char);
+  const out = [];
+  if (String(g.weird || '').trim()) {
+    // The weird stuff is free text and often a list, so keep it as written
+    // rather than guessing where the commas mean new items.
+    out.push({ name: g.weird.trim(), src: 'creation' });
   }
   return out;
 }

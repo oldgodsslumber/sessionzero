@@ -1357,6 +1357,77 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── what creation asked you about has to reach the sheet ─────────────────
+  // Reported from a browser: "my weapon doesn't appear in my inventory". It
+  // never did — the finish step wrote only the Hotlist, so the weapon you chose,
+  // the clothes you are standing in, the interesting item and the weird stuff
+  // were all collected across two screens and then dropped. A crawler walked
+  // out of creation holding nothing.
+  const gearBuild = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("dccStoreGear('clothes','jeans and a hoodie');dccStoreGear('item','a bike lock');");
+    ev("dccStoreGear('weird','12 googly eyes');dccSetFloor(1);dccFinishCreation(S.char);");
+  };
+  const named = expr => JSON.parse(ev("JSON.stringify((" + expr + "||[]).map(function(x){return x.name}))"));
+
+  check('[gear] the weapon you chose is in your hands', () => {
+    // "If you're holding anything, especially a weapon, write that in the
+    // Hand/Holding slot" (p. 115).
+    gearBuild();
+    const hands = named("S.char.blocks.gear.equipped.hands");
+    return hands.indexOf('Club') >= 0 || 'hands hold ' + JSON.stringify(hands);
+  });
+  check('[gear] a renamed weapon is carried by its name', () => {
+    ev("dccStoreCombat('weaponName','Tire Iron');dccFinishCreation(S.char);");
+    const hands = named("S.char.blocks.gear.equipped.hands");
+    return hands.indexOf('Tire Iron') >= 0 || 'hands hold ' + JSON.stringify(hands);
+  });
+  check('[gear] clothes, item and weird stuff all land somewhere', () => {
+    gearBuild();
+    const torso = named("S.char.blocks.gear.equipped.torso");
+    const hot = named("S.char.blocks.gear.hotlist");
+    const inv = named("S.char.blocks.gear.inventory");
+    if (torso.indexOf('jeans and a hoodie') < 0) return 'clothes went nowhere: ' + JSON.stringify(torso);
+    if (hot.indexOf('a bike lock') < 0) return 'the item went nowhere: ' + JSON.stringify(hot);
+    return inv.indexOf('12 googly eyes') >= 0 || 'the weird stuff went nowhere: ' + JSON.stringify(inv);
+  });
+  check('[gear] a Spell is not a thing you hold', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('spell');dccSetSpell('Fire Fingers');");
+    ev("dccSetFloor(1);dccFinishCreation(S.char);");
+    const hands = named("S.char.blocks.gear.equipped.hands");
+    if (hands.length) return 'the spell route put ' + JSON.stringify(hands) + ' in your hands';
+    return named("S.char.blocks.gear.hotlist").indexOf('Fire Fingers') >= 0
+      || 'the Spell is not in the Hotlist either';
+  });
+  check('[gear] re-finishing swaps the weapon without duplicating it', () => {
+    gearBuild();
+    ev("dccSetWeapon('Axe');dccFinishCreation(S.char);dccFinishCreation(S.char);");
+    const hands = named("S.char.blocks.gear.equipped.hands");
+    return (hands.length === 1 && hands[0] === 'Axe')
+      || 'hands hold ' + JSON.stringify(hands);
+  });
+  check('[gear] re-finishing does not take away what you looted', () => {
+    // Creation can be re-entered, so this write has to leave play gear alone.
+    gearBuild();
+    ev("S.char.blocks.gear.inventory.push({name:'Looted dagger'});");
+    ev("S.char.blocks.gear.equipped.head.push({name:'Goblin helm'});");
+    ev("S.char.blocks.gear.hotlist.push({name:'Bandage',qty:3});");
+    ev("dccFinishCreation(S.char);");
+    const inv = named("S.char.blocks.gear.inventory");
+    const head = named("S.char.blocks.gear.equipped.head");
+    const hot = named("S.char.blocks.gear.hotlist");
+    if (inv.indexOf('Looted dagger') < 0) return 'lost the looted dagger';
+    if (head.indexOf('Goblin helm') < 0) return 'lost the helm';
+    return hot.indexOf('Bandage') >= 0 || 'lost the bandages';
+  });
+  check('[gear] it all reaches the rendered sheet', () => {
+    gearBuild();
+    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};renderHero();");
+    const h = ev("document.getElementById('hero-sheet').innerHTML");
+    const missing = ['Club', 'jeans and a hoodie', 'a bike lock', '12 googly eyes'].filter(x => h.indexOf(x) < 0);
+    return missing.length ? 'not on the sheet: ' + missing.join(', ') : true;
+  });
+
   // ── changing a background must not silently bin your Skills ──────────────
   // Reported from a browser as "the options are not clicked and I can't hit
   // continue": you pick two Skills for a stage, click another background to
