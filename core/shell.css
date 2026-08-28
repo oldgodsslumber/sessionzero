@@ -71,6 +71,26 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .wiz-block{flex:1;font-size:11px;text-align:center;color:var(--muted)}
 /* What is stopping you is the one thing on the screen in the warning colour. */
 .wiz-block.is-blocking{color:var(--hot,var(--accent));font-weight:500}
+/* Inventory rows. The name and the controls are separate groups so that on a
+   narrow screen the controls drop to their own line instead of crushing the
+   name to a couple of characters. */
+.inv-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.inv-name{flex:1 1 auto;min-width:0;font-size:12px;overflow-wrap:anywhere}
+.inv-ctl{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}
+.inv-slot{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
+.inv-slot-h{width:104px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--text)}
+.inv-slot-h.is-full{color:var(--muted)}
+.inv-slot-n{display:block;font-weight:400;color:var(--muted);font-size:9px}
+.inv-slot-items{flex:1;min-width:0}
+@media (max-width:560px){
+  /* Stack the slot name above its contents, and give the item name the full
+     width with its controls underneath. */
+  .inv-slot{flex-direction:column;gap:2px}
+  .inv-slot-h{width:auto;display:flex;align-items:baseline;gap:6px}
+  .inv-slot-n{display:inline}
+  .inv-name{flex:1 1 100%}
+  .inv-ctl{margin-left:0;flex-wrap:wrap}
+}
 .blk-title{
   font-family:var(--font-label);font-weight:600;font-size:11px;
   letter-spacing:.14em;text-transform:uppercase;

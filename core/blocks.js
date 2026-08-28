@@ -624,14 +624,30 @@ registerBlockType('inventory', {
 });
 
 function invItemRow(b, c, item, where, idx, extra) {
+  // In a slots container the player can move an item between slots. The shell
+  // has no idea whether a thing is worn or held, so where it lands by default
+  // is a guess — this is how you correct it.
+  let slotPick = '';
+  if (c.kind === 'slots') {
+    slotPick = `<select title="Which slot this is in" style="flex:0 0 auto;font-size:11px;padding:2px 4px"
+      onchange="invMove('${esc(b.id)}','${esc(c.id)}','${esc(c.id)}','${esc(where)}',${idx},this.value)">` +
+      (c.slots || []).map(sl =>
+        `<option value="${esc(sl.id)}"${sl.id === where ? ' selected' : ''}>${esc(sl.name)}</option>`
+      ).join('') + `</select>`;
+  }
   const moves = (b.containers || []).filter(x => x.id !== c.id).map(x =>
     `<button class="btn btn-secondary btn-xs" title="Move to ${esc(x.label || x.id)}"
       onclick="invMove('${esc(b.id)}','${esc(c.id)}','${esc(x.id)}','${esc(where)}',${idx})">→ ${esc((x.label || x.id).split(' ')[0])}</button>`
   ).join('');
-  return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
-    <div style="flex:1;min-width:0;font-size:12px">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}</div>
-    ${extra || ''}${moves}
-    <button class="btn btn-secondary btn-xs" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx})">✕</button>
+  // Name and controls are separate groups so they can wrap onto their own
+  // lines. As one flex row the name was squeezed to nothing on a phone — five
+  // controls and an item called "Chef's Knife of Unwelcome Surprises" do not
+  // share 360px.
+  return `<div class="inv-row">
+    <div class="inv-name">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}</div>
+    <div class="inv-ctl">${extra || ''}${slotPick}${moves}
+      <button class="btn btn-secondary btn-xs" title="Remove" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx})">✕</button>
+    </div>
   </div>`;
 }
 
@@ -641,10 +657,10 @@ function invSlots(b, c, d) {
   (c.slots || []).forEach(s => {
     const items = store[s.id] || [];
     const full = items.length >= (s.max || 1);
-    h += `<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0">
-      <div style="width:104px;flex-shrink:0;font-size:11px;font-weight:700;color:${full ? 'var(--muted)' : 'var(--text)'}">
-        ${esc(s.name)}<div style="font-weight:400;color:var(--muted);font-size:9px">${items.length}/${s.max || 1}</div></div>
-      <div style="flex:1;min-width:0">`;
+    h += `<div class="inv-slot">
+      <div class="inv-slot-h${full ? ' is-full' : ''}">
+        ${esc(s.name)}<span class="inv-slot-n">${items.length}/${s.max || 1}</span></div>
+      <div class="inv-slot-items">`;
     if (!items.length) h += `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
     items.forEach((it, i) => { h += invItemRow(b, c, it, s.id, i); });
     h += `</div></div>`;
@@ -753,17 +769,31 @@ function invQty(id, cid, i, delta) {
   save(); blockRepaint(id);
 }
 // Move an item between containers, refusing when the destination is full.
-function invMove(id, fromId, toId, slotId, i) {
+// Which gear slot an item belongs in. The shell cannot know a Club is held
+// rather than worn, so the pack decides; without an answer we fall back to the
+// first slot with room, which is what used to put weapons on your head.
+function invSlotFor(block, container, item) {
+  const fn = sysDerive(container.slotFor || block.slotFor);
+  if (!fn || !item) return '';
+  try { return fn(item, container) || ''; } catch (e) { return ''; }
+}
+
+function invMove(id, fromId, toId, slotId, i, wantSlot) {
   const t = _inv(id); if (!t) return;
   const from = _container(t.block, fromId), to = _container(t.block, toId);
   if (!from || !to) return;
   const src = from.kind === 'slots' ? (t.ctx.data[fromId] || {})[slotId] : t.ctx.data[fromId];
   const item = src && src[i];
   if (!item) return;
-  // a slots destination needs a target slot: use the first with room
+  // A slots destination needs a target slot. Taking the first one with room put
+  // a Club on your head, because Head is simply the first slot in the list.
+  // Ask the caller, then the pack, then fall back.
   let destSlot = '';
   if (to.kind === 'slots') {
-    const s = (to.slots || []).find(x => invRoom(t.block, t.ctx.data, toId, x.id) > 0);
+    const want = wantSlot || invSlotFor(t.block, to, item);
+    const fits = x => invRoom(t.block, t.ctx.data, toId, x.id) > 0;
+    const s = (want && (to.slots || []).find(x => x.id === want && fits(x)))
+           || (to.slots || []).find(fits);
     if (!s) { if (typeof flashSaveError === 'function') flashSaveError(voice('noFreeSlot','No free slot')); return; }
     destSlot = s.id;
   } else if (invRoom(t.block, t.ctx.data, toId, '') === 0) {

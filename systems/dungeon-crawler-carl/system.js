@@ -159,6 +159,9 @@ registerSystem({
             note: 'weightless, and retrieved at the speed of thought outside combat' },
         ],
         counters: [{ id: 'junk', label: 'Misc. Junk' }],
+        // A weapon is held, not worn. Without this the shell drops an item in
+        // the first slot with room, which is Head.
+        slotFor: 'derive.gearSlotFor',
       },
       {
         id: 'companions', type: 'entityList', label: 'Pets, Mounts & Minions',
@@ -185,6 +188,15 @@ registerSystem({
   // ─── formulas ─────────────────────────────────────────────────────────────
   // Pure: take the character, return a number. Called on every render.
   derive: {
+    // Where a piece of gear goes when you equip it. Anything whose name matches
+    // a weapon Skill is something you hold; armour and clothing are worn, and
+    // the shell's own fallback handles those well enough.
+    gearSlotFor: (item) => {
+      const cat = item && item.name ? dccSkillByName(item.name) : null;
+      if (cat && /Weapon|Hand-To-Hand/i.test(cat.category || '')) return 'hands';
+      return '';
+    },
+
     // What creation granted, so the sheet can put back anything deleted by
     // mistake without rebuilding the character.
     grantedSkills: char => dccFinalSkills(char),

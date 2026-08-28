@@ -43,6 +43,7 @@ function boot(entry) {
 }
 
 (async function () {
+  const S_all = ev => JSON.parse(ev("JSON.stringify(S.char.blocks.gear)"));
   // ── one entry file per game: each registers exactly its own pack ──────────
   const dc = await boot('daring-comics/index.html');
   eq(dc.errs.length, 0, '[boot] no uncaught errors in the Daring Comics app');
@@ -1355,6 +1356,71 @@ function boot(entry) {
     if (body.indexOf("Begin the Crawl") < 0) return "the submit button is not the pack's copy";
     ev("closeUniverseModal()");
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
+  });
+
+  // ── equipping a weapon ───────────────────────────────────────────────────
+  // The rulebook is clear that a weapon is either in your hand or in your
+  // Hotlist, never both: "Items in Hotlists do not grant you any added
+  // benefits... When you put an item back into a Hotlist slot, its benefits
+  // turn off" (p. 112), and you "swap a weapon you're holding with a weapon in
+  // your Hotlist" (p. 111). The move between them is what has to work.
+  const gearOf = () => JSON.parse(ev("JSON.stringify(S.char.blocks.gear.equipped)"));
+  const equipBuild = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+
+  check('[equip] a weapon put back on from the Hotlist returns to your hands', () => {
+    // It used to land in the first slot with room, which is Head. A Club is
+    // held, not worn.
+    equipBuild();
+    ev("invMove('gear','equipped','hotlist','hands',0);");
+    const i = ev("S.char.blocks.gear.hotlist.findIndex(function(x){return x.name==='Club'})");
+    if (i < 0) return 'the weapon never reached the Hotlist';
+    ev("invMove('gear','hotlist','equipped',''," + i + ");");
+    const eq = gearOf();
+    if (eq.head.length) return 'the weapon went on your head';
+    return eq.hands.some(x => x.name === 'Club') || 'hands hold ' + JSON.stringify(eq.hands);
+  });
+  check('[equip] a weapon is in one place at a time, never both', () => {
+    const eq = gearOf();
+    const hot = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x.name}))"));
+    const held = eq.hands.some(x => x.name === 'Club');
+    return (held && hot.indexOf('Club') < 0) || 'Club is held=' + held + ' and in the Hotlist=' + (hot.indexOf('Club') >= 0);
+  });
+  check('[equip] anything can be moved to the slot you choose', () => {
+    // The shell cannot know where armour goes, so the player corrects it.
+    equipBuild();
+    ev("S.char.blocks.gear.inventory.push({name:'Hockey pads'});");
+    ev("invMove('gear','inventory','equipped','',0);");
+    ev("invMove('gear','equipped','equipped','head',0,'torso');");
+    const eq = gearOf();
+    if (eq.head.length) return 'the pads are still on your head';
+    return eq.torso.some(x => x.name === 'Hockey pads') || 'torso holds ' + JSON.stringify(eq.torso);
+  });
+  check('[equip] moving to a full slot is refused rather than silently dropped', () => {
+    equipBuild();
+    ev("S.char.blocks.gear.equipped.head=[{name:'Helm'}];");
+    ev("S.char.blocks.gear.inventory.push({name:'Second helm'});");
+    ev("invMove('gear','inventory','equipped','',0,'head');");
+    const eq = gearOf();
+    const heads = eq.head.map(x => x.name);
+    if (heads.length > 1) return 'Head took two items: ' + JSON.stringify(heads);
+    // it must still exist somewhere, not vanish
+    const all = JSON.stringify(S_all(ev));
+    return all.indexOf('Second helm') >= 0 || 'the item disappeared';
+  });
+  check("[equip] an item row does not crush its name on a narrow screen", () => {
+    // Reported from a phone: an equipped item was unreadable. The name and the
+    // controls are separate groups now so the controls can wrap.
+    equipBuild();
+    ev("S.char.blocks.gear.equipped.hands[0].name='Chef Knife of Unwelcome Surprises';blockRepaint('gear');");
+    const row = ev("!!document.querySelector('#blk-gear .inv-row')");
+    if (!row) return 'the row is still built from inline styles';
+    const name = ev("document.querySelector('#blk-gear .inv-name').textContent.trim()");
+    if (name.indexOf('Chef Knife') < 0) return 'the name element is missing: ' + JSON.stringify(name);
+    return ev("document.querySelectorAll('#blk-gear .inv-ctl').length") > 0
+      || 'the controls are not grouped, so they cannot wrap';
   });
 
   // ── Skills from creation are not list entries to tidy away ───────────────
