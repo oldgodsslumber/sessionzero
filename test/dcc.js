@@ -1427,6 +1427,78 @@ function boot(entry) {
     return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
   });
 
+  // ── the other kinds of item ──────────────────────────────────────────────
+  // A weapon is not the only thing an item can be. Armour grants Damage
+  // Resistance, "gained via Armor (natural or worn)" (p. 93); a scroll casts a
+  // Spell you have no Ranks in, since "a crawler can't attempt a Spell without
+  // Ranks in the Spell (unless it's a scroll)" (p. 58); and a tome "can later
+  // be read to learn the Spell" (p. 116).
+  const kindSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+  const readOut = obj => ev("SYS.derive.gearItemReadout(" + JSON.stringify(obj) + ",S.char)");
+
+  check('[kinds] armour reads as the protection it gives', () => {
+    kindSheet();
+    const line = readOut({ name: 'Hockey pads', dr: 2, resist: 'Fire' });
+    if (!/\+2 DR/.test(line)) return 'no DR in the readout: ' + JSON.stringify(line);
+    return /Fire Resistance/.test(line) || 'no resistance: ' + JSON.stringify(line);
+  });
+  check('[kinds] worn armour actually raises your Damage Resistance', () => {
+    kindSheet();
+    const before = ev("SYS.derive.dr(S.char)");
+    ev("S.char.blocks.gear.equipped.torso=[{name:'Hockey pads',dr:2}];");
+    const after = ev("SYS.derive.dr(S.char)");
+    return after === before + 2 || 'DR went from ' + before + ' to ' + after;
+  });
+  check('[kinds] the same armour in the Hotlist gives nothing', () => {
+    // "Only what is in a Gear Slot gives you anything" (p. 112).
+    ev("S.char.blocks.gear.equipped.torso=[];S.char.blocks.gear.hotlist.push({name:'Hockey pads',dr:2});");
+    return ev("SYS.derive.dr(S.char)") === 0
+      || 'stowed armour still granted ' + ev("SYS.derive.dr(S.char)") + ' DR';
+  });
+  check('[kinds] a scroll says it can be cast untrained', () => {
+    const line = readOut({ name: 'Scroll of Fireball', casts: 'Fireball', rank: 3 });
+    if (!/Fireball/.test(line)) return 'no Spell named: ' + JSON.stringify(line);
+    if (!/Rank 3/.test(line)) return 'no Rank: ' + JSON.stringify(line);
+    return /untrained/.test(line) || 'does not say it works untrained: ' + JSON.stringify(line);
+  });
+  check('[kinds] a tome offers to be read', () => {
+    const acts = JSON.parse(ev("JSON.stringify(SYS.derive.gearItemActions({name:'Tome of Air Buddy',teaches:'Air Buddy'}))"));
+    if (!acts.length) return 'a tome offered nothing to do';
+    return /Air Buddy/.test(acts[0].label) || 'unclear label: ' + acts[0].label;
+  });
+  check('[kinds] ...and reading it teaches the Spell and spends the tome', () => {
+    kindSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Tome of Air Buddy',teaches:'Air Buddy'}];blockRepaint('gear');");
+    ev("invAct('gear','inventory','',0,'learn');");
+    const spells = JSON.parse(ev("JSON.stringify((S.char.blocks.spells.skills||[]).map(function(x){return x.name}))"));
+    if (spells.indexOf('Air Buddy') < 0) return 'the Spell was not learned: ' + JSON.stringify(spells);
+    return ev("S.char.blocks.gear.inventory.length") === 0 || 'the tome survived being read';
+  });
+  check('[kinds] a tome for a Spell you know is refused, and kept', () => {
+    ev("S.char.blocks.gear.inventory=[{name:'Tome of Air Buddy',teaches:'Air Buddy'}];");
+    ev("invAct('gear','inventory','',0,'learn');");
+    const flash = ev("document.getElementById('save-flash').textContent");
+    if (!/already know/i.test(flash)) return 'said ' + JSON.stringify(flash);
+    return ev("S.char.blocks.gear.inventory.length") === 1 || 'the tome was consumed anyway';
+  });
+  check('[kinds] an ordinary item is still just an item', () => {
+    return readOut({ name: 'Googly eyes' }) === '' || 'invented mechanics for googly eyes';
+  });
+  check('[kinds] the detail editor offers every field the pack declares', () => {
+    kindSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Tome of Air Buddy',teaches:'Air Buddy'}];blockRepaint('gear');");
+    ev("[].slice.call(document.querySelectorAll('#blk-gear button'))" +
+       ".filter(function(b){return /invDetail/.test(b.getAttribute('onclick')||'')}).pop().click();");
+    const h = ev("document.getElementById('blk-gear').innerHTML");
+    const n = (h.match(/class="inv-f"/g) || []).length;
+    const want = ev("SYS.derive.gearItemFields().length");
+    if (n !== want) return 'showed ' + n + ' fields, the pack declares ' + want;
+    return /invAct/.test(h) || 'the tome offered no action in the panel';
+  });
+
   // ── an item has to be something, not just a label ────────────────────────
   // Reported from a browser: "I can add a baseball bat, but that's all it is.
   // Just the label, it's not a real weapon." An item was {name, qty} and

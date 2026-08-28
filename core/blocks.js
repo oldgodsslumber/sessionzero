@@ -635,6 +635,18 @@ function invItemRow(b, c, item, where, idx, extra) {
         `<option value="${esc(sl.id)}"${sl.id === where ? ' selected' : ''}>${esc(sl.name)}</option>`
       ).join('') + `</select>`;
   }
+  // Items are not all the same kind of thing: a weapon works as a Skill, armour
+  // grants DR, a scroll casts a Spell you have no Ranks in, a tome teaches one.
+  // The pack declares which fields an item can carry; this is the editor for
+  // them, folded away until asked for so the row stays readable on a phone.
+  const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
+  const rowKey = c.id + ':' + where + ':' + idx;
+  const openDetail = _invDetailOpen === rowKey;
+  let detail = '';
+  if (fields && fields.length) {
+    detail = `<button class="btn btn-secondary btn-xs" title="What this is"
+      onclick="invDetail('${esc(b.id)}','${esc(rowKey)}')">${openDetail ? '−' : '⋯'}</button>`;
+  }
   // Change what an existing item works as, so a mis-added Baseball Bat can be
   // made into a Club without deleting and retyping it.
   const asFn = sysDerive(b.itemOptions);
@@ -662,9 +674,10 @@ function invItemRow(b, c, item, where, idx, extra) {
     <div class="inv-name">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}
       ${(() => { const r = invReadout(b, item, (typeof S !== 'undefined' && S) ? S.char : null);
                  return r ? `<span class="inv-stat">${esc(r)}</span>` : ''; })()}</div>
-    <div class="inv-ctl">${extra || ''}${asPick}${slotPick}${moves}
+    <div class="inv-ctl">${extra || ''}${detail}${slotPick}${moves}
       <button class="btn btn-secondary btn-xs" title="Remove" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx})">✕</button>
     </div>
+    ${openDetail ? invDetailHTML(b, c, item, where, idx, fields) : ''}
   </div>`;
 }
 
@@ -852,6 +865,78 @@ function invQty(id, cid, i, delta) {
 // Which gear slot an item belongs in. The shell cannot know a Club is held
 // rather than worn, so the pack decides; without an answer we fall back to the
 // first slot with room, which is what used to put weapons on your head.
+let _invDetailOpen = '';
+function invDetail(id, rowKey) {
+  _invDetailOpen = _invDetailOpen === rowKey ? '' : rowKey;
+  blockRepaint(id);
+}
+
+function invDetailHTML(b, c, item, where, idx, fields) {
+  let h = '<div class="inv-detail">';
+  fields.forEach(function (f) {
+    const val = item[f.key] === undefined || item[f.key] === null ? '' : item[f.key];
+    h += '<label class="inv-f"><span>' + esc(f.label) + '</span>';
+    if (f.options) {
+      const opts = typeof f.options === 'function' ? f.options() : f.options;
+      h += '<select onchange="invSetField(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) +
+           ',' + idx + ',' + jsArg(f.key) + ',this.value)"><option value="">—</option>' +
+           (opts || []).map(function (o) {
+             const v = o.value === undefined ? o : o.value;
+             const l = o.label === undefined ? v : o.label;
+             return '<option value="' + esc(v) + '"' + (String(v) === String(val) ? ' selected' : '') +
+                    '>' + esc(l) + '</option>';
+           }).join('') + '</select>';
+    } else {
+      h += '<input type="' + (f.type === 'number' ? 'number' : 'text') + '" value="' + esc(String(val)) +
+           '" placeholder="' + esc(f.hint || '') + '"' +
+           ' oninput="invSetField(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) +
+           ',' + idx + ',' + jsArg(f.key) + ',this.value)">';
+    }
+    h += '</label>';
+  });
+  // Anything the pack can DO with this item, such as reading a tome.
+  const actFn = sysDerive(b.itemActions);
+  let acts = [];
+  if (actFn) { try { acts = actFn(item, (typeof S !== 'undefined' && S) ? S.char : null) || []; } catch (e) { acts = []; } }
+  acts.forEach(function (a) {
+    h += '<button class="btn btn-primary btn-xs" onclick="invAct(' + jsArg(b.id) + ',' + jsArg(c.id) +
+         ',' + jsArg(where) + ',' + idx + ',' + jsArg(a.id) + ')">' + esc(a.label) + '</button>';
+  });
+  return h + '</div>';
+}
+
+// Store a field WITHOUT repainting: this runs on every keystroke in a text box.
+function invSetField(id, cid, where, i, key, value) {
+  const t = _inv(id); if (!t) return;
+  const c = _container(t.block, cid); if (!c) return;
+  const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
+  const item = list && list[i]; if (!item) return;
+  const num = value !== '' && !isNaN(Number(value));
+  if (value === '') delete item[key]; else item[key] = num ? Number(value) : value;
+  save();
+  // This runs on every keystroke, so the block being typed into is NOT
+  // repainted — that would take the field out from under the caret. Only the
+  // blocks that read this value are refreshed, and only if they are not
+  // themselves holding the caret.
+  (t.block.affects || []).forEach(function (other) {
+    if (!blockHoldsFocus(other)) blockRepaint(other);
+  });
+}
+
+function invAct(id, cid, where, i, actionId) {
+  const t = _inv(id); if (!t) return;
+  const c = _container(t.block, cid); if (!c) return;
+  const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
+  const item = list && list[i]; if (!item) return;
+  const fn = sysDerive(t.block.itemAct);
+  if (!fn) return;
+  let res;
+  try { res = fn(actionId, item, S.char); } catch (e) { res = { ok: false, message: e.message }; }
+  if (res && res.remove) list.splice(i, 1);
+  save(); blockRepaint(id);
+  if (res && res.message && typeof flashSaveError === 'function' && res.ok === false) flashSaveError(res.message);
+}
+
 function invSetSkill(id, cid, where, i, value) {
   const t = _inv(id); if (!t) return;
   const c = _container(t.block, cid); if (!c) return;

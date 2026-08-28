@@ -165,7 +165,13 @@ registerSystem({
         // What an item can BE, and what it does once it is that.
         itemOptions: 'derive.gearItemOptions',
         itemReadout: 'derive.gearItemReadout',
+        itemFields: 'derive.gearItemFields',
+        itemActions: 'derive.gearItemActions',
+        itemAct: 'derive.gearItemAct',
         lookup: 'derive.skillLookup',
+        // Worn armour changes your Damage Resistance, so the defence readout
+        // has to be redrawn when gear changes.
+        affects: ['defence'],
       },
       {
         id: 'companions', type: 'entityList', label: 'Pets, Mounts & Minions',
@@ -202,24 +208,76 @@ registerSystem({
       .filter(s => s.kind === 'attack')
       .map(s => ({ value: s.name, label: s.name + ' (' + (s.baseDamage || s.category || '') + ')' })),
 
+    // One line describing what the thing actually does at the table, whichever
+    // kind of thing it is.
     gearItemReadout: (item, char) => {
-      if (!item || !item.skill) return '';
-      const cat = dccSkillByName(item.skill);
-      if (!cat) return '';
-      const bits = [cat.name];
-      if (cat.baseDamage) bits.push(cat.baseDamage);
-      if (cat.range) bits.push(cat.range);
-      // Your Rank in it, and what you actually add to the roll.
-      const list = (char && char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
-      const mine = list.find(s => String(s.name).toLowerCase() === String(cat.name).toLowerCase());
-      if (mine) {
-        const mod = cat.stat ? dccStatMod(dccStatOf(char, cat.stat)) : 0;
-        const tot = (mine.rank || 0) + mod;
-        bits.push('Rank ' + (mine.rank || 0) + ', ' + (tot >= 0 ? '+' : '') + tot + ' to hit');
-      } else {
-        bits.push('untrained');
+      if (!item) return '';
+      const out = [];
+      if (item.dr) out.push('+' + item.dr + ' DR');
+      if (item.resist) out.push(item.resist + ' Resistance');
+      if (item.casts) {
+        // "A crawler can't attempt a Spell without Ranks in the Spell (unless
+        // it's a scroll)" (p. 58), so a scroll is usable by anyone.
+        out.push('Scroll · casts ' + item.casts +
+                 (item.rank ? ' at Rank ' + item.rank : '') + ' untrained');
       }
-      return bits.join(' · ');
+      if (item.teaches) out.push('Tome · teaches ' + item.teaches);
+      if (item.skill) {
+        const cat = dccSkillByName(item.skill);
+        if (cat) {
+          const bits = [cat.name];
+          if (cat.baseDamage) bits.push(cat.baseDamage);
+          if (cat.range) bits.push(cat.range);
+          const list = (char && char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+          const mine = list.find(x => String(x.name).toLowerCase() === String(cat.name).toLowerCase());
+          if (mine) {
+            const mod = cat.stat ? dccStatMod(dccStatOf(char, cat.stat)) : 0;
+            const tot = (mine.rank || 0) + mod;
+            bits.push('Rank ' + (mine.rank || 0) + ', ' + (tot >= 0 ? '+' : '') + tot + ' to hit');
+          } else {
+            bits.push('untrained');
+          }
+          out.push(bits.join(' · '));
+        }
+      }
+      return out.filter(Boolean).join('  —  ');
+    },
+
+    // What an item can be. A weapon works as a Skill; armour grants Damage
+    // Resistance, which comes from "Armor (natural or worn)" (p. 93); a scroll
+    // casts a Spell you have no Ranks in (p. 58); a tome "can later be read to
+    // learn the Spell" (p. 116).
+    gearItemFields: () => [
+      { key: 'skill',   label: 'Works as',  options: () => DCC_SKILLS.filter(x => x.kind === 'attack').map(x => x.name) },
+      { key: 'dr',      label: 'Armour DR', type: 'number', hint: '0' },
+      { key: 'resist',  label: 'Resists',   hint: 'e.g. Fire' },
+      { key: 'casts',   label: 'Scroll of', options: () => DCC_SPELLS.map(x => x.name) },
+      { key: 'rank',    label: 'at Rank',   type: 'number', hint: '1' },
+      { key: 'teaches', label: 'Tome of',   options: () => DCC_SPELLS.map(x => x.name) },
+    ],
+
+    // A tome is the one item that changes your sheet by being used.
+    gearItemActions: (item) => (item && item.teaches)
+      ? [{ id: 'learn', label: 'Read it — learn ' + item.teaches }]
+      : [],
+
+    gearItemAct: (action, item, char) => {
+      if (action !== 'learn' || !item || !item.teaches) return { ok: false };
+      const cat = dccSpellByName(item.teaches);
+      char.blocks = char.blocks || {};
+      char.blocks.spells = char.blocks.spells || { skills: [] };
+      const have = char.blocks.spells.skills || [];
+      if (have.some(x => String(x.name).toLowerCase() === String(item.teaches).toLowerCase())) {
+        return { ok: false, message: 'You already know ' + item.teaches };
+      }
+      have.push({
+        name: cat ? cat.name : item.teaches,
+        rank: 1, stat: cat ? cat.stat : 'INT',
+        checkType: cat ? cat.checkType : null,
+        passive: false, source: 'tome', marked: false,
+      });
+      char.blocks.spells.skills = have;
+      return { ok: true, remove: true };      // the tome is spent once read
     },
 
     gearSlotFor: (item) => {
@@ -253,7 +311,18 @@ registerSystem({
     liftLimit: char => 'Lift limit ' + (dccStatOf(char, 'STR') * 15) + ' lb',
     maxMana:     char => dccStatOf(char, 'INT'),
     evade:       char => '+' + dccModOf(char, 'DEX'),
-    dr:          char => (char && char.dr) || 0,
+    // "Only what is in a Gear Slot gives you anything" (p. 112), so armour in
+    // the Hotlist or Inventory contributes nothing.
+    dr: (char) => {
+      let n = (char && char.dr) || 0;
+      const eq = char && char.blocks && char.blocks.gear && char.blocks.gear.equipped;
+      if (eq) {
+        Object.keys(eq).forEach(function (slot) {
+          (eq[slot] || []).forEach(function (it) { n += Number(it && it.dr) || 0; });
+        });
+      }
+      return n;
+    },
     move:        char => (char && char.move) || DCC_BASE_MOVE,
     step:        char => (char && char.step) || DCC_BASE_STEP,
     size:        char => {

@@ -76,6 +76,13 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
    name to a couple of characters. */
 .inv-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .inv-name{flex:1 1 auto;min-width:0;font-size:12px;overflow-wrap:anywhere}
+/* The per-item detail editor: what a thing IS, folded away until asked for. */
+.inv-detail{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:flex-end;
+  padding:8px 10px;margin-top:4px;background:var(--surface2);border-radius:var(--radius-btn)}
+.inv-f{display:flex;flex-direction:column;gap:2px;font-size:10px;color:var(--muted)}
+.inv-f span{font-family:var(--font-label);letter-spacing:.08em;text-transform:uppercase}
+.inv-f input,.inv-f select{font-size:11px;padding:3px 5px;min-width:96px}
+.inv-f input[type=number]{max-width:70px;min-width:60px}
 .inv-stat{display:block;font-size:10px;color:var(--blue);font-family:var(--font-label);letter-spacing:.02em;margin-top:1px}
 .inv-ctl{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}
 .inv-slot{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
