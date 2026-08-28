@@ -51,6 +51,17 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .pg:last-child{break-after:auto;page-break-after:auto}
 .pg-h{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #111;padding-bottom:4px;margin-bottom:10px}
 .pg-h-t{font-size:17pt;font-weight:900;line-height:1}
+.pr-id{display:flex;flex-wrap:wrap;gap:4px 18px;margin:6px 0 8px;padding-bottom:6px;border-bottom:1.5px solid #222}
+.pr-id-f{font-size:9pt}
+.pr-id-l{text-transform:uppercase;font-size:7pt;letter-spacing:.5px;color:#888;margin-right:4px}
+.pr-id-v{font-weight:700}
+.pr-note{font-size:8pt;line-height:1.35;color:#333;margin-bottom:8px;padding:5px 7px;border:.75pt solid #bbb;border-radius:3px}
+.pr-cols{column-count:2;column-gap:14px}
+.pr-blk{break-inside:avoid;page-break-inside:avoid;margin-bottom:9px}
+.pr-blk-t{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#111;border-bottom:1pt solid #222;margin-bottom:2px}
+.pr-t{width:100%;border-collapse:collapse;font-size:8.5pt}
+.pr-t td{padding:1px 0;vertical-align:top;border-bottom:.4pt dotted #ccc}
+.pr-t td.pr-n{text-align:right;white-space:nowrap;padding-left:6px;font-variant-numeric:tabular-nums}
 .pg-h-s{font-size:7pt;letter-spacing:1.5px;color:#999;text-transform:uppercase}
 /* 4-up cast cards */
 .grid4{display:grid;grid-template-columns:1fr 1fr;gap:0}
@@ -385,6 +396,121 @@ function renderPrintCentre(){
 function prE(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function prBoxes(n){let o='';for(let i=0;i<n;i++)o+=`<span class="sb">${i+1}</span>`;return o;}
 function prRules(n){let o='';for(let i=0;i<n;i++)o+='<span class="rule"></span>';return o;}
+// ─── printing a block-based pack ────────────────────────────────────────────
+// Everything else in this file is Daring Comics' sheet: Aspects, Stress,
+// Consequences, the Fate ladder. A pack that builds its character from blocks
+// has none of that, and printing one threw on the first Daring Comics global it
+// reached ("SKILLS is not defined"), so the preview came out empty and the game
+// had no way to print a character at all.
+//
+// This renders from the pack's own schema, so it serves any block pack rather
+// than being a second hard-coded layout.
+function prBlockRows(block, ctx) {
+  const d = ctx.data || {};
+  const rows = [];
+  const val = spec => blockValue(spec, ctx, null);
+  if (block.type === 'traitGrid') {
+    (block.traits || []).forEach(function (tr) {
+      const cell = d[tr.id] || {};
+      const base = cell.base || 0, bonus = cell.bonus || 0;
+      const modFn = sysDerive(block.mod);
+      const mod = modFn ? modFn(base + bonus, ctx) : null;
+      rows.push([tr.name || tr.id,
+                 block.layers ? (base + ' / ' + (base + bonus)) : String(base),
+                 mod === null ? '' : (mod >= 0 ? '+' + mod : String(mod))]);
+    });
+  } else if (block.type === 'track') {
+    const slots = val(block.slots) || 0;
+    const each = val(block.slotValue);
+    const marked = d.marked || 0;
+    rows.push(['Slots', slots + (each ? ' x ' + each : ''), (slots - marked) + ' left']);
+  } else if (block.type === 'pool') {
+    const max = block.max === undefined ? null : val(block.max);
+    rows.push([block.label || block.id, (d.current || 0) + (max === null ? '' : ' / ' + max), '']);
+  } else if (block.type === 'readout') {
+    (block.items || []).forEach(function (it) {
+      rows.push([it.label, String(blockValue(it.value, ctx, '')), '']);
+    });
+  } else if (block.type === 'skillList') {
+    (d.skills || []).slice().sort(function (a, b) { return (b.rank || 0) - (a.rank || 0); })
+      .forEach(function (sk) { rows.push([sk.name, 'Rank ' + (sk.rank || 0), sk.stat || '']); });
+  } else if (block.type === 'inventory') {
+    (block.containers || []).forEach(function (cn) {
+      // A 'slots' container is an object of slot-name -> array of items, so it
+      // needs flattening; a 'stack' or 'list' is already a flat array. Mapping
+      // the object's values straight out produced one empty string per empty
+      // slot, which printed as a row of bare commas.
+      const held = d[cn.id];
+      let items = [];
+      if (Array.isArray(held)) items = held;
+      else if (held && typeof held === 'object') {
+        Object.keys(held).forEach(function (k) {
+          const v = held[k];
+          if (Array.isArray(v)) items = items.concat(v);
+          else if (v) items.push(v);
+        });
+      }
+      const listed = items.filter(Boolean).map(function (i) {
+        return (i && i.name ? i.name : String(i)) + (i && i.qty > 1 ? ' x' + i.qty : '');
+      }).filter(function (n) { return n.trim(); }).join(', ');
+      rows.push([cn.label || cn.id, listed || '-', '']);
+    });
+    (block.counters || []).forEach(function (ct) {
+      rows.push([ct.label || ct.id, String((d.counters && d.counters[ct.id]) || 0), '']);
+    });
+  } else if (block.type === 'entityList') {
+    (d.entries || []).forEach(function (e) {
+      const read = sysDerive(block.readout);
+      const line = read ? (read(ctx.char, e) || []).join(' - ') : '';
+      rows.push([e.name || '-', e.kind || '', line]);
+    });
+  }
+  return rows;
+}
+
+function prBlockSheetHTML(char, opts) {
+  opts = opts || {};
+  const ids = (SYS.schema && SYS.schema.identity) || [];
+  const LABELS = { name: 'Name', crawlerNumber: 'Crawler Number', race: 'Race', class: 'Class', level: 'Level' };
+  const name = (typeof sysCharName === 'function' && sysCharName(char)) || 'Unnamed';
+  let h = '<div class="pr-id">';
+  ids.forEach(function (f) {
+    const v = char[f];
+    h += '<div class="pr-id-f"><span class="pr-id-l">' + prE(LABELS[f] || f) + '</span> ' +
+         '<span class="pr-id-v">' + prE(v === undefined || v === null || v === '' ? '-' : String(v)) + '</span></div>';
+  });
+  h += '</div>';
+  if (typeof SYS.sheetExtra === 'function') {
+    try {
+      const extra = SYS.sheetExtra(char) || '';
+      // The pack's prose is already HTML-escaped, so decode it before prE puts
+      // it back — otherwise "Race &amp; Class" prints as "Race &amp;amp; Class".
+      const text = extra.replace(/<[^>]*>/g, ' ')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/\s+/g, ' ').trim();
+      if (text) h += '<div class="pr-note">' + prE(text) + '</div>';
+    } catch (e) { /* prose is optional; never let it stop the sheet */ }
+  }
+  h += '<div class="pr-cols">';
+  ((SYS.schema && SYS.schema.blocks) || []).forEach(function (b) {
+    let rows;
+    try { rows = prBlockRows(b, blockCtx(b, char)); }
+    catch (e) { rows = [['-', 'could not be printed', '']]; }
+    if (!rows.length) return;
+    // Not every block declares a label; an id is a poor heading, so tidy it.
+    const heading = b.label || String(b.id).replace(/([A-Z])/g, ' $1').replace(/^./, function (c) { return c.toUpperCase(); });
+    h += '<div class="pr-blk"><div class="pr-blk-t">' + prE(heading) + '</div><table class="pr-t">';
+    rows.forEach(function (r) {
+      h += '<tr><td>' + prE(r[0]) + '</td><td class="pr-n">' + prE(r[1]) + '</td><td class="pr-n">' + prE(r[2]) + '</td></tr>';
+    });
+    h += '</table></div>';
+  });
+  h += '</div>';
+  const kick = opts.kicker || String(typeof lexU === 'function' ? lexU('sheet') : 'Character Sheet').toUpperCase();
+  return prPage(name, kick, h);
+}
+
 function prPage(title,kicker,body){return `<section class="pg"><div class="pg-h"><div class="pg-h-t">${prE(title)}</div><div class="pg-h-s">${prE(kicker||'Daring Comics')}</div></div>${body}</section>`;}
 
 // A character-shaped object as a quarter-page index card.
@@ -543,7 +669,8 @@ function prBuildBody(){
   const chars=[];
   _prSel.forEach(s=>{if(s.k==='team'||s.k==='region'||s.k==='log'||s.k==='ref')return;
     if(s.k==='supporting'||s.k==='nameless')return;
-    const r=prResolveChar(s);if(r)chars.push({name:r.ch.costumedName||'Sheet',ch:r.ch});});
+    const r=prResolveChar(s);
+    if(r)chars.push({name:(typeof sysCharName==='function'&&sysCharName(r.ch))||r.ch.costumedName||'Sheet',ch:r.ch});});
   runs.forEach(run=>{
     const d=run.d;
     if(d==='full'||d==='half'){
@@ -555,8 +682,11 @@ function prBuildBody(){
           const reg=(S.regions||[])[+mm[1]];title=mm[2]!==undefined?(((reg.cells||[])[+mm[2]]||{}).subZone||{}).name||'Sub-zone':(reg&&reg.name)||'Region';
           noteTOC('Maps',title);}
         else{const r=prResolveChar(s);if(!r)return;
-          html=sheetBodyHTML(r.ch,{series:r.series,half:d==='half',kicker:(r.role||'').toUpperCase()+' SHEET'});
-          title=r.ch.costumedName||'Sheet';noteTOC(r.role==='Hero'||r.role==='Player hero'?'Heroes':'NPCs',title);}
+          html=(typeof sysUsesBlocks==='function'&&sysUsesBlocks())
+            ? prBlockSheetHTML(r.ch,{kicker:(r.role||'').toUpperCase()+' SHEET'})
+            : sheetBodyHTML(r.ch,{series:r.series,half:d==='half',kicker:(r.role||'').toUpperCase()+' SHEET'});
+          title=(typeof sysCharName==='function'&&sysCharName(r.ch))||r.ch.costumedName||'Sheet';
+          noteTOC(r.role==='Hero'||r.role==='Player hero'?'Heroes':'NPCs',title);}
         if(!html)return;
         if(d==='full')out+=html;
         else{buf.push(html);if(buf.length===2){out+=`<section class="pg">${buf.join('')}</section>`;buf=[];}}
@@ -568,7 +698,10 @@ function prBuildBody(){
       const cards=[];
       run.items.forEach(s=>{
         if(s.k==='supporting'||s.k==='nameless'){const n=prRawNpc(s);if(n){cards.push(prNpcCard(n));noteTOC('Cards',n.name);}return;}
-        const r=prResolveChar(s);if(!r)return;cards.push(prCharCard(r.ch,r.role));noteTOC('Cards',r.ch.costumedName);});
+        const r=prResolveChar(s);if(!r)return;
+        const useBlocks=(typeof sysUsesBlocks==='function'&&sysUsesBlocks());
+        cards.push(useBlocks?prBlockSheetHTML(r.ch,{kicker:'REFERENCE'}):prCharCard(r.ch,r.role));
+        noteTOC('Cards',(typeof sysCharName==='function'&&sysCharName(r.ch))||r.ch.costumedName);});
       for(let i=0;i<cards.length;i+=4)out+=prPage(i===0?'Reference Cards':'Reference Cards (cont.)','CUT ALONG THE DASHED LINES','<div class="grid4">'+cards.slice(i,i+4).join('')+'</div>');
       return;
     }

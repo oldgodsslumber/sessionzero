@@ -1309,6 +1309,53 @@ function boot(entry) {
     return ev('S.floor') === 1 || 'the table is still on floor ' + ev('S.floor');
   });
 
+  // ── printing a crawler ───────────────────────────────────────────────────
+  // The print centre is Daring Comics' sheet throughout — Aspects, Stress,
+  // Consequences, the Fate ladder. Printing a crawler threw on the first
+  // Daring Comics global it reached, so the preview came out empty and there
+  // was no way to print a character at all.
+  check('[print] building a crawler document does not throw', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(3);");
+    ev("dccStatMethod('array');dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccRollBumps();dccChoose('race','human');dccChoose('cls','boring-ol-fighter');dccFinishCreation(S.char);");
+    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};showTab('print');");
+    ev("prClear();prToggle('hero','@self','full');");
+    const r = ev("(function(){try{prBuildBody();return 'ok'}catch(e){return e.message}})()");
+    return r === 'ok' || 'threw: ' + r;
+  });
+  check('[print] the sheet carries the crawler and every block', () => {
+    const doc = ev('prBuildBody()');
+    const want = ['Fenwick', 'Crawler Number', 'Strength', 'Health Bar', 'Skills', 'Club', 'Gear', 'Mana', 'Popularity'];
+    const missing = want.filter(w => doc.indexOf(w) < 0);
+    return missing.length ? 'missing from the printed sheet: ' + missing.join(', ') : true;
+  });
+  check('[print] it does not print as an Unnamed Hero', () => {
+    const txt = ev("prBuildBody()");
+    return txt.indexOf('Unnamed') < 0 || 'still printing the Daring Comics placeholder name';
+  });
+  check('[print] the pack prose is not double-escaped', () => {
+    const txt = ev("prBuildBody()");
+    return !/&amp;(amp|lt|gt|quot);/.test(txt) || 'entities were escaped twice';
+  });
+  check('[print] empty gear slots do not print as bare commas', () => {
+    const txt = ev("prBuildBody().replace(/<[^>]*>/g,' ')");
+    return !/,\s*,/.test(txt) || 'a container printed one empty entry per empty slot';
+  });
+  check('[print] a Floor 1 crawler prints too', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);dccFinishCreation(S.char);");
+    ev("S.char.name='Wren';S.char.creation={step:0,complete:true};");
+    const r = ev("(function(){try{return prBuildBody().indexOf('Wren')>=0?'ok':'name missing'}catch(e){return e.message}})()");
+    return r === 'ok' || r;
+  });
+  check('[print] Daring Comics still prints its own sheet', () => {
+    // The dispatch must not have taken the Fate layout away from the game that
+    // needs it: that sheet is chosen when the pack does NOT use blocks.
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'core/print.js'), 'utf8');
+    if (src.indexOf('sheetBodyHTML(r.ch') < 0) return 'the Fate sheet is no longer reachable';
+    return /sysUsesBlocks\(\)[\s\S]{0,120}prBlockSheetHTML/.test(src)
+      || 'the block sheet is not gated on the pack using blocks';
+  });
+
   // ── the sheet must never render as "just a card" ─────────────────────────
   // Reported from a real browser: Finish appeared to do nothing, and coming
   // back to the Hero tab showed the identity card with no sheet under it.
