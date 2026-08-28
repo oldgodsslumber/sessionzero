@@ -94,6 +94,29 @@ registerSystem({
     noFreeSlot: 'Every slot is taken.',
   },
 
+  // The map is a dungeon floor, not a city. These are the places the Atlas
+  // actually describes on the tutorial floors: hallways that "connect rooms to
+  // other rooms", stairwells that are "the only reliable way for crawlers to
+  // reach the next floor down", saferooms, bathrooms, reward rooms and the
+  // Tutorial Guilds.
+  map: {
+    firstRegion: 'The First Floor',
+    zoneTypes: [
+      { name: 'Room',      icon: '\u{1F6AA}' },
+      { name: 'Hallway',   icon: '\u{1F6E4}' },
+      { name: 'Stairwell', icon: '\u{1FA9C}' },
+      { name: 'Saferoom',  icon: '\u{1F6E1}' },
+      { name: 'Guild',     icon: '\u{1F3F0}' },
+      { name: 'Boss Room', icon: '\u{1F480}' },
+    ],
+    hints: {
+      cellName: 'e.g. Tutorial Guild, Bathroom, Reward Room',
+      cellFeature: 'e.g. Stairwell down, Loot box, Mob nest',
+      areaName: 'e.g. Storeroom, Kitchen, Collapsed hallway',
+      areaFeature: 'e.g. Trapped door, Vending machine, Body',
+    },
+  },
+
   // ─── the crawler sheet ────────────────────────────────────────────────────
   schema: {
     identity: ['name', 'crawlerNumber', 'race', 'class', 'level'],

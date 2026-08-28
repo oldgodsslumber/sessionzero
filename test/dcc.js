@@ -1435,6 +1435,44 @@ function boot(entry) {
     return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
   });
 
+  // ── the map belongs to this game ────────────────────────────────
+  // The map arrived furnished by Daring Comics: a region called "Downtown" and
+  // zones called Building, Street, Rooftop and Hideout. A dungeon has hallways
+  // and stairwells, and the Atlas names them.
+  check('[map] the starting ground is named by the pack', () => {
+    const n = ev("defaultRegion().name");
+    return n === 'The First Floor' || 'the map opens on ' + JSON.stringify(n);
+  });
+  check('[map] zone kinds are the dungeon\'s, not a city\'s', () => {
+    const kinds = JSON.parse(ev("JSON.stringify(mapZoneTypes())"));
+    const city = ['Building', 'Street', 'Rooftop', 'Hideout'].filter(k => kinds.indexOf(k) >= 0);
+    if (city.length) return 'still offers ' + city.join(', ');
+    const want = ['Hallway', 'Stairwell', 'Saferoom'];
+    const missing = want.filter(k => kinds.indexOf(k) < 0);
+    return missing.length ? 'no ' + missing.join(', ') : true;
+  });
+  check('[map] every zone kind has an icon', () => {
+    const icons = JSON.parse(ev("JSON.stringify(mapZoneIcons())"));
+    const bare = JSON.parse(ev("JSON.stringify(mapZoneTypes())")).filter(k => !icons[k]);
+    return bare.length === 0 || 'no icon for ' + bare.join(', ');
+  });
+  check('[map] the examples name places this game has', () => {
+    const hint = ev("mapHint('cellName','')");
+    if (/Wayne|City Hall|Docks/.test(hint)) return 'still suggests ' + JSON.stringify(hint);
+    return /Guild|Bathroom|Reward/.test(hint) || 'unhelpful example: ' + JSON.stringify(hint);
+  });
+  check('[map] an untouched Downtown from an older crawler is renamed', () => {
+    const got = ev("(function(){var r=defaultRegion();r.name='Downtown';" +
+                   "sysRenameStarterRegion([r]);return r.name})()");
+    return got === 'The First Floor' || 'left as ' + JSON.stringify(got);
+  });
+  check('[map] ...but a map you have drawn on is left alone', () => {
+    // Once there is anything on it, it is the player's map whatever it is called.
+    const got = ev("(function(){var r=defaultRegion();r.name='Downtown';" +
+                   "r.cells[3].name='My hideout';sysRenameStarterRegion([r]);return r.name})()");
+    return got === 'Downtown' || 'renamed a map in use to ' + JSON.stringify(got);
+  });
+
   // ── gear that raises what you are ────────────────────────────────────────
   // "Platinum: +2 Skill in the Weapon, +3 to Strength or Dexterity" (p. 116),
   // and Platinum armour gives "+3 to Catcher or Taunt Skills". Those had

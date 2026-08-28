@@ -68,7 +68,7 @@ function renderMapContent(){
     let det='';
     if(sc&&!sc.isVoid){const cur=si===sz.currentCell,adj=isAdj(sz.currentCell,si);
       _miScope='sz';_miIdx=si;_miVal=isGiSlug(sc.icon)?sc.icon:'';_miDefault=sc.name||sz.name||'';
-      det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">Area ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelSZ(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleSZVoid(${si})">${sc.isVoid?'Clear Void':'Mark Void'}</button></div><div class="form-group"><label>Name</label><input value="${esc(sc.name)}" onchange="setSZProp(${si},'name',this.value)" placeholder="e.g. Rooftop, Lab, Alley..."></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setSZProp(${si},'feature',this.value)" placeholder="e.g. Sniper Nest, Evidence Room..."></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setSZProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
+      det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">Area ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelSZ(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleSZVoid(${si})">${sc.isVoid?'Clear Void':'Mark Void'}</button></div><div class="form-group"><label>Name</label><input value="${esc(sc.name)}" onchange="setSZProp(${si},'name',this.value)" placeholder="${esc(mapHint('areaName','e.g. Rooftop, Lab, Alley...'))}"></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setSZProp(${si},'feature',this.value)" placeholder="${esc(mapHint('areaFeature','e.g. Sniper Nest, Evidence Room...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setSZProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
     return`<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><button class="btn btn-secondary btn-xs" onclick="exitSZ()">\u2190 Back to ${esc(region.name)}</button><span class="pg-title" style="font-size:18px;margin:0">${esc(sz.name)}</span>${sz.type?`<span class="tag" style="background:var(--surface3);color:var(--text);border:1px solid var(--border)">${sz.type}</span>`:''}</div><div class="form-group"><label>Zone Name</label><input value="${esc(sz.name)}" onchange="setSZName(this.value)" style="font-weight:700;color:var(--accent)"></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px">Click adjacent area to travel. Click any cell to view/edit.</div>${g}<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)"><span style="color:var(--accent)">\u25a3 You</span><span style="color:var(--blue)">\u25a3 Adjacent</span><span>\u25a0 Explored</span><span style="opacity:.5">\u25a0 Unexplored</span><span style="opacity:.3">\u25a0 Void</span></div></div>${det}`;
   }
 
@@ -88,7 +88,7 @@ function renderMapContent(){
   let det='';
   if(sc&&!sc.isVoid){const cur=si===region.currentCell,adj=isAdj(region.currentCell,si);
     _miScope='region';_miIdx=si;_miVal=isGiSlug(sc.icon)?sc.icon:'';_miDefault=sc.name||region.name||'';
-    det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">Location ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelTo(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleMapVoid(${si})">${sc.isVoid?'Clear Void':'Mark Void'}</button><button class="btn btn-gold btn-xs" onclick="enterSZ(${si})">Zoom In${sc.subZone?' ('+sc.subZone.type+')':''}</button></div><div class="form-group"><label>Location Name</label><input value="${esc(sc.name)}" onchange="setMapProp(${si},'name',this.value)" placeholder="e.g. Wayne Tower, City Hall, Docks..."></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setMapProp(${si},'feature',this.value)" placeholder="e.g. Villain HQ, Hospital, Park..."></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setMapProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
+    det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">Location ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelTo(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleMapVoid(${si})">${sc.isVoid?'Clear Void':'Mark Void'}</button><button class="btn btn-gold btn-xs" onclick="enterSZ(${si})">Zoom In${sc.subZone?' ('+sc.subZone.type+')':''}</button></div><div class="form-group"><label>Location Name</label><input value="${esc(sc.name)}" onchange="setMapProp(${si},'name',this.value)" placeholder="${esc(mapHint('cellName','e.g. Wayne Tower, City Hall, Docks...'))}"></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setMapProp(${si},'feature',this.value)" placeholder="${esc(mapHint('cellFeature','e.g. Villain HQ, Hospital, Park...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setMapProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
 
   const heroInfo=S.char?`<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:22px;font-weight:900;font-family:var(--font-title);color:var(--accent)">${heroMarker()}</span><div><div style="font-weight:700;color:var(--accent)">${esc(S.char.costumedName)}</div><div style="font-size:10px;color:var(--muted)">${esc(S.char.civilianName)}</div></div></div>`:'';
 
@@ -105,13 +105,38 @@ function newRegion(){const n=prompt('Region name:','Neighborhood '+(S.regions.le
 function renameRegion(){const r=S.regions[S.activeRegion];if(!r)return;const n=prompt('Rename region:',r.name);if(n)r.name=n;save();renderMap();}
 function deleteRegion(){if(S.regions.length<=1)return alert('Cannot delete the only region.');if(!confirm('Delete this region?'))return;S.regions.splice(S.activeRegion,1);S.activeRegion=Math.max(0,S.activeRegion-1);save();renderMap();}
 
+// The map's vocabulary belongs to the game, not the shell: a superhero city
+// has streets and rooftops, a dungeon has hallways and stairwells. A pack
+// that says nothing still gets Daring Comics' city, so the map keeps working.
+function mapZoneTypes() {
+  const m = (typeof SYS !== 'undefined' && SYS && SYS.map) || {};
+  if (m.zoneTypes && m.zoneTypes.length) return m.zoneTypes.map(z => z.name || z);
+  return ['Building', 'Street', 'Underground', 'Rooftop', 'Hideout'];
+}
+function mapZoneIcons() {
+  const m = (typeof SYS !== 'undefined' && SYS && SYS.map) || {};
+  if (m.zoneTypes && m.zoneTypes.length) {
+    const out = {};
+    m.zoneTypes.forEach(z => { if (z && z.name) out[z.name] = z.icon || ''; });
+    return out;
+  }
+  return { Building: '\ud83c\udfe2', Street: '\ud83c\udfd9',
+           Underground: '\ud83d\ude87', Rooftop: '\ud83c\udf06',
+           Hideout: '\ud83d\udd75' };
+}
+// Placeholder copy, so the examples name places this game actually has.
+function mapHint(key, fallback) {
+  const m = (typeof SYS !== 'undefined' && SYS && SYS.map) || {};
+  return (m.hints && m.hints[key]) || fallback;
+}
+
 // Sub-zone operations
 function enterSZ(ci){
   const r=S.regions[S.activeRegion];if(!r)return;const c=r.cells[ci];
   if(!c.subZone){
-    const types=['Building','Street','Underground','Rooftop','Hideout'];
+    const types=mapZoneTypes();
     let h='<div class="card"><div class="pg-title" style="font-size:18px">Zone Type</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">What kind of location is this?</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
-    types.forEach(t=>{const icons={Building:'\ud83c\udfe2',Street:'\ud83c\udfd9',Underground:'\ud83d\ude87',Rooftop:'\ud83c\udf06',Hideout:'\ud83d\udd75'};h+=`<button class="btn btn-primary" style="padding:12px;font-size:13px" onclick="createSZ(${ci},'${t}')">${icons[t]||''} ${t}</button>`;});
+    types.forEach(t=>{const icons=mapZoneIcons();h+=`<button class="btn btn-primary" style="padding:12px;font-size:13px" onclick="createSZ(${ci},'${t}')">${icons[t]||''} ${t}</button>`;});
     h+='</div></div>';
     document.getElementById('map-content').innerHTML=h;return;
   }

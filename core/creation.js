@@ -15,6 +15,7 @@ function renderHero(){
       // Restore the table state saved alongside the character — the journal,
       // the floor, the map and any fight that was in progress.
       const sess=(typeof sysScratchSession==='function')?sysScratchSession():null;
+      if(sess)sysRenameStarterRegion(sess.regions);
       if(sess)SYS_SESSION_KEYS.forEach(function(k){
         if(sess[k]===undefined||sess[k]===null)return;
         // A universe id is only meaningful against this game's own list.
@@ -50,6 +51,22 @@ function sysNewCharacter(){
   if(!confirm('Start a new '+lex('hero')+'?\n\n'+(nm?'"'+nm+'" will be replaced in this slot. Export it first if you want to keep it.':'The current sheet will be replaced.')))return;
   S.char=SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}};
   save();renderHero();
+}
+
+// A crawler whose map was created before this pack named its own starting
+// ground is carrying Daring Comics' "Downtown". Rename it, but only while it is
+// still untouched: once a player has drawn on it, it is their map whatever it
+// is called.
+function sysRenameStarterRegion(regions){
+  const want=(SYS&&SYS.map&&SYS.map.firstRegion)||'';
+  if(!want||!Array.isArray(regions))return;
+  regions.forEach(function(r){
+    if(!r||r.name!=='Downtown'||want==='Downtown')return;
+    const touched=(r.cells||[]).some(function(c){
+      return c&&(c.name||c.notes||c.feature||c.icon||c.subZone||c.type!=='unknown');
+    });
+    if(!touched)r.name=want;
+  });
 }
 
 // The block-driven sheet: an identity header the pack declares, then its blocks.

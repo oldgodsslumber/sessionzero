@@ -22,7 +22,9 @@ const LOG_TYPES=[
 // hoisting no longer reaches across the separate <script> tags).
 function defaultRegion(name){
   const cells=Array.from({length:25},(_,i)=>({type:'unknown',isVoid:false,isCurrent:i===12,name:i===12?'':'',icon:'',notes:'',feature:'',subZone:null}));
-  return{name:name||'Downtown',cells,currentCell:12};
+  // "Downtown" is Daring Comics'. A pack names its own starting ground.
+  const first=(typeof SYS!=='undefined'&&SYS&&SYS.map&&SYS.map.firstRegion)||'Downtown';
+  return{name:name||first,cells,currentCell:12};
 }
 
 function defaultState(){
