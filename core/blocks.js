@@ -707,7 +707,8 @@ function invAdder(b, c) {
       (c.slots || []).map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') + `</select>`
     : '';
   return `<div style="display:flex;gap:6px;margin-top:6px">
-    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…" style="flex:1">
+    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…" style="flex:1"
+      onkeydown="if(event.key==='Enter')invAdd('${esc(b.id)}','${esc(c.id)}')">
     ${slotPick}
     <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div>`;
 }
@@ -740,6 +741,37 @@ function invAdd(id, cid) {
   const c = _container(t.block, cid);
   const sel = document.getElementById('inv-slot-' + id + '-' + cid);
   const slotId = sel ? sel.value : '';
+
+  // A stack container holds one entry per NAME, counted up — "You may place up
+  // to 999 of the same item by name into a single slot of your Hotlist"
+  // (p. 112). Adding a second Healing Potion used to take a second of the ten
+  // slots instead of making the first one read x2, so a Hotlist filled up with
+  // duplicates of the same thing.
+  if (c.kind === 'stack') {
+    const list = t.ctx.data[cid] = t.ctx.data[cid] || [];
+    const at = list.findIndex(x => x && String(x.name).toLowerCase() === name.toLowerCase());
+    if (at >= 0) {
+      const max = c.stackMax || 999;
+      if ((list[at].qty || 1) >= max) {
+        if (typeof flashSaveError === 'function') flashSaveError(list[at].name + ' is capped at ' + max);
+        return;
+      }
+      list[at].qty = (list[at].qty || 1) + 1;
+      if (inp) inp.value = '';
+      save(); blockRepaint(id);
+      return;
+    }
+    // A new name needs a free slot of its own.
+    if (invRoom(t.block, t.ctx.data, cid, slotId) === 0) {
+      if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
+      return;
+    }
+    list.push({ name, qty: 1 });
+    if (inp) inp.value = '';
+    save(); blockRepaint(id);
+    return;
+  }
+
   if (invRoom(t.block, t.ctx.data, cid, slotId) === 0) {
     if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
     return;

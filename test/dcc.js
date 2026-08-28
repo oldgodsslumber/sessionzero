@@ -1358,6 +1358,75 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── adding items ─────────────────────────────────────────────────────────
+  const invSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);dccFinishCreation(S.char);");
+    ev("S.char.creation={step:0,complete:true};renderHero();");
+  };
+  const addTo = (cid, name) => {
+    ev("var i=document.getElementById('inv-add-gear-" + cid + "');i.value=" + JSON.stringify(name) + ";");
+    ev("[].slice.call(document.querySelectorAll('#blk-gear button'))" +
+       ".filter(function(b){return (b.getAttribute('onclick')||'')===\"invAdd('gear','" + cid + "')\"})[0].click();");
+  };
+  const hot = () => JSON.parse(ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x.name+' x'+(x.qty||1)}))"));
+
+  check('[items] the same item twice stacks instead of taking a second slot', () => {
+    // "You may place up to 999 of the same item by name into a single slot of
+    // your Hotlist" (p. 112). The Hotlist has ten slots, so duplicates were
+    // burning them.
+    invSheet();
+    addTo('hotlist', 'Healing Potion');
+    addTo('hotlist', 'Healing Potion');
+    addTo('hotlist', 'Healing Potion');
+    const list = hot();
+    const potions = list.filter(x => /Healing Potion/.test(x));
+    if (potions.length !== 1) return 'took ' + potions.length + ' slots: ' + JSON.stringify(list);
+    return potions[0] === 'Healing Potion x3' || 'stacked to ' + JSON.stringify(potions[0]);
+  });
+  check('[items] stacking is by name regardless of case', () => {
+    addTo('hotlist', 'healing potion');
+    const potions = hot().filter(x => /[Hh]ealing [Pp]otion/.test(x));
+    return potions.length === 1 || 'made a second entry: ' + JSON.stringify(potions);
+  });
+  check('[items] a new name still needs a free slot, and says so when there is none', () => {
+    invSheet();
+    for (let i = 0; i < 12; i++) addTo('hotlist', 'Thing ' + i);
+    const n = ev("S.char.blocks.gear.hotlist.length");
+    if (n > 10) return 'the Hotlist grew to ' + n + ' slots';
+    const flash = ev("document.getElementById('save-flash').textContent");
+    return /room/i.test(flash) || 'no explanation was given: ' + JSON.stringify(flash);
+  });
+  check('[items] ...but a repeat still stacks on a full Hotlist', () => {
+    // It needs no new slot, so a full list is no reason to refuse it.
+    ev("S.char.blocks.gear.hotlist[0]={name:'Healing Potion',qty:2};blockRepaint('gear');");
+    addTo('hotlist', 'Healing Potion');
+    const p = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.hotlist.filter(function(x){return x.name==='Healing Potion'}))"));
+    return (p.length === 1 && p[0].qty === 3) || 'got ' + JSON.stringify(p);
+  });
+  check('[items] a stack will not climb past its cap', () => {
+    invSheet();
+    ev("S.char.blocks.gear.hotlist=[{name:'Rock',qty:999}];blockRepaint('gear');");
+    addTo('hotlist', 'Rock');
+    const qty = ev("S.char.blocks.gear.hotlist[0].qty");
+    if (qty !== 999) return 'went to ' + qty;
+    return /capped/i.test(ev("document.getElementById('save-flash').textContent")) || 'no cap message';
+  });
+  check('[items] Enter adds, without reaching for the button', () => {
+    invSheet();
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Rope';" +
+       "i.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));");
+    const inv = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.map(function(x){return x.name}))"));
+    return inv.indexOf('Rope') >= 0 || 'nothing was added: ' + JSON.stringify(inv);
+  });
+  check('[items] adding to a gear slot uses the slot you picked', () => {
+    invSheet();
+    ev("var i=document.getElementById('inv-add-gear-equipped');i.value='Goblin Helm';" +
+       "document.getElementById('inv-slot-gear-equipped').value='head';");
+    ev("invAdd('gear','equipped');");
+    const head = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.equipped.head.map(function(x){return x.name}))"));
+    return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
+  });
+
   // ── equipping a weapon ───────────────────────────────────────────────────
   // The rulebook is clear that a weapon is either in your hand or in your
   // Hotlist, never both: "Items in Hotlists do not grant you any added
