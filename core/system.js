@@ -103,6 +103,13 @@ function lex(key) {
   return (SYS && SYS.lexicon && SYS.lexicon[key]) || DEFAULT_LEXICON[key] || key;
 }
 
+// Optional copy: returns '' when neither the pack nor the default defines it,
+// so a caller can fall back. lex() cannot be used for this — it returns the key
+// itself for an unknown term, which is always truthy.
+function lexOpt(key) {
+  return (SYS && SYS.lexicon && SYS.lexicon[key]) || DEFAULT_LEXICON[key] || '';
+}
+
 // Capitalised / lower variants, for mid-sentence copy.
 function lexU(key) { const s = lex(key); return s.charAt(0).toUpperCase() + s.slice(1); }
 function lexL(key) { return lex(key).toLowerCase(); }

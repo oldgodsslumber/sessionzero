@@ -14,18 +14,69 @@
   --radius-card:12px;--radius-btn:10px;--radius-input:9px;
   --comic-shadow:3px 3px 0 var(--ink);--comic-shadow-lg:5px 5px 0 rgba(0,0,0,.4);--ink:rgba(0,0,0,.55);--comic:1;
 }
+/* Dungeon Crawler Carl's own identity, measured from the Core Rulebook rather
+   than picked: vector fills totalled by area across the book give lime #abd037
+   as the dominant colour, deep green #007035 under it, and orange #f36c21 as
+   the hot accent. The structural blue is the book's own table furniture — its
+   tables are banded #7ed3f7 over a #e7f6fd zebra, which is the closest thing
+   the rulebook has to an interface, so the app borrows it instead of inventing
+   one. The ground is the cover's near-black, biased green.
+
+   Type: Neue Kabel and Citrus Gothic carry the book but are licensed and not on
+   Google Fonts. Jost shares Kabel's 1920s geometric lineage and is drawn for
+   screen, so it holds at UI sizes; Oswald stands in for Citrus Gothic on labels;
+   Inter carries body copy; JetBrains Mono is a new role the book has no
+   equivalent for — Stat values, Ranks and dice results, which need to line up.
+
+   This game does not offer a theme picker. Daring Comics keeps all five. */
 html[data-theme="crawler"]{
-  --bg:#0b0f14;--surface:#141a22;--surface2:#1c242e;--surface3:#26313d;
-  --accent:#f0a202;--accent2:#ffc043;--text:#e8edf2;--muted:#8b9bab;
-  --border:#2b3644;--green:#3ecf8e;--yellow:#f0a202;--blue:#4a9eff;
-  --red:#e5484d;--gold:#f0c000;--purple:#a78bfa;--cyan:#22d3ee;
-  /* Oswald is condensed and highly legible at small sizes; Bangers is a comic
-     display face that was never loaded anyway and fell back to Comic Sans. */
-  --font-title:'Oswald',system-ui,sans-serif;--font-label:'Oswald',system-ui,sans-serif;
+  --bg:#0b0f0c;--surface:#121a14;--surface2:#18221a;--surface3:#202c22;
+  --accent:#abd037;--accent2:#c3e05f;--text:#e7f6fd;--muted:#8b9a8e;
+  --border:#26332a;--green:#41ad49;--yellow:#ffc20e;--blue:#7ed3f7;
+  --red:#ee3532;--gold:#ffc20e;--purple:#662d90;--cyan:#7ed3f7;
+  --deep:#007035;--hot:#f36c21;--paper:#e7f6fd;
+  --font-title:'Jost',system-ui,sans-serif;--font-label:'Oswald',system-ui,sans-serif;
   --font-body:'Inter',system-ui,'Segoe UI',sans-serif;
-  --radius-card:10px;--radius-btn:8px;--radius-input:7px;
+  --font-data:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --radius-card:4px;--radius-btn:3px;--radius-input:3px;
   --comic-shadow:none;--comic-shadow-lg:none;--ink:rgba(0,0,0,0);--comic:0;
 }
+/* Headings are geometric and set tight; the comic treatment is switched off. */
+html[data-theme="crawler"] .pg-title{
+  font-family:var(--font-title);font-weight:700;letter-spacing:-.01em;
+  text-transform:none;text-shadow:none;font-size:26px;
+}
+html[data-theme="crawler"] .label{
+  font-family:var(--font-label);font-weight:600;font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--blue);
+}
+/* The book's table band, reused for every block heading on the sheet. */
+html[data-theme="crawler"] .blk-title{
+  font-family:var(--font-label);font-weight:600;font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);border-bottom:1px solid var(--border);
+  padding-bottom:3px;margin-bottom:6px;
+}
+/* Figures are what you read mid-fight, so they get the mono face and align. */
+html[data-theme="crawler"] .num,
+html[data-theme="crawler"] .tg-total,
+html[data-theme="crawler"] .tg-mod{
+  font-family:var(--font-data);font-variant-numeric:tabular-nums;
+}
+html[data-theme="crawler"] .btn-primary{
+  background:var(--accent);color:#08110f;font-family:var(--font-label);
+  font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+}
+html[data-theme="crawler"] .btn-secondary{
+  background:transparent;color:var(--blue);border:1px solid var(--border);
+  font-family:var(--font-label);letter-spacing:.06em;
+}
+html[data-theme="crawler"] .btn-gold{background:var(--gold);color:#0b0f0c}
+html[data-theme="crawler"] .btn-danger{background:var(--red);color:#fff}
+html[data-theme="crawler"] .nb.active{color:var(--accent)}
+html[data-theme="crawler"] .nb{color:var(--muted)}
+html[data-theme="crawler"] .uni-bar{border-color:var(--border)}
+html[data-theme="crawler"] .uni-name{font-family:var(--font-label);letter-spacing:.08em}
 html[data-theme="dark"]{
   --bg:#0c0c0c;--surface:#1a1a1a;--surface2:#252525;--surface3:#333;
   --accent:#d4a020;--accent2:#e8b838;--text:#d8d0c0;--muted:#706858;

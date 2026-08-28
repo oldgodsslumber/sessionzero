@@ -1309,6 +1309,54 @@ function boot(entry) {
     return ev('S.floor') === 1 || 'the table is still on floor ' + ev('S.floor');
   });
 
+  // ── the pack's own identity ──────────────────────────────────────────────
+  // Measured from the Core Rulebook: lime #abd037 is the dominant fill by area,
+  // and the book's tables are banded #7ed3f7. The shell's five themes are
+  // Daring Comics' and stay with it.
+  check('[brand] the crawler theme is applied and is not the comic one', () => {
+    const theme = ev("document.documentElement.getAttribute('data-theme')");
+    if (theme !== 'crawler') return 'data-theme is ' + JSON.stringify(theme);
+    const g = k => ev("getComputedStyle(document.documentElement).getPropertyValue('--" + k + "').trim()");
+    if (g('accent') !== '#abd037') return 'accent is ' + g('accent');
+    return /Jost/.test(g('font-title')) || 'title face is ' + g('font-title');
+  });
+  check('[brand] this game offers no theme picker', () => {
+    // One fixed identity. Offering the shell's themes here would let a player
+    // pick a comic palette for a dungeon crawl.
+    if (ev('(SYS.themes||[]).length') !== 0) return 'the pack still declares themes';
+    return ev("(document.getElementById('theme-wrap')||{}).style.display") === 'none'
+      || 'the swatch row is still shown';
+  });
+  check('[brand] the entry file loads the faces the theme names', () => {
+    const fs2 = require('fs'), path2 = require('path');
+    const html = fs2.readFileSync(path2.join(__dirname, '..', 'dcc/index.html'), 'utf8');
+    const want = ['Jost', 'Oswald', 'Inter', 'JetBrains+Mono'];
+    const missing = want.filter(f => html.indexOf(f) < 0);
+    if (missing.length) return 'not loaded: ' + missing.join(', ');
+    return html.indexOf('Bangers') < 0 || 'still loading the comic face it does not use';
+  });
+  check('[brand] the print window loads its own fonts', () => {
+    // The preview is a separate document. Without its own link the sheet falls
+    // back silently, which is how the app came to render in Comic Sans.
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'core/print.js'), 'utf8');
+    const head = src.slice(src.indexOf('<!DOCTYPE html><html><head>'), src.indexOf('<!DOCTYPE html><html><head>') + 900);
+    return /fonts\.googleapis\.com/.test(head) || 'the print document loads no fonts';
+  });
+
+  // ── the opening gate speaks the pack's language ──────────────────────────
+  check("[gate] the first screen a player sees uses this game's words", () => {
+    // Render the gate fresh: by now the suite has been through it, and the
+    // modal body holds whatever was drawn last.
+    ev("openUniverseSetup(true)");
+    // Visible text only: the handler names still contain "submitUniverseSetup",
+    // which is code, not copy.
+    const body = ev("document.getElementById('universe-modal-body').textContent");
+    if (body.indexOf("Universe") >= 0) return 'still says Universe to a Dungeon Crawler Carl player';
+    if (body.indexOf("Begin the Crawl") < 0) return "the submit button is not the pack's copy";
+    ev("closeUniverseModal()");
+    return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
+  });
+
   // ── printing a crawler ───────────────────────────────────────────────────
   // The print centre is Daring Comics' sheet throughout — Aspects, Stress,
   // Consequences, the Fate ladder. Printing a crawler threw on the first

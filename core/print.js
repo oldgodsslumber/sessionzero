@@ -51,17 +51,19 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .pg:last-child{break-after:auto;page-break-after:auto}
 .pg-h{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #111;padding-bottom:4px;margin-bottom:10px}
 .pg-h-t{font-size:17pt;font-weight:900;line-height:1}
-.pr-id{display:flex;flex-wrap:wrap;gap:4px 18px;margin:6px 0 8px;padding-bottom:6px;border-bottom:1.5px solid #222}
+.pr-id{display:flex;flex-wrap:wrap;gap:3px 20px;margin:5px 0 9px;padding-bottom:6px;border-bottom:1.5pt solid #101410}
 .pr-id-f{font-size:9pt}
-.pr-id-l{text-transform:uppercase;font-size:7pt;letter-spacing:.5px;color:#888;margin-right:4px}
-.pr-id-v{font-weight:700}
+.pr-id-l{font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:7pt;letter-spacing:.9px;color:#68786a;margin-right:5px;font-weight:500}
+.pr-id-v{font-weight:600}
 .pr-note{font-size:8pt;line-height:1.35;color:#333;margin-bottom:8px;padding:5px 7px;border:.75pt solid #bbb;border-radius:3px}
 .pr-cols{column-count:2;column-gap:14px}
 .pr-blk{break-inside:avoid;page-break-inside:avoid;margin-bottom:9px}
-.pr-blk-t{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#111;border-bottom:1pt solid #222;margin-bottom:2px}
+.pr-blk-t{font-family:'Oswald',sans-serif;font-size:8pt;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;
+  color:#101410;border-bottom:1pt solid #101410;padding-bottom:1.5pt;margin-bottom:3px}
 .pr-t{width:100%;border-collapse:collapse;font-size:8.5pt}
 .pr-t td{padding:1px 0;vertical-align:top;border-bottom:.4pt dotted #ccc}
-.pr-t td.pr-n{text-align:right;white-space:nowrap;padding-left:6px;font-variant-numeric:tabular-nums}
+.pr-t td.pr-n{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:7.6pt;
+  text-align:right;white-space:nowrap;padding-left:6px;font-variant-numeric:tabular-nums}
 .pg-h-s{font-size:7pt;letter-spacing:1.5px;color:#999;text-transform:uppercase}
 /* 4-up cast cards */
 .grid4{display:grid;grid-template-columns:1fr 1fr;gap:0}
@@ -507,7 +509,15 @@ function prBlockSheetHTML(char, opts) {
     h += '</table></div>';
   });
   h += '</div>';
-  const kick = opts.kicker || String(typeof lexU === 'function' ? lexU('sheet') : 'Character Sheet').toUpperCase();
+  let kick = opts.kicker || String(typeof lexU === 'function' ? lexU('sheet') : 'Character Sheet').toUpperCase();
+  // Floor and Level go in the kicker: a sheet has to be identifiable at a
+  // glance across a table, and those two answer "whose turn is this".
+  const marks = [];
+  if (char.floor !== undefined && char.floor !== null) {
+    marks.push(String(typeof lexU === 'function' ? lexU('logBreak') : 'Floor') + ' ' + char.floor);
+  }
+  if (char.level !== undefined && char.level !== null && char.level !== '') marks.push('Level ' + char.level);
+  if (marks.length) kick += ' · ' + marks.join(' · ');
   return prPage(name, kick, h);
 }
 
@@ -756,7 +766,13 @@ function prOpenDoc(){
 // Shared window opener for every printed document.
 function dcOpenPrintDoc(title,body,opts){
   opts=opts||{};
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>${dcSheetCSS()}</style></head><body class="${opts.bodyClass||''}">${body}`
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>`+
+    // The preview is its own document, so it has to load the faces itself.
+    // Without this the sheet silently falls back — the same way the app spent
+    // months rendering its headings in Comic Sans.
+    `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`+
+    `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;600;700&family=Oswald:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Bangers&family=Comic+Neue:wght@400;700&display=swap">`+
+    `<style>${dcSheetCSS()}</style></head><body class="${opts.bodyClass||''}">${body}`
     +(opts.script?`<scr`+`ipt>${opts.script}</scr`+`ipt>`:'')+`</body></html>`;
   const w=window.open('','_blank');
   if(!w){alert('Please allow popups to print.');return null;}

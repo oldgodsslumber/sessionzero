@@ -46,11 +46,10 @@ registerSystem({
   // The shell's default look is Daring Comics': a comic display face, all-caps
   // titles, hard drop shadows. Wrong for a dungeon crawl, and the display face
   // was never actually loaded, so it fell back to Comic Sans.
+  // One fixed identity, measured from the rulebook — no picker. The five
+  // themes in the shell are Daring Comics' own and stay with it; offering them
+  // here would let a player pick a comic palette for a dungeon crawl.
   defaultTheme: 'crawler',
-  themes: [
-    ['crawler', 'Crawler Interface', '#f0a202,#26313d'],
-    ['dark',    'Plain dark',        '#7a8a9e,#1a2236'],
-  ],
 
   // The app is the Crawler Interface, so the words are the System AI's.
   lexicon: {
@@ -60,6 +59,13 @@ registerSystem({
     team: 'Party',            region: 'Neighborhood', regions: 'Neighborhoods',
     logBreak: 'Floor',        log: 'Crawl Log',     wiki: 'Codex',
     save: 'Crawler File',     saves: 'Crawler Files', sheet: 'Crawler Sheet',
+    // The opening gate's own copy. The shell falls back to Daring Comics'
+    // wording for any pack that does not supply these.
+    registerWorld: 'Register Your Crawl',
+    startWorld: 'Begin the Crawl',
+    joinWorld: 'Join a table',
+    joinPrompt: 'Someone else already running the dungeon?',
+    universeHint: 'e.g. Borant Prime, The Meat Grinder',
   },
 
   // ─── the crawler sheet ────────────────────────────────────────────────────

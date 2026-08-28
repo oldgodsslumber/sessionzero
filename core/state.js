@@ -434,9 +434,9 @@ function openUniverseSetup(required,editId){
   // click and no way to satisfy it — the app could not be started at all.
   const tones=sysList('SERIES_TONES'),levels=sysList('SERIES_LEVELS');
   const hasSeries=tones.length>0&&levels.length>0;
-  let h=`<div class="card"><div class="pg-title" style="font-size:22px">${ed?'Universe Settings':(required?'Name Your Universe':'New Universe')}</div>`;
+  let h=`<div class="card"><div class="pg-title" style="font-size:22px">${ed?(lexU('universe')+' Settings'):(required?esc(lexOpt('registerWorld')||('Name Your '+lexU('universe'))):('New '+lexU('universe')))}</div>`;
   h+=`<div style="font-size:12px;color:var(--muted);margin:6px 0 12px">A ${lex('universe')} is your shared game world. Every ${lex('hero')}, ${lex('npc')} and wiki entry in it is shared.${hasSeries?' Its tone and power level apply to every '+lex('hero')+' here.':''}</div>`;
-  h+=`<div class="form-group"><label>Universe Name</label><input id="uni-name" value="${esc(ed?ed.name:'')}" placeholder="e.g. Marvel, My City, Earth-27" onkeydown="if(event.key==='Enter')submitUniverseSetup('${editId||''}')"><\/div>`;
+  h+=`<div class="form-group"><label>${esc(lexU('universe'))} Name</label><input id="uni-name" value="${esc(ed?ed.name:'')}" placeholder="${esc(lexOpt('universeHint')||'e.g. Marvel, My City, Earth-27')}" onkeydown="if(event.key==='Enter')submitUniverseSetup('${editId||''}')"><\/div>`;
   if(hasSeries){
   h+=`<div class="label">Series Tone</div><div class="grid-3 mb-3">`;
   sysList('SERIES_TONES').forEach(function(t){h+=`<div class="game-opt ${cur.tone===t.id?'selected':''}" onclick="_uniPick('tone','${t.id}','${editId||''}')"><div class="opt-title">${t.name}<\/div><div class="opt-desc">${t.desc}<\/div><div class="opt-stats">Refresh ${t.refresh} | ${2+t.stressBonus} Stress Boxes<\/div><\/div>`;});
@@ -447,11 +447,11 @@ function openUniverseSetup(required,editId){
   }
   h+=`<div style="display:flex;gap:8px;margin-top:8px">`;
   if(!required)h+=`<button class="btn btn-secondary" style="flex:1" onclick="closeUniverseModal()">Cancel<\/button>`;
-  h+=`<button class="btn btn-primary" style="flex:1" onclick="submitUniverseSetup('${editId||''}')">${ed?'Save Changes':'Create Universe'}<\/button><\/div>`;
+  h+=`<button class="btn btn-primary" style="flex:1" onclick="submitUniverseSetup('${editId||''}')">${ed?'Save Changes':esc(lexOpt('startWorld')||('Create '+lexU('universe')))}<\/button><\/div>`;
   // A brand-new browser has no universe, so this modal is locked — without a
   // way through it, a player invited to someone else's table could never reach
   // the sign-in screen at all.
-  if(required)h+=`<div class="divider"><\/div><div style="text-align:center"><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Joining a game someone else is running?<\/div><button class="btn btn-gold btn-full" onclick="openMultiplayer()">\u{1F310} Join a Shared Universe<\/button><\/div>`;
+  if(required)h+=`<div class="divider"><\/div><div style="text-align:center"><div style="font-size:11px;color:var(--muted);margin-bottom:6px">${esc(lexOpt('joinPrompt')||'Joining a game someone else is running?')}<\/div><button class="btn btn-gold btn-full" onclick="openMultiplayer()">${esc(lexOpt('joinWorld')||('\u{1F310} Join a Shared '+lexU('universe')))}<\/button><\/div>`;
   h+=`<\/div>`;
   document.getElementById('universe-modal-body').innerHTML=h;
   const m=document.getElementById('universe-modal');m.classList.toggle('locked',!!required);m.classList.add('open');
