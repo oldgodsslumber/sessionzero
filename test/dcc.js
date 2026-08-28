@@ -1357,6 +1357,37 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── the interface talks ──────────────────────────────────────────────────
+  // The app IS the System AI's interface, so its ambient notices are in its
+  // voice. Failures are not: when a save fails the player needs to know what to
+  // do about it, and a message in character is worst exactly when it matters.
+  check('[voice] the save flash speaks as the interface', () => {
+    ev("flashSaved()");
+    const t = ev("document.getElementById('save-flash').textContent");
+    return t === 'Logged' || 'flashed ' + JSON.stringify(t);
+  });
+  check('[voice] a failure stays plain and keeps its instruction', () => {
+    ev("flashSaveError('Not saved — storage full. Delete or export a file.')");
+    const t = ev("document.getElementById('save-flash').textContent");
+    if (!/storage full/.test(t)) return 'the reason was lost: ' + JSON.stringify(t);
+    return /Delete or export/.test(t) || 'the instruction was lost: ' + JSON.stringify(t);
+  });
+  check("[voice] in-play notices are the pack's words", () => {
+    ev("S.char=SYS.newCharacter();S.char.blocks.skills={skills:[{name:'Club',stat:'STR',rank:3}]};");
+    ev("document.body.insertAdjacentHTML('beforeend','<input id=' + JSON.stringify('sk-add-skills') + '>');");
+    ev("document.getElementById('sk-add-skills').value='Club';skillAdd('skills');");
+    const t = ev("document.getElementById('save-flash').textContent");
+    return /Crawler/.test(t) || 'said ' + JSON.stringify(t);
+  });
+  check('[voice] nothing is hardcoded — a silent pack gets plain English', () => {
+    // voice() must fall back, so a pack that wants a neutral app says nothing.
+    const keep = ev("JSON.stringify(SYS.voice)");
+    ev("SYS.voice=null;flashSaved();");
+    const plain = ev("document.getElementById('save-flash').textContent");
+    ev("SYS.voice=" + keep + ";");
+    return plain === 'Saved ✓' || 'fell back to ' + JSON.stringify(plain);
+  });
+
   // ── chrome, sheet and wizard, restyled to the pack's identity ────────────
   check('[chrome] the sheet shows which Crawl it belongs to', () => {
     // The universe bar was only drawn by Daring Comics' own renderers, so a

@@ -110,6 +110,18 @@ function lexOpt(key) {
   return (SYS && SYS.lexicon && SYS.lexicon[key]) || DEFAULT_LEXICON[key] || '';
 }
 
+// Interface copy in the pack's own voice. A pack may narrate its UI — Dungeon
+// Crawler Carl's app IS the System AI's interface, and it talks. Anything the
+// pack does not supply falls back to the plain wording, so a pack that wants a
+// neutral app simply says nothing.
+//
+// Failure messages are deliberately NOT routed through this. When a save fails
+// the player needs to know what to do about it, and a message in character is
+// worse than useless at exactly the moment it matters.
+function voice(key, plain) {
+  return (SYS && SYS.voice && SYS.voice[key]) || plain;
+}
+
 // Capitalised / lower variants, for mid-sentence copy.
 function lexU(key) { const s = lex(key); return s.charAt(0).toUpperCase() + s.slice(1); }
 function lexL(key) { return lex(key).toLowerCase(); }

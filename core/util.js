@@ -80,7 +80,7 @@ function clearRollToast(){var t=document.getElementById('quick-roll-toast');if(t
 function addTeamToConflict(){if(!S.team||!S.conflict)return;S.conflict.turnOrder.push({name:S.team.name+' (Team)',type:'Team'});S.conflict.log.push(S.team.name+' joined');save();renderConflict();}
 var _saveFlashT=null;
 function _saveFlashEl(){var el=document.getElementById('save-flash');if(!el){el=document.createElement('div');el.id='save-flash';document.body.appendChild(el);}return el;}
-function flashSaved(){var el=_saveFlashEl();el.textContent='Saved ✓';el.style.background='';el.style.color='';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},900);}
+function flashSaved(){var el=_saveFlashEl();el.textContent=voice('saved','Saved ✓');el.style.background='';el.style.color='';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},900);}
 // A failed write used to still flash "Saved ✓" — the flash now tells the truth.
 function flashSaveError(msg){var el=_saveFlashEl();el.textContent='⚠ '+(msg||'Not saved');el.style.background='var(--red)';el.style.color='#fff';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},2600);}
 function pdIconUrl(id){return 'https://api.iconify.design/'+encodeURIComponent(id)+'.svg';}

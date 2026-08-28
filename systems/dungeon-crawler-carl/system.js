@@ -68,6 +68,21 @@ registerSystem({
     universeHint: 'e.g. Borant Prime, The Meat Grinder',
   },
 
+  // The app is the Crawler Interface, and in the novels that interface talks:
+  // clipped, official, addressing you as Crawler. "Welcome, Crawler. Welcome to
+  // the First Floor." These are kept SHORT on purpose — you see "Logged" a
+  // hundred times a session, and a joke that lands once is friction the
+  // fiftieth time.
+  //
+  // Failures are deliberately absent. When a save fails you need to know what
+  // to do about it, so those stay plain.
+  voice: {
+    saved: 'Logged',
+    alreadyKnown: 'You have that already, Crawler.',
+    noRoom: 'No room, Crawler.',
+    noFreeSlot: 'Every slot is taken.',
+  },
+
   // ─── the crawler sheet ────────────────────────────────────────────────────
   schema: {
     identity: ['name', 'crawlerNumber', 'race', 'class', 'level'],

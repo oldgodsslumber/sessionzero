@@ -460,7 +460,7 @@ function skillAdd(id) {
   const cat = lookup ? lookup(name.trim()) : null;
   t.ctx.data.skills = t.ctx.data.skills || [];
   if (t.ctx.data.skills.some(s => s.name.toLowerCase() === name.trim().toLowerCase())) {
-    if (typeof flashSaveError === 'function') flashSaveError('Already known');
+    if (typeof flashSaveError === 'function') flashSaveError(voice('alreadyKnown','Already known'));
     return;
   }
   t.ctx.data.skills.push({
@@ -675,7 +675,7 @@ function invAdd(id, cid) {
   const sel = document.getElementById('inv-slot-' + id + '-' + cid);
   const slotId = sel ? sel.value : '';
   if (invRoom(t.block, t.ctx.data, cid, slotId) === 0) {
-    if (typeof flashSaveError === 'function') flashSaveError('No room there');
+    if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
     return;
   }
   const item = { name, qty: 1 };
@@ -714,7 +714,7 @@ function invMove(id, fromId, toId, slotId, i) {
   let destSlot = '';
   if (to.kind === 'slots') {
     const s = (to.slots || []).find(x => invRoom(t.block, t.ctx.data, toId, x.id) > 0);
-    if (!s) { if (typeof flashSaveError === 'function') flashSaveError('No free slot'); return; }
+    if (!s) { if (typeof flashSaveError === 'function') flashSaveError(voice('noFreeSlot','No free slot')); return; }
     destSlot = s.id;
   } else if (invRoom(t.block, t.ctx.data, toId, '') === 0) {
     if (typeof flashSaveError === 'function') flashSaveError((to.label || to.id) + ' is full');
