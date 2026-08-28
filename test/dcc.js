@@ -662,10 +662,32 @@ function boot(entry) {
     const spent = ev('dccPointsSpent(S.char)');
     return spent === 27 || 'spent ' + spent;
   });
-  check('[tutorial] tutorial points raise the Enhanced layer, not the base', () => {
+  check('[tutorial] tutorial points raise the Unenhanced layer', () => {
+    // "As crawlers gain new Stat Points from leveling up, these improve the
+    // Unenhanced Stat layer... The second layer, called Enhanced, includes the
+    // Unenhanced score plus any bonuses from gear, Spells, Buffs, and other
+    // sources." This check used to assert the opposite, which is how the sheet
+    // came to show an Unenhanced column up to 27 too low.
     const base = ev("S.char.blocks.stats.CON.base");
     const bonus = ev("S.char.blocks.stats.CON.bonus");
-    return (bonus === 27 && base !== 27) || 'base=' + base + ' bonus=' + bonus;
+    const pick = ev("dccStatPick(S.char,'CON')");
+    if (bonus !== 0) return 'creation wrote ' + bonus + ' into the gear layer';
+    return base === pick + 27 || 'Unenhanced is ' + base + ', expected ' + (pick + 27);
+  });
+  check('[tutorial] Enhanced is Unenhanced plus the gear layer', () => {
+    // The gear/Spell/Buff layer belongs to play, not creation, so it starts
+    // empty and dccStatOf reads the two together.
+    ev("S.char.blocks.stats.CON.bonus=4;");
+    const enh = ev("dccStatOf(S.char,'CON')");
+    const base = ev("S.char.blocks.stats.CON.base");
+    ev("S.char.blocks.stats.CON.bonus=0;");
+    return enh === base + 4 || 'Enhanced ' + enh + ' != Unenhanced ' + base + ' + 4';
+  });
+  check('[tutorial] spending more points does not disturb the gear layer', () => {
+    ev("S.char.blocks.stats.STR.bonus=3;dccStatPoint('STR',-1);dccStatPoint('STR',1);");
+    const b = ev("S.char.blocks.stats.STR.bonus");
+    ev("S.char.blocks.stats.STR.bonus=0;");
+    return b === 3 || 'the gear bonus became ' + b;
   });
   // ── Acquired Loot and the six Experiences ────────────────────────────────
   check('[loot] the screen blocks until loot is rolled', () => {
@@ -1012,6 +1034,44 @@ function boot(entry) {
     return !cm.weaponName || 'an Axe is still called ' + JSON.stringify(cm.weaponName);
   });
 
+  check('[layers] Race and Class grants land in Unenhanced too', () => {
+    // A Race is what you ARE, not something you are carrying.
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccChoose('race','human');dccChoose('cls','boring-ol-fighter');dccFinishCreation(S.char);");
+    const cell = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.CON)"));
+    const pick = ev("dccStatPick(S.char,'CON')");
+    if (cell.bonus !== 0) return 'the Class grant went into the gear layer: ' + JSON.stringify(cell);
+    return cell.base > pick || 'the Class grant did not reach Unenhanced: ' + JSON.stringify(cell);
+  });
+  check('[layers] a crawler saved under the old model is migrated, not doubled', () => {
+    // Old shape: base = the array pick alone, bonus = points + Race/Class.
+    // A naive read would count the granted points twice.
+    ev("S.char=SYS.newCharacter();dccCre(S.char);");
+    ev("dccFloorStart(S.char).points={STR:27};");
+    ev("S.char.blocks.stats={STR:{base:6,bonus:27},CON:{base:5,bonus:0},DEX:{base:4,bonus:0},INT:{base:3,bonus:0},CHA:{base:2,bonus:0}};");
+    ev("dccApplyStatLayers(S.char);");
+    const st = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.STR)"));
+    if (st.base !== 33) return 'Unenhanced should be 6 + 27 = 33, got ' + st.base;
+    if (st.bonus !== 0) return 'the granted points were left in the gear layer: ' + st.bonus;
+    return ev("dccStatOf(S.char,'STR')") === 33 || 'Enhanced drifted to ' + ev("dccStatOf(S.char,'STR')");
+  });
+  check('[layers] migration keeps a genuine gear bonus', () => {
+    // bonus = 27 granted + 5 from a ring. Only the granted part moves.
+    ev("S.char=SYS.newCharacter();dccCre(S.char);");
+    ev("dccFloorStart(S.char).points={STR:27};");
+    ev("S.char.blocks.stats={STR:{base:6,bonus:32}};");
+    ev("dccApplyStatLayers(S.char);");
+    const st = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.STR)"));
+    return (st.base === 33 && st.bonus === 5)
+      || 'expected Unenhanced 33 with 5 left as gear, got ' + JSON.stringify(st);
+  });
+  check('[layers] migrating twice is a no-op', () => {
+    ev("dccApplyStatLayers(S.char);dccApplyStatLayers(S.char);");
+    const st = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.STR)"));
+    return (st.base === 33 && st.bonus === 5) || 'drifted to ' + JSON.stringify(st);
+  });
+
   // ── Floors 4 and 5 (p. 118) ──────────────────────────────────────────────
   // Each is "the rules for creating a Third Floor Crawler, then..." — they are
   // NOT cumulative with each other. Floor 4 used to implement only the first of
@@ -1203,9 +1263,12 @@ function boot(entry) {
     ev("S.char=SYS.newCharacter();dccSetFloor(3);dccStatMethod('array');");
     ev("dccAssignStat('STR',6);for(var i=0;i<27;i++)dccStatPoint('STR',1);");
     ev("dccStatMethod('roll');dccRollStats();");
-    const cell = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.STR)"));
-    return cell.bonus === 27
-      || 'the 27 points vanished but were still counted as spent: ' + JSON.stringify(cell);
+    // The roll replaces what you walked in with; the 27 points sit on top of it.
+    const base = ev("S.char.blocks.stats.STR.base");
+    const pick = ev("dccStatPick(S.char,'STR')");
+    return base - pick === 27
+      || 'the 27 points vanished but were still counted as spent: Unenhanced ' +
+         base + ' on a roll of ' + pick;
   });
   check('[floor] finishing twice does not stack the Race and Class bonuses', () => {
     ev("S.char=SYS.newCharacter();dccSetFloor(3);dccChoose('race','human');dccChoose('cls','boring-ol-fighter');");

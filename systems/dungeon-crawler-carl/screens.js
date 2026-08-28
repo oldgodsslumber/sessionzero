@@ -260,7 +260,7 @@ function dccScreenStats(ctx) {
   if (!c.blocks) c.blocks = {};
   if (!c.blocks.stats) c.blocks.stats = {};
   const cur = c.blocks.stats;
-  const used = DCC_STATS.map(s => (cur[s.id] || {}).base).filter(v => v);
+  const used = DCC_STATS.map(s => dccStatPick(c, s.id)).filter(v => v);
 
   let h = `<div class="card"><div class="label">How do you want your Stats?</div>
     <button class="btn btn-xs ${d.statMethod === 'array' ? 'btn-primary' : 'btn-secondary'}"
@@ -275,10 +275,10 @@ function dccScreenStats(ctx) {
   if (d.statMethod === 'array') {
     h += `<div class="card"><div style="display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center">`;
     DCC_STATS.forEach(s => {
-      const v = (cur[s.id] || {}).base || 0;
+      const v = dccStatPick(c, s.id);
       h += `<div style="font-size:13px" title="${esc(s.desc)}">${esc(s.name)} <span style="color:var(--muted)">${s.id}</span></div><div>`;
       h += DCC_STANDARD_ARRAY.map(n => {
-        const takenBy = DCC_STATS.find(o => o.id !== s.id && (cur[o.id] || {}).base === n);
+        const takenBy = DCC_STATS.find(o => o.id !== s.id && dccStatPick(c, o.id) === n);
         // A value held by another Stat is still clickable — it swaps the two.
         // Removing the handler instead meant that once all five were assigned
         // every button was dead and the grid could not be changed at all.
@@ -301,7 +301,7 @@ function dccScreenStats(ctx) {
     } else {
       h += `<div style="display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;align-items:center">`;
       DCC_STATS.forEach(s => {
-        const v = (cur[s.id] || {}).base || 0;
+        const v = dccStatPick(c, s.id);
         h += `<div style="font-size:13px">${esc(s.name)}</div>
               <div style="font-weight:700;text-align:center;min-width:30px">${v}</div>
               <div style="color:var(--accent);font-weight:700">+${dccStatMod(v)}</div>`;
@@ -326,25 +326,58 @@ function dccScreenStats(ctx) {
 }
 
 
-// The Enhanced layer (`blocks.stats[x].bonus`) is the SUM of two independent
-// grants: the tutorial-floor points you spent, and the Race/Class deltas.
-// Both used to write that one field directly, so each clobbered the other —
-// finishing twice stacked the Race/Class bonus forever, and a single "-" click
-// on the Stats screen deleted it. Recompute the field from both sources
-// instead; every caller then becomes idempotent for free.
-function dccApplyStatBonuses(char, withRaceClass) {
+// The two Stat layers, the way the book defines them.
+//
+// "A crawler's base layer, called Unenhanced, includes their Stats when they
+// walk into the World Dungeon... As crawlers gain new Stat Points from leveling
+// up, these improve the Unenhanced Stat layer. The second layer, called
+// Enhanced, includes the Unenhanced score plus any bonuses from gear, Spells,
+// Buffs, and other sources."
+//
+// So Unenhanced (`base`) is what you rolled or assigned PLUS the tutorial-floor
+// points PLUS whatever your Race and Class grant, and Enhanced (`bonus`) is the
+// gear/Spell/Buff layer on top, which creation does not touch at all. Both of
+// creation's grants used to be written into `bonus` instead: the Enhanced total
+// came out right, so nothing looked broken, but the Unenhanced column on the
+// sheet read low by up to 27 — and Unenhanced is the layer a Stat potion or a
+// level-up actually raises.
+//
+// The array or roll is kept separately from the total it feeds, so recomputing
+// is idempotent and the Stats screen can still tell which array value you hold.
+function dccStatPicks(char) {
+  const d = dccCre(char);
+  if (!d.statPicks) d.statPicks = {};
+  return d.statPicks;
+}
+function dccStatPick(char, id) { return dccStatPicks(char)[id] || 0; }
+
+function dccApplyStatLayers(char) {
+  const d = dccCre(char);
   const fs = dccFloorStart(char);
   const pts = fs.points || {};
-  // Default to whatever the character's own history says: the Race/Class layer
-  // counts once the finish step has landed it, and not before.
-  const useRc = (withRaceClass === undefined) ? !!fs.rcApplied : withRaceClass;
-  const rc = useRc ? ((dccRcDiff(char) || {}).stats || {}) : {};
+  const rc = fs.rcApplied ? ((dccRcDiff(char) || {}).stats || {}) : {};
   char.blocks = char.blocks || {};
   char.blocks.stats = char.blocks.stats || {};
+  const picks = dccStatPicks(char);
+
+  // A crawler built before this correction has base = the array pick alone and
+  // bonus = points + Race/Class. Recover the pick, and take the granted part
+  // back out of the Enhanced layer, leaving any genuine gear bonus behind.
+  if (!d.statLayersV2) {
+    DCC_STATS.forEach(function (st) {
+      const cell = char.blocks.stats[st.id];
+      if (!cell) return;
+      if (!picks[st.id]) picks[st.id] = cell.base || 0;
+      const granted = (pts[st.id] || 0) + ((rc[st.id] && rc[st.id].delta) || 0);
+      cell.bonus = Math.max(0, (cell.bonus || 0) - granted);
+    });
+    d.statLayersV2 = true;
+  }
+
   DCC_STATS.forEach(function (st) {
     const cell = char.blocks.stats[st.id] || { base: 0, bonus: 0 };
-    cell.bonus = (pts[st.id] || 0) + ((rc[st.id] && rc[st.id].delta) || 0);
-    char.blocks.stats[st.id] = cell;
+    cell.base = (picks[st.id] || 0) + (pts[st.id] || 0) + ((rc[st.id] && rc[st.id].delta) || 0);
+    char.blocks.stats[st.id] = cell;          // `bonus` is the gear layer; not ours
   });
 }
 
@@ -352,11 +385,13 @@ function dccStatMethod(m) {
   const c = S.char, d = dccCre(c);
   if (d.statMethod === m) return;
   d.statMethod = m;
-  c.blocks = c.blocks || {}; c.blocks.stats = {};      // switching method starts over
-  // ...but the tutorial points are a separate grant and are still spent, so
-  // re-apply them. They used to vanish while dccPointsSpent() still counted
-  // them, leaving the crawler 27 points poorer with no warning.
-  dccApplyStatBonuses(c);
+  // Switching method starts the array/roll over, but the tutorial points are a
+  // separate grant and are still spent, so they survive. They used to vanish
+  // while dccPointsSpent() still counted them, leaving the crawler 27 points
+  // poorer with no warning.
+  const picks = dccStatPicks(c);
+  DCC_STATS.forEach(function (st) { picks[st.id] = 0; });
+  dccApplyStatLayers(c);
   save(); wizRepaint();
 }
 // Each array value is used exactly once, so giving one Stat a value another
@@ -364,21 +399,20 @@ function dccStatMethod(m) {
 function dccAssignStat(id, n) {
   const c = S.char;
   c.blocks.stats = c.blocks.stats || {};
-  const mine = (c.blocks.stats[id] || {}).base || 0;
+  const picks = dccStatPicks(c);
+  const mine = picks[id] || 0;
   if (mine === n) {                       // clicking your own value clears it
-    c.blocks.stats[id] = Object.assign({}, c.blocks.stats[id], { base: 0 });
-    dccApplyStatBonuses(c);
+    picks[id] = 0;
+    dccApplyStatLayers(c);
     save(); wizRepaint();
     return;
   }
-  const holder = DCC_STATS.find(s => s.id !== id && (c.blocks.stats[s.id] || {}).base === n);
-  if (holder) {
-    // Hand them whatever this Stat was holding — 0 if it had nothing yet, which
-    // is just a move rather than a swap.
-    c.blocks.stats[holder.id] = Object.assign({}, c.blocks.stats[holder.id], { base: mine });
-  }
-  c.blocks.stats[id] = Object.assign({}, c.blocks.stats[id] || { bonus: 0 }, { base: n });
-  dccApplyStatBonuses(c);
+  const holder = DCC_STATS.find(s => s.id !== id && (picks[s.id] || 0) === n);
+  // Hand them whatever this Stat was holding — 0 if it had nothing yet, which
+  // is just a move rather than a swap.
+  if (holder) picks[holder.id] = mine;
+  picks[id] = n;
+  dccApplyStatLayers(c);
   save(); wizRepaint();
 }
 
@@ -386,22 +420,20 @@ function dccAssignStat(id, n) {
 // grant and are deliberately left alone.
 function dccResetStats() {
   const c = S.char; if (!c) return;
-  c.blocks.stats = c.blocks.stats || {};
-  DCC_STATS.forEach(s => {
-    c.blocks.stats[s.id] = Object.assign({}, c.blocks.stats[s.id] || {}, { base: 0 });
-  });
-  dccApplyStatBonuses(c);
+  const picks = dccStatPicks(c);
+  DCC_STATS.forEach(s => { picks[s.id] = 0; });
+  dccApplyStatLayers(c);
   save(); wizRepaint();
 }
 function dccRollStats() {
   const c = S.char;
-  c.blocks.stats = {};
+  const picks = dccStatPicks(c);
   DCC_STATS.forEach(s => {
     let v = wizRoll(6);
     while (v === 1) v = wizRoll(6);            // reroll 1s
-    c.blocks.stats[s.id] = { base: v, bonus: 0 };
+    picks[s.id] = v;
   });
-  dccApplyStatBonuses(c);
+  dccApplyStatLayers(c);
   save(); wizRepaint();
 }
 
@@ -448,7 +480,7 @@ const DCC_SCREENS = [
     validate(c) {
       const d = dccCre(c);
       if (!d.statMethod) return 'Choose a method.';
-      const vals = DCC_STATS.map(s => ((c.blocks && c.blocks.stats || {})[s.id] || {}).base || 0);
+      const vals = DCC_STATS.map(s => dccStatPick(c, s.id));
       if (vals.some(v => !v)) return 'Every Stat needs a value.';
       // the Spell route was chosen a screen ago and needs INT 4+ (p. 106)
       if (dccCre(c).combat.route === 'spell' && dccStatOf(c, 'INT') < DCC_STARTING_SPELL_MIN_INT) {
@@ -558,7 +590,7 @@ function dccFinishCreation(char) {
   // Recomputed from the tutorial points plus the Race/Class deltas, so
   // finishing a second time lands on the same numbers instead of stacking.
   dccFloorStart(char).rcApplied = true;
-  dccApplyStatBonuses(char, true);
+  dccApplyStatLayers(char);
   if (diff) {
     // The benefits and drawbacks the review screen previewed. They used to be
     // dropped here, so everything a player wrote into a custom Race or Class —
@@ -790,11 +822,13 @@ function dccScreenTutorial(ctx) {
        '<div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:4px 8px;align-items:center">';
   DCC_STATS.forEach(function (s) {
     const add = (fs.points || {})[s.id] || 0;
+    // What you walked in with, then the Unenhanced total those points build to.
+    const walkedIn = dccStatPick(c, s.id);
     const base = ((c.blocks && c.blocks.stats || {})[s.id] || {}).base || 0;
     h += '<div style="font-size:13px">' + esc(s.name) + '</div>' +
-         '<div style="color:var(--muted);min-width:22px;text-align:right">' + base + '</div>' +
+         '<div style="color:var(--muted);min-width:22px;text-align:right">' + walkedIn + '</div>' +
          '<button class="btn btn-secondary btn-xs" onclick="dccStatPoint(\'' + s.id + '\',-1)">&minus;</button>' +
-         '<div style="min-width:34px;text-align:center;font-weight:700">' + (base + add) + '</div>' +
+         '<div style="min-width:34px;text-align:center;font-weight:700">' + base + '</div>' +
          '<button class="btn btn-secondary btn-xs" ' + (left <= 0 ? 'disabled style="opacity:.4"' : '') +
          ' onclick="dccStatPoint(\'' + s.id + '\',1)">+</button>';
   });
@@ -884,7 +918,7 @@ function dccSetFloor(n) {
       fs.points[st.id] = have - take;
       over -= take;
     });
-    dccApplyStatBonuses(c);
+    dccApplyStatLayers(c);
   }
   save(); wizRepaint();
 }
@@ -900,7 +934,7 @@ function dccStatPoint(id, d) {
   fs.points[id] = next;
   // The Enhanced layer is owned by dccApplyStatBonuses; assigning it here is
   // what used to wipe the Race/Class grant on a finished crawler.
-  dccApplyStatBonuses(c);
+  dccApplyStatLayers(c);
   save(); wizRepaint();
 }
 function dccRollFavor() { dccFloorStart(S.char).favor = wizRoll(2); save(); wizRepaint(); }
