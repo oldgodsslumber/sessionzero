@@ -371,7 +371,15 @@ function boot(entry) {
     if (ev('S.char.blocks.skills.skills[0].marked')) return 'mark not cleared';
     return true;
   });
-  check('[advance] rank edits clamp at 0 and at the cap', () => {
+  check('[advance] a Skill Rank is not nudged by hand', () => {
+    // Skills advance from use, so there is nothing for a +/- pair to do. The
+    // clamping below still matters because advancement goes through it.
+    ev("S.char=SYS.newCharacter();S.char.blocks.skills={skills:[{name:'A',rank:3}]};");
+    ev("S.char.creation={step:0,complete:true};renderHero();");
+    const h = ev("document.getElementById('blk-skills').innerHTML");
+    return h.indexOf('skillRank(') < 0 || 'the sheet still offers Rank buttons';
+  });
+  check('[advance] rank changes clamp at 0 and at the cap', () => {
     ev("S.char.blocks.skills={skills:[{name:'A',rank:0}]}");
     ev("skillRank('skills',0,-1)");
     if (ev('S.char.blocks.skills.skills[0].rank') !== 0) return 'went below 0';
@@ -1425,6 +1433,65 @@ function boot(entry) {
     ev("invAdd('gear','equipped');");
     const head = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.equipped.head.map(function(x){return x.name}))"));
     return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
+  });
+
+  // ── gear that raises what you are ────────────────────────────────────────
+  // "Platinum: +2 Skill in the Weapon, +3 to Strength or Dexterity" (p. 116),
+  // and Platinum armour gives "+3 to Catcher or Taunt Skills". Those had
+  // nowhere to live, so a magic ring was a label.
+  const wornSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccSetFloor(1);dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+
+  check('[worn] a worn item raises the Stat it grants', () => {
+    wornSheet();
+    const before = ev("dccStatOf(S.char,'STR')");
+    ev("S.char.blocks.gear.equipped.accessories=[{name:'Ring of Might',grantsStat:'STR',grantsStatN:6}];");
+    const after = ev("dccStatOf(S.char,'STR')");
+    return after === before + 6 || 'Enhanced STR went from ' + before + ' to ' + after;
+  });
+  check('[worn] ...on the Enhanced layer only, never Unenhanced', () => {
+    // "Enhanced includes the Unenhanced score plus any bonuses from gear."
+    // Taking the ring off has to take the bonus with it, so it is not stored.
+    const base = ev("S.char.blocks.stats.STR.base");
+    ev("S.char.blocks.gear.equipped.accessories=[];");
+    if (ev("S.char.blocks.stats.STR.base") !== base) return 'the Stat itself was changed';
+    return ev("dccStatOf(S.char,'STR')") === base || 'the bonus outlived the item';
+  });
+  check('[worn] the Stat grid shows the worn total and its Mod', () => {
+    wornSheet();
+    const before = ev("document.querySelector('#tg-stats-STR-tot').textContent");
+    ev("S.char.blocks.gear.equipped.accessories=[{name:'Ring',grantsStat:'STR',grantsStatN:6}];renderHero();");
+    const after = ev("document.querySelector('#tg-stats-STR-tot').textContent");
+    if (Number(after) !== Number(before) + 6) return 'grid reads ' + after + ', was ' + before;
+    return ev("document.querySelector('#tg-stats-STR-mod').textContent") !== '' || 'no Mod shown';
+  });
+  check('[worn] a Skill bonus reaches that Skill total', () => {
+    wornSheet();
+    const line = () => ev("SYS.derive.gearItemReadout({name:'Bat',skill:'Club'},S.char)");
+    const before = /\+(\d+) to hit/.exec(line());
+    ev("S.char.blocks.gear.equipped.accessories=[{name:'Gloves',grantsSkill:'Club',grantsSkillN:2}];");
+    const after = /\+(\d+) to hit/.exec(line());
+    if (!before || !after) return 'no to-hit figure: ' + JSON.stringify(line());
+    return Number(after[1]) === Number(before[1]) + 2
+      || 'to hit went from ' + before[1] + ' to ' + after[1];
+  });
+  check('[worn] stowed gear grants nothing at all', () => {
+    // "Only what is in a Gear Slot gives you anything" (p. 112).
+    wornSheet();
+    const base = ev("dccStatOf(S.char,'STR')");
+    ev("S.char.blocks.gear.hotlist.push({name:'Ring',grantsStat:'STR',grantsStatN:6});");
+    ev("S.char.blocks.gear.inventory.push({name:'Gloves',grantsSkill:'Club',grantsSkillN:2});");
+    if (ev("dccStatOf(S.char,'STR')") !== base) return 'a Hotlist ring raised a Stat';
+    return ev("SYS.derive.wornBonus(S.char,'skill','Club')") === 0 || 'stowed gloves still helped';
+  });
+  check('[worn] the detail panel can record both grants', () => {
+    const keys = JSON.parse(ev("JSON.stringify(SYS.derive.gearItemFields().map(function(f){return f.key}))"));
+    const want = ['grantsStat', 'grantsStatN', 'grantsSkill', 'grantsSkillN'];
+    const missing = want.filter(k => keys.indexOf(k) < 0);
+    return missing.length ? 'no field for ' + missing.join(', ') : true;
   });
 
   // ── the other kinds of item ──────────────────────────────────────────────

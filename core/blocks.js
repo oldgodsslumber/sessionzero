@@ -88,6 +88,17 @@ function renderBlockSheet(char, targetEl) {
   }).join('');
 }
 
+// What the character's gear adds to a trait or a Skill. The block names a
+// derive; the pack works out the number from whatever is worn. Kept derived
+// rather than stored so that removing an item removes its bonus, which is the
+// whole point of the Enhanced layer: "the Unenhanced score plus any bonuses
+// from gear, Spells, Buffs, and other sources".
+function blockExtra(block, kind, id, char) {
+  const fn = sysDerive(block && block.extra);
+  if (!fn || !char) return 0;
+  try { return Number(fn(char, kind, id)) || 0; } catch (e) { return 0; }
+}
+
 // Resolve a block field that may be a literal, a 'derive.x' string, or a function.
 function blockValue(spec, ctx, fallback) {
   if (spec === undefined || spec === null) return fallback;
@@ -127,7 +138,11 @@ registerBlockType('traitGrid', {
             <div class="label" style="margin:0;text-align:center">Mod</div>`;
       traits.forEach(t => {
         const id = t.id || t, cell = d[id] || { base: 0, bonus: 0 };
-        const enhanced = (cell.base || 0) + (cell.bonus || 0);
+        // Gear is part of the Enhanced score by definition, but it is not
+        // STORED there — it is read from what you are wearing, so taking the
+        // item off takes the bonus with it.
+        const worn = blockExtra(b, 'trait', id, ctx.char);
+        const enhanced = (cell.base || 0) + (cell.bonus || 0) + worn;
         const mod = modOf ? modOf(enhanced) : 0;
         h += `<div style="font-size:13px;font-weight:600" title="${esc(t.desc || '')}">${esc(t.name || id)}</div>
               <input type="number" value="${cell.base || 0}" style="width:64px;text-align:center;padding:5px"
@@ -172,7 +187,7 @@ function traitSet(blockId, traitId, layer, v) {
 
   if (block.layers) {
     const cell = d[traitId] || { base: 0, bonus: 0 };
-    const total = (cell.base || 0) + (cell.bonus || 0);
+    const total = (cell.base || 0) + (cell.bonus || 0) + blockExtra(block, 'trait', traitId, S.char);
     const modOf = block.mod ? sysDerive(block.mod) : null;
     const mod = modOf ? modOf(total) : 0;
     const tot = document.getElementById('tg-' + blockId + '-' + traitId + '-tot');
@@ -413,7 +428,7 @@ registerBlockType('skillList', {
     list.slice().sort((a, z) => a.name.localeCompare(z.name)).forEach(s => {
       const i = list.indexOf(s);
       const mod = (modOf && s.stat) ? modOf(ctx.char, s.stat) : 0;
-      const total = (s.rank || 0) + mod;
+      const total = (s.rank || 0) + mod + blockExtra(b, 'skill', s.name, ctx.char);
       h += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
         <div title="Mark when you use this Skill" onclick="skillMark('${esc(b.id)}',${i})"
           style="width:20px;height:20px;flex-shrink:0;border:2px solid ${s.marked ? 'var(--green)' : 'var(--border)'};
@@ -423,11 +438,8 @@ registerBlockType('skillList', {
           <div style="font-size:13px;font-weight:600">${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
           <div style="font-size:10px;color:var(--muted)">${esc(s.stat || '—')}${mod ? ' +' + mod : ''}${s.checkType ? ' · ' + esc(s.checkType) : ''}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:4px">
-          <button class="btn btn-secondary btn-xs" onclick="skillRank('${esc(b.id)}',${i},-1)">−</button>
-          <div style="min-width:26px;text-align:center;font-weight:700">${s.rank || 0}</div>
-          <button class="btn btn-secondary btn-xs" onclick="skillRank('${esc(b.id)}',${i},1)">+</button>
-        </div>
+        <div class="num" style="min-width:34px;text-align:center;font-weight:700"
+             title="Rank. Skills advance from use, not by hand.">${s.rank || 0}</div>
         <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
         ${skillIsYours(s)
           ? `<button class="btn btn-secondary btn-xs" title="Remove this ${esc(b.label || 'entry')} — you added it yourself" onclick="skillDel('${esc(b.id)}',${i})">✕</button>`
@@ -519,6 +531,9 @@ function skillMark(id, i) {
   const s = t.ctx.data.skills[i]; if (!s || s.passive) return;   // passives never mark
   s.marked = !s.marked; save(); blockRepaint(id);
 }
+// Not wired to any button. Ranks are not nudged by hand — a Skill rises when
+// you use it and pass its advancement roll — but this is still the single place
+// that applies the floor and the Rank cap, so advancement goes through it.
 function skillRank(id, i, d) {
   const t = _skillData(id); if (!t) return;
   const s = t.ctx.data.skills[i]; if (!s) return;

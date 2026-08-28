@@ -10,7 +10,18 @@
 // SYS points at whichever pack is selected, not at this one.
 function dccStatOf(char, id) {
   const c = char && char.blocks && char.blocks.stats && char.blocks.stats[id];
-  return c ? (c.base || 0) + (c.bonus || 0) : 0;   // Enhanced = Unenhanced + bonus
+  let n = c ? (c.base || 0) + (c.bonus || 0) : 0;  // Enhanced = Unenhanced + bonus
+  // ...plus whatever you are wearing, which is not stored on the Stat because
+  // taking the item off has to take the bonus with it.
+  const eq = char && char.blocks && char.blocks.gear && char.blocks.gear.equipped;
+  if (eq) {
+    Object.keys(eq).forEach(function (slot) {
+      (eq[slot] || []).forEach(function (it) {
+        if (it && it.grantsStat === id) n += Number(it.grantsStatN) || 0;
+      });
+    });
+  }
+  return n;
 }
 function dccModOf(char, id) { return dccStatMod(dccStatOf(char, id)); }
 
@@ -98,6 +109,7 @@ registerSystem({
         traits: DCC_STATS.map(s => ({ id: s.id, name: s.name, desc: s.desc })),
         // editing a Stat changes Health, Mana and Evade, so repaint those too
         affects: ['health', 'mana', 'defence'],
+        extra: 'derive.wornBonus',
       },
       {
         id: 'health', type: 'track', label: 'Health Bar',
@@ -129,6 +141,7 @@ registerSystem({
         statMod: 'derive.skillStatMod',
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.skillLookup',
+        extra: 'derive.wornBonus',
         granted: 'derive.grantedSkills',
         catalog: 'skills',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
@@ -232,7 +245,8 @@ registerSystem({
           const mine = list.find(x => String(x.name).toLowerCase() === String(cat.name).toLowerCase());
           if (mine) {
             const mod = cat.stat ? dccStatMod(dccStatOf(char, cat.stat)) : 0;
-            const tot = (mine.rank || 0) + mod;
+            const worn = SYS.derive.wornBonus(char, 'skill', cat.name);
+            const tot = (mine.rank || 0) + mod + worn;
             bits.push('Rank ' + (mine.rank || 0) + ', ' + (tot >= 0 ? '+' : '') + tot + ' to hit');
           } else {
             bits.push('untrained');
@@ -254,6 +268,13 @@ registerSystem({
       { key: 'casts',   label: 'Scroll of', options: () => DCC_SPELLS.map(x => x.name) },
       { key: 'rank',    label: 'at Rank',   type: 'number', hint: '1' },
       { key: 'teaches', label: 'Tome of',   options: () => DCC_SPELLS.map(x => x.name) },
+      // "+3 to Strength or Dexterity" on a Platinum weapon, "+3 to Catcher or
+      // Taunt Skills" on Platinum armour (p. 116) — gear that raises what you
+      // are rather than what you hit with.
+      { key: 'grantsStat',  label: 'Grants Stat',  options: () => DCC_STATS.map(x => x.id) },
+      { key: 'grantsStatN', label: 'by',           type: 'number', hint: '0' },
+      { key: 'grantsSkill', label: 'Grants Skill', options: () => DCC_SKILLS.map(x => x.name) },
+      { key: 'grantsSkillN', label: 'by',          type: 'number', hint: '0' },
     ],
 
     // A tome is the one item that changes your sheet by being used.
@@ -278,6 +299,26 @@ registerSystem({
       });
       char.blocks.spells.skills = have;
       return { ok: true, remove: true };      // the tome is spent once read
+    },
+
+    // What the gear you are WEARING adds. "Only what is in a Gear Slot gives
+    // you anything" (p. 112), so a bonus is live exactly while the item is
+    // equipped — stow it and the bonus goes with it.
+    wornBonus: (char, kind, id) => {
+      const eq = char && char.blocks && char.blocks.gear && char.blocks.gear.equipped;
+      if (!eq) return 0;
+      let n = 0;
+      Object.keys(eq).forEach(function (slot) {
+        (eq[slot] || []).forEach(function (it) {
+          if (!it) return;
+          if (kind === 'trait' && it.grantsStat === id) n += Number(it.grantsStatN) || 0;
+          if (kind === 'skill' && it.grantsSkill &&
+              String(it.grantsSkill).toLowerCase() === String(id).toLowerCase()) {
+            n += Number(it.grantsSkillN) || 0;
+          }
+        });
+      });
+      return n;
     },
 
     gearSlotFor: (item) => {
