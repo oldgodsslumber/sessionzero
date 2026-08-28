@@ -1383,6 +1383,38 @@ function boot(entry) {
     if (!/Smush/.test(ev("String(dccRace('sasquatch').prerequisites)"))) return 'wrong entry chosen';
     return JSON.parse(r).ok === false || 'a crawler with no Smush was allowed: ' + r;
   });
+  // ── extraction damage that survives as data ──────────────────────────────
+  check('[tables] Table 25 gives four evenly-sized loot spreads', () => {
+    const rows = JSON.parse(ev('JSON.stringify(DCC_LOOT_SPREAD.map(function(r){return [r.roll,r.text.length]}))'));
+    if (rows.length !== 4) return 'expected 4 rows, got ' + rows.length;
+    const bad = rows.filter(r => r[1] > 200);
+    // Row 4 shipped at 3,269 characters: the extraction ran past the end of the
+    // cell and swallowed three pages of surrounding body prose, which the loot
+    // screen then rendered as a wall of text.
+    return bad.length ? 'row ' + bad[0][0] + ' is ' + bad[0][1] + ' characters long' : true;
+  });
+  check('[tables] no table row swallowed the prose around it', () => {
+    // The general form of the bug above. A row an order of magnitude longer
+    // than its siblings is almost certainly page text, not a table cell.
+    const bad = ev(`(function(){
+      var out=[];
+      var names=Object.getOwnPropertyNames(window).filter(function(k){
+        return /^DCC_/.test(k) && Array.isArray(window[k]) && window[k].length>=3;
+      });
+      names.forEach(function(k){
+        var lens=window[k].map(function(r){return JSON.stringify(r).length});
+        var sorted=lens.slice().sort(function(a,b){return a-b});
+        var med=sorted[Math.floor(sorted.length/2)];
+        lens.forEach(function(L,i){
+          if(med>0 && L>med*8 && L>500) out.push(k+'['+i+'] '+L+' vs median '+med);
+        });
+      });
+      return JSON.stringify(out);
+    })()`);
+    const list = JSON.parse(bad);
+    return list.length ? list.join(' | ') : true;
+  });
+
   // ── the real prerequisite text, recovered from the PDF ───────────────────
   // Five entries shipped with prose damaged by the extraction: cut mid-phrase,
   // or with a clipped duplicate text layer spliced through them. A gate whose
