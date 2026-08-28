@@ -158,6 +158,9 @@ const SYS_SESSION_KEYS = ['notes', 'floor', 'conflict', 'regions', 'activeRegion
 
 function sysScratchSave(char, session) {
   try {
+    // Stamp it. Both games share an origin, and an unstamped session cannot be
+    // told apart from one another game left behind.
+    if (session) session.systemId = SYS ? SYS.id : null;
     const payload = { char: char, session: session || null, v: 2 };
     localStorage.setItem(sysKey('scratch'), JSON.stringify(payload));
     return true;
@@ -165,9 +168,24 @@ function sysScratchSave(char, session) {
 }
 
 // Pull the session half back out, or null if this scratch key predates it.
+//
+// The session carries the map, the journal, the bestiary and the universe the
+// character is bound to. Before the save store was namespaced per game, this
+// app could boot onto the OTHER game's save, and the first save() then wrote
+// all of that into this key — so a crawler inherited a Daring Comics map, its
+// journal, and a universe id that does not exist in this game at all. Refuse
+// anything that did not come from here.
 function sysScratchSession() {
   const d = sysScratchLoad(true);
-  return (d && d.v === 2) ? (d.session || null) : null;
+  const sess = (d && d.v === 2) ? (d.session || null) : null;
+  if (!sess) return null;
+  const mine = SYS ? SYS.id : null;
+  // An unstamped session predates the stamp, and nothing in it reliably says
+  // which game wrote it — a foreign one with no universe id looks identical to
+  // a native one. The character is stored separately and is never at risk, so
+  // the safe reading is to drop the session and start the map and journal
+  // clean. That costs at most one session's table state, once.
+  return sess.systemId === mine ? sess : null;
 }
 
 // The character's display name, whatever the pack calls that field. Reads the

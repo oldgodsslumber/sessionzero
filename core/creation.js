@@ -15,7 +15,12 @@ function renderHero(){
       // Restore the table state saved alongside the character — the journal,
       // the floor, the map and any fight that was in progress.
       const sess=(typeof sysScratchSession==='function')?sysScratchSession():null;
-      if(sess)SYS_SESSION_KEYS.forEach(function(k){if(sess[k]!==undefined&&sess[k]!==null)S[k]=sess[k];});
+      if(sess)SYS_SESSION_KEYS.forEach(function(k){
+        if(sess[k]===undefined||sess[k]===null)return;
+        // A universe id is only meaningful against this game's own list.
+        if(k==='universeId'&&!getUniverse(sess[k]))return;
+        S[k]=sess[k];
+      });
     }
     // A pack with creation screens starts there and stays until it is finished.
     if((SYS.creation||[]).length&&!(S.char.creation&&S.char.creation.complete)){
@@ -64,7 +69,10 @@ function renderSysSheet(){
   h+=`<button class="btn btn-secondary btn-xs" onclick="exportJSON()" title="Download this ${esc(lex('hero'))} as JSON">Export</button>`;
   h+=`<button class="btn btn-secondary btn-xs" onclick="sysNewCharacter()" title="Start a new ${esc(lex('hero'))}">New</button>`;
   h+=`</div></div>`;
-  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${S.floor||3}</div>`;
+  // The character's own floor, not the table's. A Level 1 crawler starting on
+  // the First Floor read "Floor 3" here, because this took the session default.
+  const shownFloor=(ch&&ch.floor!==undefined&&ch.floor!==null)?ch.floor:(S.floor||3);
+  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${esc(String(shownFloor))}</div>`;
   h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
   ids.forEach(f=>{
     h+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;

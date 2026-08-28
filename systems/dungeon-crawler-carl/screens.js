@@ -630,6 +630,10 @@ function dccFinishCreation(char) {
   char.blocks.health = { marked: 0 };
   char.level = dccFloorCfg(char).level;
   char.floor = fs.floor;
+  // The table starts where the crawler does, so the shell's floor tracking and
+  // everything reading it (salvage bands, pet Ranks, the Crawl Log) begin in
+  // the right place instead of at the default of 3.
+  if (typeof S !== 'undefined' && S) S.floor = fs.floor;
   // Popularity starts at CHA Mod x2 (p. 115) -- but only for a crawler who has
   // been through the Tutorial Floors. Viewers cannot tune in until after the
   // First Floor, so a Floor 1 crawler has no audience yet.

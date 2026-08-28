@@ -1230,6 +1230,85 @@ function boot(entry) {
     return four === 10 || 'Floor 4 drew ' + four + ' Enhanced controls, expected 10 (5 Stats x 2)';
   });
 
+  // ── the table state must not cross between games ─────────────────────────
+  // Reported from a real browser: a crawler's Map and Crawl Log were the ones
+  // from a Daring Comics save. The session blob carries the map, the journal,
+  // the bestiary and the universe the character is bound to, and it used to be
+  // restored with no check of which game wrote it. Before the save store was
+  // namespaced, this app could boot onto the other game's save, and the first
+  // save() wrote all of that into this key.
+  check('[session] a saved session is stamped with the game that wrote it', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};");
+    ev("S.notes=[{id:'n',type:'main',text:'CRAWL LOG',ts:1}];S.floor=1;save();");
+    const raw = JSON.parse(ev("localStorage.getItem(sysKey('scratch'))"));
+    return (raw.session && raw.session.systemId === 'dungeon-crawler-carl')
+      || 'stamped ' + JSON.stringify(raw.session && raw.session.systemId);
+  });
+  check('[session] ...and a stamped session is restored', () => {
+    const blob = ev("localStorage.getItem(sysKey('scratch'))");
+    ev("S=defaultState();S.char=null;localStorage.setItem(sysKey('scratch')," + JSON.stringify(blob) + ");renderHero();");
+    return (ev('S.notes.length') === 1 && ev('S.floor') === 1)
+      || 'journal ' + ev('S.notes.length') + ', floor ' + ev('S.floor');
+  });
+  check('[session] a session from another game is refused', () => {
+    const foreign = JSON.stringify({
+      char: JSON.parse(ev("JSON.stringify(SYS.newCharacter())")),
+      session: { systemId: 'daring-comics', notes: [{ id: 'n', text: 'DC JOURNAL', ts: 1 }],
+                 regions: [{ name: 'Metropolis Docks', pins: [] }], universeId: 'u_dc', floor: 3 },
+      v: 2,
+    });
+    ev("S=defaultState();S.char=null;localStorage.setItem(sysKey('scratch')," + JSON.stringify(foreign) + ");renderHero();");
+    if (ev('S.notes.length') !== 0) return "inherited the other game's journal";
+    const regions = ev("JSON.stringify(S.regions.map(function(r){return r.name}))");
+    if (/Metropolis/.test(regions)) return "inherited the other game's map: " + regions;
+    return ev('S.universeId') === null || 'bound to a foreign universe: ' + ev('S.universeId');
+  });
+  check('[session] an unstamped session is discarded rather than guessed at', () => {
+    // Nothing in an old blob reliably says which game wrote it, and the
+    // character is stored separately, so the map and journal start clean.
+    const legacy = JSON.stringify({
+      char: JSON.parse(ev("JSON.stringify(SYS.newCharacter())")),
+      session: { notes: [{ id: 'n', text: 'DC JOURNAL', ts: 1 }],
+                 regions: [{ name: 'Metropolis Docks', pins: [] }], floor: 3 },
+      v: 2,
+    });
+    ev("S=defaultState();S.char=null;localStorage.setItem(sysKey('scratch')," + JSON.stringify(legacy) + ");renderHero();");
+    return ev('S.notes.length') === 0 || 'restored ' + ev('S.notes.length') + ' foreign journal entries';
+  });
+  check('[session] the crawler itself is never discarded with it', () => {
+    return (ev('!!S.char') && ev('S.char.systemId') === 'dungeon-crawler-carl')
+      || 'the character was lost along with the session';
+  });
+  check('[session] a universe this game does not have is never adopted', () => {
+    const blob = JSON.stringify({
+      char: JSON.parse(ev("JSON.stringify(SYS.newCharacter())")),
+      session: { systemId: 'dungeon-crawler-carl', universeId: 'u_does_not_exist', floor: 2 },
+      v: 2,
+    });
+    ev("S=defaultState();S.char=null;localStorage.setItem(sysKey('scratch')," + JSON.stringify(blob) + ");renderHero();");
+    return ev('S.universeId') !== 'u_does_not_exist'
+      || 'bound to a universe that is not in this game';
+  });
+
+  // ── the sheet shows the crawler's own floor ──────────────────────────────
+  check('[sheet] the header shows the floor the crawler starts on', () => {
+    // It read the session default, so a Level 1 crawler on the First Floor was
+    // labelled "Floor 3".
+    const seen = [];
+    [1, 3, 4, 5].forEach(f => {
+      ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(" + f + ");");
+      ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+      const h = ev("document.getElementById('hero-sheet').innerHTML");
+      const m = /Dungeon Crawler Carl[^<]*?Floor (\d+)/.exec(h);
+      seen.push(m ? Number(m[1]) : null);
+    });
+    return seen.join(',') === '1,3,4,5' || 'headers read ' + seen.join(', ');
+  });
+  check("[sheet] finishing sets the table floor to the crawler's", () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);dccFinishCreation(S.char);");
+    return ev('S.floor') === 1 || 'the table is still on floor ' + ev('S.floor');
+  });
+
   // ── the sheet must never render as "just a card" ─────────────────────────
   // Reported from a real browser: Finish appeared to do nothing, and coming
   // back to the Hero tab showed the identity card with no sheet under it.
