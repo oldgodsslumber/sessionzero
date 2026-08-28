@@ -374,10 +374,18 @@ function dccApplyStatLayers(char) {
     d.statLayersV2 = true;
   }
 
+  // Points placed into Enhanced are ours to maintain; anything else in that
+  // layer is gear, Spells and Buffs and must survive untouched. Remember what
+  // we last wrote so the difference can be told apart on the next recompute.
+  const enh = fs.pointsEnh || {};
+  if (!d.enhApplied) d.enhApplied = {};
   DCC_STATS.forEach(function (st) {
     const cell = char.blocks.stats[st.id] || { base: 0, bonus: 0 };
     cell.base = (picks[st.id] || 0) + (pts[st.id] || 0) + ((rc[st.id] && rc[st.id].delta) || 0);
-    char.blocks.stats[st.id] = cell;          // `bonus` is the gear layer; not ours
+    const gear = (cell.bonus || 0) - (d.enhApplied[st.id] || 0);
+    cell.bonus = Math.max(0, gear) + (enh[st.id] || 0);
+    d.enhApplied[st.id] = enh[st.id] || 0;
+    char.blocks.stats[st.id] = cell;
   });
 }
 
@@ -765,9 +773,13 @@ function dccPrimaryAttack(char) {
        : cm.route === 'spell' ? cm.spell
        : cm.route === 'handtohand' ? cm.h2h : null;
 }
+// Floor 3 spends its 27 points on the Unenhanced layer; Floors 4 and 5 may put
+// theirs in either ("distribute 30 more points among your Enhanced and
+// Unenhanced Stats", p. 118). Both are the same budget, so both are counted.
 function dccPointsSpent(char) {
-  const p = dccFloorStart(char).points || {};
-  return DCC_STATS.reduce((n, s) => n + (p[s.id] || 0), 0);
+  const fs = dccFloorStart(char);
+  const un = fs.points || {}, enh = fs.pointsEnh || {};
+  return DCC_STATS.reduce((n, s) => n + (un[s.id] || 0) + (enh[s.id] || 0), 0);
 }
 
 function dccScreenTutorial(ctx) {
@@ -818,19 +830,42 @@ function dccScreenTutorial(ctx) {
        '<div style="font-size:12px;color:' + (left ? 'var(--accent)' : 'var(--muted)') + '">' +
        left + ' of ' + cfg.statPoints + ' left</div></div>' +
        '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">(Level &minus; 1) &times; 3. Spend them now: ' +
-       'Races and Classes have Stat requirements, and the next screen checks them.</div>' +
-       '<div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:4px 8px;align-items:center">';
+       'Races and Classes have Stat requirements, and the next screen checks them.' +
+       (cfg.layerChoice
+         ? ' From Floor ' + cfg.floor + ' they may go into either layer: Unenhanced is what you are, ' +
+           'Enhanced is what you are carrying. Only Unenhanced survives losing your gear.'
+         : ' They raise your Unenhanced Stat, which raises Enhanced with it.') +
+       '</div>';
+  // Two columns of controls where the floor offers the choice, one where it
+  // does not, so Floor 3 keeps the simpler layout it has always had.
+  const cols = cfg.layerChoice
+    ? '1fr auto auto auto auto auto auto auto'
+    : '1fr auto auto auto auto';
+  if (cfg.layerChoice) {
+    h += '<div style="display:grid;grid-template-columns:' + cols + ';gap:2px 8px;align-items:center;' +
+         'font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">' +
+         '<div></div><div>In</div><div style="grid-column:span 3;text-align:center">Unenhanced</div>' +
+         '<div style="grid-column:span 3;text-align:center">Enhanced</div></div>';
+  }
+  h += '<div style="display:grid;grid-template-columns:' + cols + ';gap:4px 8px;align-items:center">';
   DCC_STATS.forEach(function (s) {
-    const add = (fs.points || {})[s.id] || 0;
-    // What you walked in with, then the Unenhanced total those points build to.
     const walkedIn = dccStatPick(c, s.id);
-    const base = ((c.blocks && c.blocks.stats || {})[s.id] || {}).base || 0;
+    const cell = ((c.blocks && c.blocks.stats || {})[s.id] || {});
+    const base = cell.base || 0;
     h += '<div style="font-size:13px">' + esc(s.name) + '</div>' +
          '<div style="color:var(--muted);min-width:22px;text-align:right">' + walkedIn + '</div>' +
          '<button class="btn btn-secondary btn-xs" onclick="dccStatPoint(\'' + s.id + '\',-1)">&minus;</button>' +
          '<div style="min-width:34px;text-align:center;font-weight:700">' + base + '</div>' +
          '<button class="btn btn-secondary btn-xs" ' + (left <= 0 ? 'disabled style="opacity:.4"' : '') +
          ' onclick="dccStatPoint(\'' + s.id + '\',1)">+</button>';
+    if (cfg.layerChoice) {
+      const put = (fs.pointsEnh || {})[s.id] || 0;
+      h += '<button class="btn btn-secondary btn-xs" ' + (put <= 0 ? 'disabled style="opacity:.4"' : '') +
+           ' onclick="dccStatPoint(\'' + s.id + '\',-1,\'enhanced\')">&minus;</button>' +
+           '<div style="min-width:34px;text-align:center;font-weight:700">' + (cell.bonus || 0) + '</div>' +
+           '<button class="btn btn-secondary btn-xs" ' + (left <= 0 ? 'disabled style="opacity:.4"' : '') +
+           ' onclick="dccStatPoint(\'' + s.id + '\',1,\'enhanced\')">+</button>';
+    }
   });
   h += '</div></div>';
 
@@ -922,17 +957,19 @@ function dccSetFloor(n) {
   }
   save(); wizRepaint();
 }
-function dccStatPoint(id, d) {
+function dccStatPoint(id, d, layer) {
   const c = S.char, fs = dccFloorStart(c), cfg = dccFloorCfg(c);
-  fs.points = fs.points || {};
+  // Only a floor that offers the choice may spend into Enhanced.
+  const enh = layer === 'enhanced' && cfg.layerChoice === true;
+  const key = enh ? 'pointsEnh' : 'points';
+  fs[key] = fs[key] || {};
   // Clamp to what is left rather than only refusing once the budget is already
   // gone: the old check read the total BEFORE the increment, so a delta bigger
   // than 1 sailed straight past it.
   const left = cfg.statPoints - dccPointsSpent(c);
   const step = d > 0 ? Math.min(d, Math.max(0, left)) : d;
-  const next = Math.max(0, (fs.points[id] || 0) + step);
-  fs.points[id] = next;
-  // The Enhanced layer is owned by dccApplyStatBonuses; assigning it here is
+  fs[key][id] = Math.max(0, (fs[key][id] || 0) + step);
+  // Both layers are recomputed from the record; assigning either directly is
   // what used to wipe the Race/Class grant on a finished crawler.
   dccApplyStatLayers(c);
   save(); wizRepaint();

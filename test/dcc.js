@@ -1165,6 +1165,71 @@ function boot(entry) {
     return extras.length === 0 || 'Floor 3 picked up ' + extras.join(', ');
   });
 
+  // ── choosing which Stat layer the extra points go to ─────────────────────
+  // "Distribute 30 more points among your Enhanced and Unenhanced Stats"
+  // (p. 118). Floor 3 has no such choice: its 27 points are added to the
+  // Unenhanced Stat (p. 115).
+  check('[layerchoice] only Floors 4 and 5 offer the choice', () => {
+    const has = f => !!ev("DCC_FLOOR_START.filter(function(x){return x.floor===" + f + "})[0].layerChoice");
+    return (!has(1) && !has(3) && has(4) && has(5))
+      || [1, 3, 4, 5].map(f => 'F' + f + '=' + has(f)).join(' ');
+  });
+  check('[layerchoice] Floor 3 refuses to spend into Enhanced even if asked', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccStatPoint('CON',1,'enhanced');");
+    const un = ev("(S.char.dcc.floorStart.points||{}).CON||0");
+    const enh = ev("(S.char.dcc.floorStart.pointsEnh||{}).CON||0");
+    return (un === 1 && enh === 0)
+      || 'went to Unenhanced ' + un + ', Enhanced ' + enh;
+  });
+  check('[layerchoice] on Floor 4 the two layers take points separately', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(4);dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("for(var i=0;i<20;i++)dccStatPoint('STR',1);");
+    ev("for(var i=0;i<10;i++)dccStatPoint('CON',1,'enhanced');");
+    const str = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.STR)"));
+    const con = JSON.parse(ev("JSON.stringify(S.char.blocks.stats.CON)"));
+    if (str.base !== 26 || str.bonus !== 0) return 'STR ' + JSON.stringify(str);
+    return (con.base === 5 && con.bonus === 10) || 'CON ' + JSON.stringify(con);
+  });
+  check('[layerchoice] both layers draw on the one budget', () => {
+    return ev('dccPointsSpent(S.char)') === 30 || 'counted ' + ev('dccPointsSpent(S.char)') + ' of 30 spent';
+  });
+  check('[layerchoice] the budget cannot be beaten by switching layer', () => {
+    ev("for(var i=0;i<100;i++)dccStatPoint('DEX',1,'enhanced');");
+    ev("for(var i=0;i<100;i++)dccStatPoint('INT',1);");
+    const spent = ev('dccPointsSpent(S.char)');
+    return spent === 57 || 'spent ' + spent + ' of 57';
+  });
+  check('[layerchoice] Enhanced points do not eat a real gear bonus', () => {
+    // The gear/Spell/Buff layer and the points placed there share one field, so
+    // the recompute has to be able to tell them apart.
+    ev("S.char=SYS.newCharacter();dccSetFloor(4);");
+    ev("for(var i=0;i<10;i++)dccStatPoint('CON',1,'enhanced');");
+    ev("S.char.blocks.stats.CON.bonus += 4;");      // a ring
+    ev("dccApplyStatLayers(S.char);");
+    if (ev('S.char.blocks.stats.CON.bonus') !== 14) return 'after a recompute: ' + ev('S.char.blocks.stats.CON.bonus') + ', expected 14';
+    ev("dccStatPoint('CON',-1,'enhanced');");
+    return ev('S.char.blocks.stats.CON.bonus') === 13
+      || 'taking a point back left ' + ev('S.char.blocks.stats.CON.bonus') + ', expected 13';
+  });
+  check('[layerchoice] recomputing repeatedly does not drift', () => {
+    const before = ev('S.char.blocks.stats.CON.bonus');
+    ev("dccApplyStatLayers(S.char);dccApplyStatLayers(S.char);dccApplyStatLayers(S.char);");
+    return ev('S.char.blocks.stats.CON.bonus') === before
+      || 'drifted from ' + before + ' to ' + ev('S.char.blocks.stats.CON.bonus');
+  });
+  check('[layerchoice] the screen shows the extra controls only where they apply', () => {
+    const cols = f => {
+      ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(" + f + ");");
+      ev("S.char.creation={step:6,complete:false};renderHero();");
+      const h = ev("(document.getElementById('wiz-body')||{}).innerHTML||''");
+      return (h.match(/dccStatPoint\([^)]*enhanced/g) || []).length;
+    };
+    const three = cols(3), four = cols(4);
+    if (three !== 0) return 'Floor 3 drew ' + three + ' Enhanced controls';
+    return four === 10 || 'Floor 4 drew ' + four + ' Enhanced controls, expected 10 (5 Stats x 2)';
+  });
+
   // ── starting on the First Floor at Level 1 ───────────────────────────────
   // The core rulebook only builds Third and Fourth Floor crawlers: "If you'd
   // rather start out at Level 1, look for the Dungeon Crawler Carl Roleplaying

@@ -215,12 +215,14 @@ const DCC_FLOOR_START = [
   // points, each adds four things the app used to ignore entirely.
   { floor: 4, level: 20, statPoints: 57, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
     tutorial: true, raceClass: true, popularity: true,
+    layerChoice: true,       // "among your Enhanced and Unenhanced Stats"
     extraExperiences: 2,                       // "including the Third Floor table"
     skillBoost: { count: 6, low: '2d2', high: '1d2', threshold: 4 },
     popularityBonus: 1,                        // "Add your CHA Mod to your Popularity"
     extraLoot: ['Bronze', 'Silver'] },
   { floor: 5, level: 30, statPoints: 87, primaryBump: '2d4', otherBump: '1d4', rankCap: 10,
     tutorial: true, raceClass: true, popularity: true,
+    layerChoice: true,       // "among your Enhanced and Unenhanced Stats"
     extraExperiences: 4,
     skillBoost: { count: 8, low: '2d2', high: '1d2', threshold: 4 },
     popularityBonus: 1,
