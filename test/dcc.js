@@ -1532,6 +1532,67 @@ function boot(entry) {
     return missing.length ? 'no field for ' + missing.join(', ') : true;
   });
 
+  // ── a Spell has to say what it does ───────────────────────────
+  // Reported from a browser: "I have no idea what spells do. Even Heal." The
+  // catalogue carried Mana, range and type but no effect text at all, so the
+  // sheet could only ever show a name.
+  check('[spells] every Spell in the catalogue has its effect', () => {
+    const without = ev("JSON.stringify(DCC_SPELLS.filter(function(s){return !s.effect})" +
+                       ".map(function(s){return s.name}))");
+    return without === '[]' || 'no effect recorded for: ' + without;
+  });
+  check('[spells] Heal says what Heal does', () => {
+    const heal = ev("(DCC_SPELLS.filter(function(s){return s.name==='Heal'})[0]||{}).effect||''");
+    return /Health Bar/.test(heal) || 'reads ' + JSON.stringify(heal);
+  });
+  check('[spells] the sheet prints the cost, the range and the effect', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('spell');dccSetSpell('Fire Fingers');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+    const h = ev("document.getElementById('blk-spells').innerHTML");
+    if (!/sk-effect/.test(h)) return 'no effect line rendered at all';
+    if (!/Mana/.test(h)) return 'no Mana cost shown';
+    return /Health Bar slots/.test(h) || 'Heal still does not say what it does';
+  });
+  check('[spells] the damage line is not printed twice', () => {
+    // The printed entry repeats its own Base Damage inside the effect text.
+    const line = ev("(function(){var e=document.querySelectorAll('#blk-spells .sk-effect');" +
+                    "for(var i=0;i<e.length;i++){if(/Fire/.test(e[i].textContent))return e[i].textContent}" +
+                    "return ''})()");
+    const hits = (line.match(/1d4 \+ INT Fire/g) || []).length;
+    return hits <= 1 || 'the damage appears ' + hits + ' times: ' + JSON.stringify(line);
+  });
+  check('[spells] a Skill shows its catalogue line too', () => {
+    const h = ev("document.getElementById('blk-skills').innerHTML");
+    return /sk-effect/.test(h) || 'Skills carry no description';
+  });
+
+  // ── nothing may run off the side of a card ────────────────────
+  // Reported from a phone: the Hotlist controls ran off the edge. The gear rows
+  // were fixed for this earlier and the Hotlist rows were not.
+  check('[mobile] Hotlist rows are grouped so they can wrap', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);dccFinishCreation(S.char);");
+    ev("S.char.creation={step:0,complete:true};renderHero();");
+    ev("S.char.blocks.gear.hotlist=[{name:'Healing Potion',qty:3}];blockRepaint('gear');");
+    const h = ev("document.getElementById('blk-gear').innerHTML");
+    if (!/inv-row/.test(h)) return 'Hotlist rows are still inline-styled';
+    return /inv-ctl/.test(h) || 'the controls are not grouped, so they cannot wrap';
+  });
+  check('[mobile] no inventory row is a fixed single line any more', () => {
+    const h = ev("document.getElementById('blk-gear').innerHTML");
+    const inline = (h.match(/display:flex;align-items:center;gap:6px;padding:3px 0/g) || []).length;
+    return inline === 0 || inline + ' rows still use the old fixed layout';
+  });
+  check('[mobile] the add row is grouped so it can wrap too', () => {
+    const h = ev("document.getElementById('blk-gear').innerHTML");
+    if (!/class="inv-add"/.test(h)) return 'the add row is still one fixed line';
+    return /inv-add-opts/.test(h) || 'its pickers are not grouped';
+  });
+  check('[mobile] an item in the Hotlist still says what it is', () => {
+    ev("S.char.blocks.gear.hotlist=[{name:'Scroll of Fireball',casts:'Fireball',rank:3}];blockRepaint('gear');");
+    const h = ev("document.getElementById('blk-gear').innerHTML");
+    return /casts Fireball/.test(h) || 'the readout was lost in the rework';
+  });
+
   // ── the other kinds of item ──────────────────────────────────────────────
   // A weapon is not the only thing an item can be. Armour grants Damage
   // Resistance, "gained via Armor (natural or worn)" (p. 93); a scroll casts a

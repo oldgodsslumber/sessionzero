@@ -437,6 +437,12 @@ registerBlockType('skillList', {
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600">${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
           <div style="font-size:10px;color:var(--muted)">${esc(s.stat || '—')}${mod ? ' +' + mod : ''}${s.checkType ? ' · ' + esc(s.checkType) : ''}</div>
+          ${(() => {
+            // What it actually does. A Spell called "Heal" tells you nothing on
+            // its own, and the catalogue has had the answer all along.
+            const info = skillInfo(b, s);
+            return info ? `<div class="sk-effect">${esc(info)}</div>` : '';
+          })()}
         </div>
         <div class="num" style="min-width:34px;text-align:center;font-weight:700"
              title="Rank. Skills advance from use, not by hand.">${s.rank || 0}</div>
@@ -483,6 +489,32 @@ function skillRestore(id) {
     return Object.assign({ marked: false }, g);
   }));
   save(); blockRepaint(id);
+}
+
+// The catalogue line for an entry: its cost, range and what it does. The pack
+// supplies the lookup, so the shell does not need to know what a Spell is.
+function skillInfo(block, entry) {
+  const look = sysDerive(block.lookup);
+  if (!look || !entry) return '';
+  let cat = null;
+  try { cat = look(entry.name); } catch (e) { return ''; }
+  if (!cat) return '';
+  const bits = [];
+  if (cat.mana !== undefined && cat.mana !== null) bits.push(cat.mana + ' Mana');
+  if (cat.range) bits.push(cat.range);
+  if (cat.baseDamage) bits.push(cat.baseDamage);
+  if (cat.effect) {
+    // The printed entry repeats its own Base Damage and AI Favor lines inside
+    // the effect text; both are shown separately, so trim them rather than
+    // saying the same thing twice on one line.
+    let e = String(cat.effect);
+    if (cat.baseDamage) e = e.split('Base Damage: ' + cat.baseDamage).join('');
+    e = e.replace(/^\s*AI Favor:\s*\d+\s*/i, '').replace(/\s{2,}/g, ' ').trim();
+    if (e) bits.push(e);
+  } else if (cat.limitations) {
+    bits.push(cat.limitations);
+  }
+  return bits.join(' · ');
 }
 
 function _skillData(id) {
@@ -719,20 +751,23 @@ function invStack(b, c, d) {
   let h = `<div>`;
   for (let i = 0; i < size; i++) {
     const it = items[i];
-    h += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
-      <div style="width:20px;flex-shrink:0;font-size:10px;color:var(--muted)">${i + 1}</div>`;
+    // Grouped and wrapping, like the gear rows. As one flex line the controls
+    // ran straight off the side of the card on a phone.
+    h += `<div class="inv-row"><div class="inv-slotno">${i + 1}</div>`;
     if (!it) {
-      h += `<div style="flex:1;font-size:11px;color:var(--muted)">empty</div></div>`;
+      h += `<div class="inv-name" style="color:var(--muted)">empty</div></div>`;
       continue;
     }
-    h += `<div style="flex:1;min-width:0;font-size:12px">${esc(it.name)}</div>
+    const line = invReadout(b, it, (typeof S !== 'undefined' && S) ? S.char : null);
+    h += `<div class="inv-name">${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
+      <div class="inv-ctl">
       <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
-      <div style="min-width:34px;text-align:center;font-weight:700">${it.qty || 1}</div>
+      <div class="num" style="min-width:28px;text-align:center;font-weight:700">${it.qty || 1}</div>
       <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},1)">+</button>`;
     (b.containers || []).filter(x => x.id !== c.id).forEach(x => {
       h += `<button class="btn btn-secondary btn-xs" onclick="invMove('${esc(b.id)}','${esc(c.id)}','${esc(x.id)}','',${i})">→ ${esc((x.label || x.id).split(' ')[0])}</button>`;
     });
-    h += `<button class="btn btn-secondary btn-xs" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','',${i})">✕</button></div>`;
+    h += `<button class="btn btn-secondary btn-xs" title="Remove" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','',${i})">✕</button></div></div>`;
   }
   return h + `</div>`;
 }
@@ -773,11 +808,13 @@ function invAdder(b, c) {
     ? `<select id="inv-slot-${esc(b.id)}-${esc(c.id)}" style="flex:0 0 130px">` +
       (c.slots || []).map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') + `</select>`
     : '';
-  return `<div style="display:flex;gap:6px;margin-top:6px">
-    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…" style="flex:1"
+  // An input, a slot picker, a "works as" picker and a button never fit one
+  // line on a phone, so they are grouped and allowed to wrap.
+  return `<div class="inv-add">
+    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…"
       onkeydown="if(event.key==='Enter')invAdd('${esc(b.id)}','${esc(c.id)}')">
-    ${slotPick}${invAsPick(b, c, '')}
-    <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div>`;
+    <div class="inv-add-opts">${slotPick}${invAsPick(b, c, '')}
+      <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div></div>`;
 }
 
 // ─── mutators ───────────────────────────────────────────────────────────────

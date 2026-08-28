@@ -83,6 +83,14 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .inv-f span{font-family:var(--font-label);letter-spacing:.08em;text-transform:uppercase}
 .inv-f input,.inv-f select{font-size:11px;padding:3px 5px;min-width:96px}
 .inv-f input[type=number]{max-width:70px;min-width:60px}
+.sk-effect{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:2px;overflow-wrap:anywhere}
+.inv-slotno{width:20px;flex-shrink:0;font-size:10px;color:var(--muted)}
+.inv-add{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.inv-add > input{flex:1 1 140px;min-width:0}
+.inv-add-opts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.inv-add-opts select{min-width:0;max-width:150px}
+/* A block is a card on a phone: nothing inside may push the page sideways. */
+.card,.card-sm{overflow-x:hidden}
 .inv-stat{display:block;font-size:10px;color:var(--blue);font-family:var(--font-label);letter-spacing:.02em;margin-top:1px}
 .inv-ctl{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}
 .inv-slot{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
@@ -91,6 +99,9 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .inv-slot-n{display:block;font-weight:400;color:var(--muted);font-size:9px}
 .inv-slot-items{flex:1;min-width:0}
 @media (max-width:560px){
+  .inv-add > input{flex:1 1 100%}
+  .inv-add-opts{flex:1 1 100%}
+  .inv-add-opts select{flex:1 1 auto;max-width:none}
   /* Stack the slot name above its contents, and give the item name the full
      width with its controls underneath. */
   .inv-slot{flex-direction:column;gap:2px}
