@@ -1230,6 +1230,53 @@ function boot(entry) {
     return four === 10 || 'Floor 4 drew ' + four + ' Enhanced controls, expected 10 (5 Stats x 2)';
   });
 
+  // ── the sheet must never render as "just a card" ─────────────────────────
+  // Reported from a real browser: Finish appeared to do nothing, and coming
+  // back to the Hero tab showed the identity card with no sheet under it.
+  // renderSysSheet writes its cards, THEN fills #sys-blocks separately, so any
+  // throw while building the blocks left the player looking at the cards alone
+  // — which reads exactly like creation having failed.
+  check('[sheet] a null block does not blank the sheet', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};S.char.blocks.gear=null;renderHero();");
+    const n = ev("document.getElementById('sys-blocks').children.length");
+    return n === ev('SYS.schema.blocks.length') || 'drew ' + n + ' blocks';
+  });
+  check('[sheet] every block being null is still survivable', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};");
+    ev("SYS.schema.blocks.forEach(function(b){S.char.blocks[b.id]=null});renderHero();");
+    return ev("document.getElementById('sys-blocks').children.length") === ev('SYS.schema.blocks.length')
+      || 'the sheet collapsed to ' + ev("document.getElementById('sys-blocks').children.length") + ' blocks';
+  });
+  check('[sheet] a block whose data is null is re-initialised, not dereferenced', () => {
+    // blockCtx used to test for `undefined` only, so a null slipped past it and
+    // every renderer then read a property off null.
+    ev("S.char=SYS.newCharacter();S.char.blocks.mana=null;");
+    ev("blockCtx(sysBlock('mana'),S.char);");
+    return ev('S.char.blocks.mana') !== null || 'still null after blockCtx';
+  });
+  check('[sheet] one broken block says so and the rest still draw', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};");
+    const keep = ev("SYS.derive.hbSlotValue");
+    ev("SYS.derive.hbSlotValue=function(){throw new Error('MARKER-BAD-DATA')};renderHero();");
+    const h = ev("document.getElementById('sys-blocks').innerHTML");
+    ev("SYS.derive.hbSlotValue=" + String(keep) + ";");
+    if (!/could not be drawn/.test(h)) return 'the failure was swallowed silently';
+    if (!/MARKER-BAD-DATA/.test(h)) return 'the reason was not reported';
+    return /blk-skills/.test(h) || 'the other blocks were lost too';
+  });
+  check('[sheet] finishing creation leaves a full sheet, not a card', () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(3);");
+    ev("dccStatMethod('array');dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccRollBumps();dccChoose('race','human');dccChoose('cls','boring-ol-fighter');");
+    ev("wizState(S.char).complete=true;dccFinishCreation(S.char);renderHero();");
+    const n = ev("(document.getElementById('sys-blocks')||{children:[]}).children.length");
+    if (n !== ev('SYS.schema.blocks.length')) return 'only ' + n + ' blocks after Finish';
+    // and it survives leaving the tab and coming back, which is how it was found
+    ev("showTab('dice');showTab('hero');");
+    return ev("document.getElementById('sys-blocks').children.length") === ev('SYS.schema.blocks.length')
+      || 'the sheet collapsed after switching tabs';
+  });
+
   // ── starting on the First Floor at Level 1 ───────────────────────────────
   // The core rulebook only builds Third and Fourth Floor crawlers: "If you'd
   // rather start out at Level 1, look for the Dungeon Crawler Carl Roleplaying

@@ -620,7 +620,11 @@ function dccFinishCreation(char) {
   }
   char.blocks.skills = { skills: dccFinalSkills(char) };
   char.blocks.spells = { skills: dccStartingSpells(char) };
-  char.blocks.gear = char.blocks.gear || blockCtx(sysBlock('gear'), char) && char.blocks.gear;
+  // blockCtx creates the block's data if it is missing, so calling it IS the
+  // initialisation. The old line assigned the result of a && chain back over
+  // the top, which did nothing when the block was absent and actively kept a
+  // null in place when it was null.
+  blockCtx(sysBlock('gear'), char);
   if (char.blocks.gear) char.blocks.gear.hotlist = dccStartingHotlist(char);
   char.blocks.mana = { current: dccStatOf(char, 'INT') };
   char.blocks.health = { marked: 0 };

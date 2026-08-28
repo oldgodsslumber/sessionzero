@@ -23,7 +23,11 @@ function registerBlockType(id, def) { BLOCK_TYPES[id] = def; }
 // existing save without a migration.
 function blockCtx(block, char) {
   if (!char.blocks) char.blocks = {};
-  if (char.blocks[block.id] === undefined) {
+  // `== null` catches null as well as undefined. A block that came back null —
+  // from a save, or from a deletion synced out of the database — used to slip
+  // past this and every renderer then dereferenced it, which blanked the whole
+  // sheet and left the player looking at their identity card alone.
+  if (char.blocks[block.id] == null) {
     const t = BLOCK_TYPES[block.type];
     char.blocks[block.id] = (t && t.init) ? t.init(block, char) : {};
   }
@@ -67,7 +71,21 @@ function renderBlockSheet(char, targetEl) {
   const el = typeof targetEl === 'string' ? document.getElementById(targetEl) : targetEl;
   if (!el || !SYS) return;
   const blocks = (SYS.schema && SYS.schema.blocks) || [];
-  el.innerHTML = blocks.map(b => renderBlock(b, char)).join('');
+  // Rendered one at a time. A single throw used to abort the whole map, so
+  // nothing was assigned and the sheet showed only the cards above this
+  // element — the character looked like it had failed to finish creation.
+  // Now the rest of the sheet survives and the broken block says what happened.
+  el.innerHTML = blocks.map(function (b) {
+    try {
+      return renderBlock(b, char);
+    } catch (e) {
+      return '<div class="card" style="border-color:var(--red)">' +
+        '<div class="label mb-1" style="color:var(--red)">' + esc(b.label || b.id) +
+        ' could not be drawn</div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + esc(e.message) +
+        '</div></div>';
+    }
+  }).join('');
 }
 
 // Resolve a block field that may be a literal, a 'derive.x' string, or a function.
