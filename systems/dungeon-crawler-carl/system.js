@@ -258,6 +258,12 @@ registerSystem({
                  (item.rank ? ' at Rank ' + item.rank : '') + ' untrained');
       }
       if (item.teaches) out.push('Tome · teaches ' + item.teaches);
+      if (item.grantsStat && item.grantsStatN) {
+        out.push((item.grantsStatN > 0 ? '+' : '') + item.grantsStatN + ' ' + item.grantsStat);
+      }
+      if (item.grantsSkill && item.grantsSkillN) {
+        out.push((item.grantsSkillN > 0 ? '+' : '') + item.grantsSkillN + ' ' + item.grantsSkill);
+      }
       if (item.skill) {
         const cat = dccSkillByName(item.skill);
         if (cat) {

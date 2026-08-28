@@ -1532,6 +1532,77 @@ function boot(entry) {
     return missing.length ? 'no field for ' + missing.join(', ') : true;
   });
 
+  // ── printing what you carry ───────────────────
+  // Gear used to print as a run-on comma list squeezed into a column of the
+  // main sheet, with none of the mechanics: "Gear Slots Hockey pads, Club
+  // Hotlist Healing Potion x3". Worn gear and the Hotlist are what you reach
+  // for mid-fight, so each gets a page.
+  const printed = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');");
+    ev("dccStoreCombat('weaponName','Tire Iron');dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccSetFloor(3);dccRollBumps();dccChoose('race','human');dccChoose('cls','boring-ol-fighter');");
+    ev("dccFinishCreation(S.char);S.char.name='Fenwick';S.char.creation={step:0,complete:true};");
+    ev("S.char.blocks.gear.equipped.torso=[{name:'Hockey pads',dr:2,resist:'Fire'}];");
+    ev("S.char.blocks.gear.equipped.accessories=[{name:'Ring of Might',grantsStat:'STR',grantsStatN:3}];");
+    ev("S.char.blocks.gear.hotlist=[{name:'Healing Potion',qty:3},{name:'Scroll of Fireball',casts:'Fireball',rank:3}];");
+    ev("showTab('print');prClear();prToggle('hero','@self','full');");
+    return ev("prBuildBody()");
+  };
+  const pageWith = (doc, kicker) => {
+    const parts = doc.split('<section class="pg">').slice(1);
+    return parts.filter(x => x.indexOf(kicker) >= 0)[0] || '';
+  };
+
+  check('[print] worn gear and the Hotlist each get their own page', () => {
+    const doc = printed();
+    if (!pageWith(doc, 'WORN AND HELD')) return 'no page for what you are wearing';
+    return pageWith(doc, 'HOTLIST') !== '' || 'no page for the Hotlist';
+  });
+  check('[print] the worn page lists every slot, filled or not', () => {
+    const page = pageWith(printed(), 'WORN AND HELD');
+    const want = ['Head', 'Torso', 'Arms', 'Legs', 'Feet', 'Hands/Holding', 'Accessories'];
+    const missing = want.filter(sl => page.indexOf(sl) < 0);
+    return missing.length ? 'no row for ' + missing.join(', ') : true;
+  });
+  check('[print] a weapon prints its damage and to-hit, not just a name', () => {
+    const page = pageWith(printed(), 'WORN AND HELD');
+    if (page.indexOf('Tire Iron') < 0) return 'the weapon is not on the page';
+    if (!/1d6/.test(page)) return 'no damage printed';
+    return /to hit/.test(page) || 'no to-hit printed';
+  });
+  check('[print] armour prints its DR, and the page totals it', () => {
+    const page = pageWith(printed(), 'WORN AND HELD');
+    if (!/\+2 DR/.test(page)) return 'the armour does not state its DR';
+    return /Damage Resistance/.test(page) || 'the page does not total Damage Resistance';
+  });
+  check('[print] an item that grants a Stat says so', () => {
+    const page = pageWith(printed(), 'WORN AND HELD');
+    return /\+3 STR/.test(page) || 'the ring printed as a bare name';
+  });
+  check('[print] the Hotlist page has a numbered row per slot', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    // Ten slots, including the empty ones — it is a sheet you write on.
+    const rows = (page.match(/<tr>/g) || []).length;
+    return rows >= 10 || 'only ' + rows + ' rows for a ten-slot Hotlist';
+  });
+  check('[print] a scroll on the Hotlist says what it casts', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    return /casts Fireball/.test(page) || 'the scroll printed as a bare name';
+  });
+  check('[print] gear is no longer squeezed onto the main sheet', () => {
+    const page = pageWith(printed(), 'HERO SHEET');
+    return page.indexOf('Hotlist') < 0
+      || 'the main sheet still carries the gear block as a comma list';
+  });
+  check('[print] every page is identifiable face-down', () => {
+    const doc = printed();
+    const parts = doc.split('<section class="pg">').slice(1)
+      .filter(x => x.indexOf('CONTENTS') < 0);
+    const bad = parts.filter(x => x.indexOf('Fenwick') < 0 || x.indexOf('Floor 3') < 0);
+    return bad.length === 0 || bad.length + ' page(s) carry neither the name nor the floor';
+  });
+
   // ── a Spell has to say what it does ───────────────────────────
   // Reported from a browser: "I have no idea what spells do. Even Heal." The
   // catalogue carried Mana, range and type but no effect text at all, so the
@@ -2143,9 +2214,12 @@ function boot(entry) {
   });
   check('[print] the sheet carries the crawler and every block', () => {
     const doc = ev('prBuildBody()');
-    const want = ['Fenwick', 'Crawler Number', 'Strength', 'Health Bar', 'Skills', 'Club', 'Gear', 'Mana', 'Popularity'];
+    // "Gear" is no longer a block on this page — what you carry has pages of
+    // its own now — but the weapon itself must still appear in the document.
+    const want = ['Fenwick', 'Crawler Number', 'Strength', 'Health Bar', 'Skills', 'Club', 'Mana', 'Popularity'];
     const missing = want.filter(w => doc.indexOf(w) < 0);
-    return missing.length ? 'missing from the printed sheet: ' + missing.join(', ') : true;
+    if (missing.length) return 'missing from the printed sheet: ' + missing.join(', ');
+    return doc.indexOf('WORN AND HELD') >= 0 || 'nothing prints what the crawler is carrying';
   });
   check('[print] it does not print as an Unnamed Hero', () => {
     const txt = ev("prBuildBody()");

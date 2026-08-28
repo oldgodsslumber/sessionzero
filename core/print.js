@@ -58,6 +58,20 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .pr-note{font-size:8pt;line-height:1.35;color:#333;margin-bottom:8px;padding:5px 7px;border:.75pt solid #bbb;border-radius:3px}
 .pr-cols{column-count:2;column-gap:14px}
 .pr-blk{break-inside:avoid;page-break-inside:avoid;margin-bottom:9px}
+.pr-gear{margin-top:4px}
+.pr-gear th{background:#101410;color:#f7f9f6;font-family:'Oswald',sans-serif;font-size:7.5pt;
+  letter-spacing:1.1px;text-transform:uppercase;text-align:left;padding:3pt 5pt}
+.pr-gear td{padding:3.5pt 5pt;border-bottom:.5pt solid #b9c3ba;vertical-align:top}
+.pr-gear td.pr-w{width:86pt;font-family:'Oswald',sans-serif;font-size:8pt;letter-spacing:.4px;color:#3d4a3e}
+.pr-gear td.pr-box{width:26pt;border-left:.5pt solid #b9c3ba}
+.pr-gear td.pr-empty{height:15pt}
+.pr-sub{font-size:7.5pt;color:#4a5a4c;line-height:1.35;margin-top:1pt}
+.pr-q{color:#4a5a4c}
+.pr-tot{margin-top:7pt;font-family:'Oswald',sans-serif;font-size:9pt;letter-spacing:.6px;
+  text-transform:uppercase;border-top:1.5pt solid #101410;padding-top:4pt}
+.pr-tot strong{font-size:12pt}
+.pr-note-sm{font-family:'Inter',sans-serif;font-size:7.5pt;text-transform:none;letter-spacing:0;
+  color:#68786a;margin-left:8pt}
 .pr-blk-t{font-family:'Oswald',sans-serif;font-size:8pt;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;
   color:#101410;border-bottom:1pt solid #101410;padding-bottom:1.5pt;margin-bottom:3px}
 .pr-t{width:100%;border-collapse:collapse;font-size:8.5pt}
@@ -470,6 +484,84 @@ function prBlockRows(block, ctx) {
   return rows;
 }
 
+
+// ─── what you are carrying ──────────────────────────────────────────────────
+// Worn gear and the Hotlist each get a page. On the crawler sheet they are the
+// two things you actually reach for mid-fight, and a comma-separated line in
+// the corner of page one does not survive contact with a table.
+function prCarriedRow(item, extra) {
+  const line = (typeof invReadout === 'function')
+    ? invReadout(sysBlock('gear') || {}, item, S.char) : '';
+  return '<tr><td class="pr-w">' + prE(extra || '') + '</td>' +
+    '<td>' + prE(item && item.name ? item.name : '—') +
+    (item && item.qty > 1 ? ' <span class="pr-q">×' + item.qty + '</span>' : '') +
+    (line ? '<div class="pr-sub">' + prE(line) + '</div>' : '') +
+    '</td><td class="pr-box"></td></tr>';
+}
+
+function prCarriedPages(char, name, kick) {
+  // Floor and Level identify a loose page face-down on a table; the sheet's own
+  // name is already the heading, so it does not need repeating in the kicker.
+  const marks = (kick.indexOf('·') >= 0) ? kick.slice(kick.indexOf('·') - 1) : '';
+  const block = (SYS.schema && SYS.schema.blocks || []).filter(function (b) {
+    return b.type === 'inventory';
+  })[0];
+  if (!block) return '';
+  const d = (char.blocks && char.blocks[block.id]) || {};
+  let out = '';
+
+  // ── worn and held ─────────────────────────────────────────────────────────
+  const slots = (block.containers || []).filter(function (c) { return c.kind === 'slots'; });
+  if (slots.length) {
+    let h = '<table class="pr-t pr-gear"><thead><tr><th>Slot</th><th>Item</th><th class="pr-box">Used</th></tr></thead><tbody>';
+    slots.forEach(function (c) {
+      (c.slots || []).forEach(function (sl) {
+        const items = ((d[c.id] || {})[sl.id]) || [];
+        if (!items.length) {
+          h += '<tr><td class="pr-w">' + prE(sl.name) + '</td><td class="pr-empty"></td><td class="pr-box"></td></tr>';
+          return;
+        }
+        items.forEach(function (it, n) {
+          h += prCarriedRow(it, n === 0 ? sl.name : '');
+        });
+      });
+    });
+    h += '</tbody></table>';
+    // Damage Resistance is the number this page exists to answer.
+    const dr = sysDerive('derive.dr');
+    if (dr) {
+      let n = 0;
+      try { n = dr(char) || 0; } catch (e) { n = 0; }
+      h += '<div class="pr-tot">Damage Resistance <strong>' + prE(String(n)) + '</strong>' +
+           '<span class="pr-note-sm">only what is in a slot counts</span></div>';
+    }
+    out += prPage(name, 'WORN AND HELD' + marks, h);
+  }
+
+  // ── the Hotlist, and everything else ──────────────────────────────────────
+  (block.containers || []).filter(function (c) { return c.kind !== 'slots'; }).forEach(function (c) {
+    const items = d[c.id] || [];
+    const size = c.kind === 'stack' ? (c.size || 10) : Math.max(items.length + 6, 12);
+    let h = '';
+    if (c.note) h += '<div class="pr-note">' + prE(c.note) + '</div>';
+    h += '<table class="pr-t pr-gear"><thead><tr><th class="pr-w">#</th><th>Item</th><th class="pr-box">Used</th></tr></thead><tbody>';
+    for (let i = 0; i < size; i++) {
+      const it = items[i];
+      // Empty rows are deliberate: this is a sheet you write on.
+      h += it ? prCarriedRow(it, String(i + 1))
+              : '<tr><td class="pr-w">' + (i + 1) + '</td><td class="pr-empty"></td><td class="pr-box"></td></tr>';
+    }
+    h += '</tbody></table>';
+    if ((block.counters || []).length && c.kind !== 'stack') {
+      h += '<div class="pr-tot">' + block.counters.map(function (ct) {
+        return prE(ct.label || ct.id) + ' <strong>' + prE(String((d.counters || {})[ct.id] || 0)) + '</strong>';
+      }).join('  ') + '</div>';
+    }
+    out += prPage(name, String(c.label || c.id).toUpperCase() + marks, h);
+  });
+  return out;
+}
+
 function prBlockSheetHTML(char, opts) {
   opts = opts || {};
   const ids = (SYS.schema && SYS.schema.identity) || [];
@@ -495,7 +587,12 @@ function prBlockSheetHTML(char, opts) {
     } catch (e) { /* prose is optional; never let it stop the sheet */ }
   }
   h += '<div class="pr-cols">';
-  ((SYS.schema && SYS.schema.blocks) || []).forEach(function (b) {
+  // Inventory gets pages of its own: squeezed into a column of this one it
+  // printed as a run-on comma list with none of the mechanics, which is no use
+  // at a table.
+  ((SYS.schema && SYS.schema.blocks) || []).filter(function (b) {
+    return b.type !== 'inventory';
+  }).forEach(function (b) {
     let rows;
     try { rows = prBlockRows(b, blockCtx(b, char)); }
     catch (e) { rows = [['-', 'could not be printed', '']]; }
@@ -518,7 +615,8 @@ function prBlockSheetHTML(char, opts) {
   }
   if (char.level !== undefined && char.level !== null && char.level !== '') marks.push('Level ' + char.level);
   if (marks.length) kick += ' · ' + marks.join(' · ');
-  return prPage(name, kick, h);
+  // The sheet, then a page for what you are carrying, then the Hotlist.
+  return prPage(name, kick, h) + prCarriedPages(char, name, kick);
 }
 
 function prPage(title,kicker,body){return `<section class="pg"><div class="pg-h"><div class="pg-h-t">${prE(title)}</div><div class="pg-h-s">${prE(kicker||'Daring Comics')}</div></div>${body}</section>`;}
