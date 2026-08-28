@@ -117,7 +117,7 @@ registerBlockType('traitGrid', {
     const b = ctx.block, d = ctx.data, dual = !!b.layers;
     const traits = b.traits || [];
     const modOf = b.mod ? sysDerive(b.mod) : null;
-    let h = `<div class="card"><div class="pg-title" style="font-size:18px">${esc(b.label || 'Traits')}</div>`;
+    let h = `<div class="card"><div class="blk-title">${esc(b.label || 'Traits')}</div>`;
     if (b.hint) h += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(b.hint)}</div>`;
     if (dual) {
       h += `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px 8px;align-items:center">
@@ -220,19 +220,19 @@ registerBlockType('track', {
     const marked = Math.min(d.marked || 0, count);
     const remaining = count - marked;
     let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-             <div class="pg-title" style="font-size:18px">${esc(b.label || 'Track')}</div>
+             <div class="blk-title">${esc(b.label || 'Track')}</div>
              <div style="font-size:12px;color:var(--muted)">${remaining}/${count}${b.percent ? ' · ' + Math.round(remaining / count * 100) + '%' : ''}</div></div>`;
     h += `<div style="display:flex;gap:3px;flex-wrap:wrap">`;
     for (let i = 0; i < count; i++) {
       // rtl: slot 0 is the leftmost/lowest %, and marks land on the highest first
       const isMarked = rtl ? (i >= remaining) : (i < marked);
       const pct = Math.round((i + 1) / count * 100);
-      h += `<div onclick="trackToggle('${esc(b.id)}',${i})" title="${b.percent ? pct + '%' : ''}"
-             style="width:38px;height:44px;border:2px solid ${isMarked ? 'var(--red)' : 'var(--border)'};
-             border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-             cursor:pointer;background:${isMarked ? 'var(--surface3)' : 'var(--surface2)'};
-             opacity:${isMarked ? '.45' : '1'}">
-             <div style="font-weight:700;font-size:14px">${slotValue}</div>
+      // Classed rather than inline-styled, so a pack theme can say what a live
+      // slot and a spent one look like. Health reads better as "what is left"
+      // than as "what is gone".
+      h += `<div class="trk-slot${isMarked ? ' is-spent' : ''}"
+             onclick="trackToggle('${esc(b.id)}',${i})" title="${b.percent ? pct + '%' : ''}">
+             <div class="trk-v">${slotValue}</div>
              ${b.percent ? `<div style="font-size:8px;color:var(--muted)">${pct}%</div>` : ''}</div>`;
     }
     h += `</div>`;
@@ -319,7 +319,7 @@ registerBlockType('pool', {
     if (max !== null && (d.current || 0) > max) d.current = max;
     const cur = d.current || 0;
     return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
-      <div><div class="pg-title" style="font-size:18px">${esc(b.label || b.id)}</div>
+      <div><div class="blk-title">${esc(b.label || b.id)}</div>
       ${b.hint ? `<div style="font-size:11px;color:var(--muted)">${esc(b.hint)}</div>` : ''}</div>
       <div style="display:flex;align-items:center;gap:6px">
         <button class="btn btn-secondary btn-xs" onclick="poolAdj('${esc(b.id)}',-1)">−</button>
@@ -379,7 +379,7 @@ registerBlockType('skillList', {
     const modOf = b.statMod ? sysDerive(b.statMod) : null;
     const marked = list.filter(s => s.marked).length;
     let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <div class="pg-title" style="font-size:18px">${esc(b.label || 'Skills')}</div>
+      <div class="blk-title">${esc(b.label || 'Skills')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--muted)">${list.length} known${marked ? ' · ' + marked + ' marked' : ''}</span>
         <button class="btn btn-secondary btn-xs" onclick="skillAddToggle('${esc(b.id)}')">${d.adding ? 'Cancel' : '+ Skill'}</button>
@@ -541,7 +541,7 @@ registerBlockType('inventory', {
   render(ctx) {
     const b = ctx.block, d = ctx.data;
     let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-      <div class="pg-title" style="font-size:18px">${esc(b.label || 'Gear')}</div>`;
+      <div class="blk-title">${esc(b.label || 'Gear')}</div>`;
     const cap = b.carryLimit ? blockValue(b.carryLimit, ctx, null) : null;
     if (cap !== null) h += `<div style="font-size:11px;color:var(--muted)">${esc(String(cap))}</div>`;
     h += `</div>`;
@@ -747,7 +747,7 @@ registerBlockType('entityList', {
     const kinds = b.kinds || [];
     const rows = d.entries || [];
     let h = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <div class="pg-title" style="font-size:18px">${esc(b.label || 'Companions')}</div>
+      <div class="blk-title">${esc(b.label || 'Companions')}</div>
       <div style="display:flex;gap:4px;align-items:center">
         <input id="ent-add-${esc(b.id)}" placeholder="Name" style="width:120px;padding:5px">
         <select id="ent-kind-${esc(b.id)}" style="width:96px">

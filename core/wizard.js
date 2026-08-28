@@ -56,8 +56,8 @@ function renderWizard(targetEl) {
 
   let h = `<div class="card" style="margin-bottom:10px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-      <div class="pg-title" style="font-size:22px">${esc(step.label || step.id)}</div>
-      <div style="font-size:11px;color:var(--muted)">Step ${i + 1} of ${steps.length}</div>
+      <div class="wiz-title">${esc(step.label || step.id)}</div>
+      <div class="wiz-count">${i + 1} / ${steps.length}</div>
     </div>
     <div style="display:flex;gap:3px">`;
   steps.forEach((s, n) => {
@@ -66,9 +66,10 @@ function renderWizard(targetEl) {
     // a closing quote inside the "done" branch and the rest of the declarations
     // outside it, so every completed segment parsed as a junk attribute and
     // rendered with no flex, no height and no colour.
-    const bg = here ? 'var(--accent)' : done ? 'var(--accent2)' : 'var(--surface3)';
-    h += `<div title="${esc(s.label || s.id)}"${done ? ` onclick="wizGoto(${n})"` : ''}` +
-      ` style="${done ? 'cursor:pointer;' : ''}flex:1;height:5px;border-radius:3px;background:${bg}"></div>`;
+    // A descent, not nine equal ticks: each completed step is a rung you have
+    // already dropped past, the current one is lit, and the rest are ahead.
+    const cls = here ? 'wiz-rung is-here' : done ? 'wiz-rung is-done' : 'wiz-rung';
+    h += `<div class="${cls}" title="${esc(s.label || s.id)}"${done ? ` onclick="wizGoto(${n})"` : ''}></div>`;
   });
   h += `</div></div><div id="wiz-body"></div>`;
   el.innerHTML = h;
@@ -91,8 +92,7 @@ function wizRepaint() {
   const last = i === steps.length - 1;
   inner += `<div class="card-sm" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
     <button class="btn btn-secondary btn-xs" ${i === 0 ? 'disabled style="opacity:.4"' : ''} onclick="wizBack()">← Back</button>
-    <div style="flex:1;font-size:11px;color:${ok === true ? 'var(--muted)' : 'var(--accent)'};text-align:center">
-      ${ok === true ? '' : esc(String(ok))}</div>
+    <div class="wiz-block${ok === true ? '' : ' is-blocking'}">${ok === true ? '' : esc(String(ok))}</div>
     <button class="btn btn-primary btn-xs" ${ok === true ? '' : 'disabled style="opacity:.4"'} onclick="wizNext()">
       ${last ? 'Finish' : 'Continue →'}</button></div>`;
   body.innerHTML = inner;

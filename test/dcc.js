@@ -1357,6 +1357,53 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── chrome, sheet and wizard, restyled to the pack's identity ────────────
+  check('[chrome] the sheet shows which Crawl it belongs to', () => {
+    // The universe bar was only drawn by Daring Comics' own renderers, so a
+    // block pack's sheet had no way to see or switch its world.
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);dccFinishCreation(S.char);");
+    ev("S.char.creation={step:0,complete:true};renderHero();");
+    const bar = ev("!!document.querySelector('#hero-sheet .uni-bar')");
+    return bar || 'no universe bar on the sheet';
+  });
+  check('[chrome] ...and the floor it is on, because the floor is the clock', () => {
+    const chip = ev("(document.querySelector('.uni-floor')||{}).textContent||''");
+    if (chip !== 'Floor 1') return 'chip reads ' + JSON.stringify(chip);
+    ev("S.floor=4;renderHero();");
+    return ev("(document.querySelector('.uni-floor')||{}).textContent") === 'Floor 4'
+      || 'the chip did not follow the floor';
+  });
+  check('[sheet] every block heading shares one class a pack can style', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");
+    const n = ev("document.querySelectorAll('#sys-blocks .blk-title').length");
+    return n >= 6 || 'only ' + n + ' headings carry the class';
+  });
+  check('[sheet] a spent track slot is marked as spent, not coloured inline', () => {
+    // Inline styles cannot be themed. Health reads better as what is left.
+    ev("S.char.blocks.health={marked:3};blockRepaint('health');");
+    const live = ev("document.querySelectorAll('.trk-slot:not(.is-spent)').length");
+    const spent = ev("document.querySelectorAll('.trk-slot.is-spent').length");
+    if (spent !== 3) return spent + ' slots marked spent, expected 3';
+    return live > 0 || 'no live slots left to read';
+  });
+  check('[wizard] the progress strip is a descent, not nine equal ticks', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:2,complete:false};renderHero();");
+    const total = ev("document.querySelectorAll('.wiz-rung').length");
+    const done = ev("document.querySelectorAll('.wiz-rung.is-done').length");
+    const here = ev("document.querySelectorAll('.wiz-rung.is-here').length");
+    if (total !== ev('SYS.creation.length')) return total + ' rungs for ' + ev('SYS.creation.length') + ' screens';
+    return (done === 2 && here === 1) || done + ' behind, ' + here + ' lit';
+  });
+  check('[wizard] a blocked screen says so in the warning colour, not the accent', () => {
+    // Everything on the screen used to share one accent, so the one thing
+    // stopping you looked like everything else.
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:false};renderHero();");
+    const el = ev("!!document.querySelector('.wiz-block.is-blocking')");
+    if (!el) return 'screen 1 of a blank crawler should be blocking';
+    const txt = ev("document.querySelector('.wiz-block.is-blocking').textContent.trim()");
+    return txt.length > 0 || 'the blocking message is empty';
+  });
+
   // ── printing a crawler ───────────────────────────────────────────────────
   // The print centre is Daring Comics' sheet throughout — Aspects, Stress,
   // Consequences, the Fate ladder. Printing a crawler threw on the first

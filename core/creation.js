@@ -56,8 +56,11 @@ function sysNewCharacter(){
 function renderSysSheet(){
   const el=document.getElementById('hero-sheet');if(!el)return;
   const ch=S.char,ids=(SYS.schema&&SYS.schema.identity)||[];
+  // The universe bar was only drawn by Daring Comics' own renderers, so a
+  // block pack's sheet had no way to see or switch the world it belongs to.
   const LABELS={name:'Name',crawlerNumber:'Crawler Number',race:'Race',class:'Class',level:'Level'};
-  let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
+  let h=universeBarHTML();
+  h+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
   h+=`<div class="pg-title">${esc(lexU('sheet'))}</div>`;
   // The sheet used to be a one-way door: once creation finished there was no
   // control anywhere to export, start another character, or fix a choice —

@@ -51,7 +51,27 @@ html[data-theme="crawler"] .label{
   letter-spacing:.14em;text-transform:uppercase;color:var(--blue);
 }
 /* The book's table band, reused for every block heading on the sheet. */
-html[data-theme="crawler"] .blk-title{
+html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; spent slots recede rather
+   than shouting in red, so a glance reads "how much is left". */
+.trk-slot{width:38px;height:44px;border:2px solid var(--accent);border-radius:var(--radius-btn);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;background:var(--surface2);transition:opacity .12s,border-color .12s}
+.trk-slot.is-spent{border-color:var(--border);background:var(--surface);opacity:.4}
+.trk-v{font-weight:700;font-size:14px;color:var(--accent)}
+.trk-slot.is-spent .trk-v{color:var(--muted)}
+.uni-floor{font-family:var(--font-label);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--blue);border-left:1px solid var(--border);margin-left:8px;padding-left:8px;white-space:nowrap}
+/* Creation wizard. The rung strip reads as a descent: steps behind you are
+   solid and clickable, the one you are on is lit, the rest are unlit. */
+.wiz-title{font-family:var(--font-title);font-size:22px;color:var(--accent);letter-spacing:.3px}
+.wiz-count{font-family:var(--font-data,var(--font-label));font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wiz-rung{flex:1;height:5px;border-radius:2px;background:var(--surface3);transition:background .15s}
+.wiz-rung.is-done{background:var(--accent2);cursor:pointer}
+.wiz-rung.is-here{background:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.wiz-block{flex:1;font-size:11px;text-align:center;color:var(--muted)}
+/* What is stopping you is the one thing on the screen in the warning colour. */
+.wiz-block.is-blocking{color:var(--hot,var(--accent));font-weight:500}
+.blk-title{
   font-family:var(--font-label);font-weight:600;font-size:11px;
   letter-spacing:.14em;text-transform:uppercase;
   color:var(--accent);border-bottom:1px solid var(--border);
@@ -128,6 +148,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .page{display:none;padding:16px;animation:fadeIn .15s ease}
 .page.active{display:block}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* Every block heading on a block-pack sheet. Defaults to the shell's title
+   treatment at a smaller size; a pack theme can restyle all of them at once. */
+.blk-title{font-family:var(--font-title);font-size:18px;letter-spacing:.5px;margin-bottom:4px;color:var(--accent)}
 .pg-title{font-family:var(--font-title);font-size:28px;letter-spacing:1px;margin-bottom:4px;color:var(--accent)}
 .pg-sub{font-size:12px;color:var(--muted);margin-bottom:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:14px;margin-bottom:10px}

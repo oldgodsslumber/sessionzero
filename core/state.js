@@ -421,7 +421,15 @@ function repairSaveIndex(){const n=rebuildSaveIndex();alert('Save list rebuilt f
 // ═══════════════════════════════════════════════════════════
 let _uniRequired=false;
 function refreshUniverseUI(){try{renderHero();}catch(e){}try{if(document.getElementById('npcs-content'))renderNPCs();}catch(e){}try{if(document.getElementById('wiki-content'))renderWiki();}catch(e){}}
-function universeBarHTML(){const u=currentUniverse();const nm=u?u.name:'No universe';return `<div class="uni-bar" onclick="openUniverseManager()" title="Your game world — tap to manage universes"><span class="uni-ico">\u{1F30C}</span><span class="uni-name">${esc(nm)}</span><span class="uni-caret">▾</span></div>`;}
+function universeBarHTML(){const u=currentUniverse();const nm=u?u.name:'No universe';return `<div class="uni-bar" onclick="openUniverseManager()" title="Your game world — tap to manage universes"><span class="uni-ico">\u{1F30C}</span><span class="uni-name">${esc(nm)}</span>${_uniFloorHTML()}<span class="uni-caret">▾</span></div>`;}
+// A pack whose lexicon renames the log break to something the table tracks —
+// Dungeon Crawler Carl's Floor — shows it here, because that is the clock.
+function _uniFloorHTML(){
+  if(!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))return '';
+  const f=(S&&S.floor);
+  if(f===undefined||f===null)return '';
+  return `<span class="uni-floor">${esc(lexU('logBreak'))} ${esc(String(f))}</span>`;
+}
 function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New heroes join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
 function closeUniverseModal(){const m=document.getElementById('universe-modal');if(m)m.classList.remove('open','locked');}
 function openUniverseSetup(required,editId){
