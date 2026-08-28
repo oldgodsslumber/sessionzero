@@ -1357,6 +1357,56 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── the Continue gate has to keep up with what you type ──────────────────
+  // Reported from a browser: you enter a name and the screen still says the
+  // crawler needs one, with Continue disabled. The value WAS stored — a screen
+  // handler deliberately does not repaint, because that is what protects the
+  // caret — but the footer saying why Continue is disabled lives in the same
+  // body and went stale, so creation could not be started at all.
+  check('[gate] typing a name clears the message and enables Continue', () => {
+    ev("S.char=SYS.newCharacter();S.char.name='';S.char.creation={step:0,complete:false};renderHero();");
+    const msg = () => ev("(document.getElementById('wiz-msg')||{}).textContent||''");
+    const blocked = () => ev("!!(document.getElementById('wiz-next')||{}).disabled");
+    if (!/name/i.test(msg())) return 'a nameless crawler should be blocked, message was ' + JSON.stringify(msg());
+    if (!blocked()) return 'Continue was not disabled to begin with';
+    ev("var i=document.querySelector('#wiz-body input');i.value='Fenwick';" +
+       "i.dispatchEvent(new window.Event('input',{bubbles:true}));");
+    if (msg().trim() !== '') return 'the message went stale: ' + JSON.stringify(msg());
+    return blocked() === false || 'Continue is still disabled after typing a name';
+  });
+  check('[gate] ...and Continue then actually advances', () => {
+    ev("document.getElementById('wiz-next').click();");
+    return ev('S.char.creation.step') === 1 || 'still on step ' + ev('S.char.creation.step');
+  });
+  check('[gate] refreshing the gate does not disturb what you are typing', () => {
+    // The fix must not reintroduce the focus bug it was written around.
+    ev("S.char=SYS.newCharacter();S.char.name='';S.char.creation={step:0,complete:false};renderHero();");
+    ev("var i=document.querySelector('#wiz-body input');i.setAttribute('data-probe','1');i.focus();" +
+       "i.value='Fen';i.dispatchEvent(new window.Event('input',{bubbles:true}));");
+    const kept = ev("(document.querySelector('#wiz-body input')||{}).getAttribute&&document.querySelector('#wiz-body input').getAttribute('data-probe')");
+    if (kept !== '1') return 'the input was replaced while typing';
+    return ev("document.activeElement.tagName") === 'INPUT' || 'focus was lost';
+  });
+  check('[gate] every screen keeps its gate in step with its inputs', () => {
+    // The general form. Any screen whose handlers store without repainting can
+    // strand the player behind a stale message.
+    const stale = [];
+    const n = ev('SYS.creation.length');
+    for (let i = 0; i < n; i++) {
+      ev("S.char.creation.step=" + i + ";renderHero();");
+      const before = ev("(document.getElementById('wiz-msg')||{}).textContent||''");
+      // Nudge every input on the screen, then ask whether the footer agrees
+      // with what validate() now says.
+      ev("[].slice.call(document.querySelectorAll('#wiz-body input')).forEach(function(i){" +
+         "i.dispatchEvent(new window.Event('input',{bubbles:true}))});");
+      const shown = ev("(document.getElementById('wiz-msg')||{}).textContent||''").trim();
+      const truth = ev("wizValidate(S.char," + i + ")");
+      const want = truth === true ? '' : String(truth).trim();
+      if (shown !== want) stale.push('screen ' + (i + 1) + ' shows ' + JSON.stringify(shown) + ' but validate says ' + JSON.stringify(want));
+    }
+    return stale.length ? stale[0] : true;
+  });
+
   // ── the interface talks ──────────────────────────────────────────────────
   // The app IS the System AI's interface, so its ambient notices are in its
   // voice. Failures are not: when a save fails the player needs to know what to

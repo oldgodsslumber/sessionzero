@@ -92,10 +92,34 @@ function wizRepaint() {
   const last = i === steps.length - 1;
   inner += `<div class="card-sm" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
     <button class="btn btn-secondary btn-xs" ${i === 0 ? 'disabled style="opacity:.4"' : ''} onclick="wizBack()">← Back</button>
-    <div class="wiz-block${ok === true ? '' : ' is-blocking'}">${ok === true ? '' : esc(String(ok))}</div>
-    <button class="btn btn-primary btn-xs" ${ok === true ? '' : 'disabled style="opacity:.4"'} onclick="wizNext()">
+    <div id="wiz-msg" class="wiz-block${ok === true ? '' : ' is-blocking'}">${ok === true ? '' : esc(String(ok))}</div>
+    <button id="wiz-next" class="btn btn-primary btn-xs" ${ok === true ? '' : 'disabled style="opacity:.4"'} onclick="wizNext()">
       ${last ? 'Finish' : 'Continue →'}</button></div>`;
   body.innerHTML = inner;
+  // A screen's own handlers deliberately do NOT repaint — that is what protects
+  // the caret while you type. But the footer that says why Continue is disabled
+  // lives in the same body, so it went stale: you typed your name, the message
+  // still read "needs a name", and the button stayed disabled. Recheck the gate
+  // on any input without redrawing anything the player is typing into.
+  body.oninput = wizRefreshGate;
+  body.onchange = wizRefreshGate;
+}
+
+// Update only the two things the gate owns: the message and the button. Never
+// re-render — this runs on every keystroke.
+function wizRefreshGate() {
+  const char = wizChar(); if (!char) return;
+  const ok = wizValidate(char, wizStepIndex(char));
+  const msg = document.getElementById('wiz-msg');
+  const btn = document.getElementById('wiz-next');
+  if (msg) {
+    msg.textContent = ok === true ? '' : String(ok);
+    msg.classList.toggle('is-blocking', ok !== true);
+  }
+  if (btn) {
+    btn.disabled = ok !== true;
+    btn.style.opacity = ok === true ? '' : '.4';
+  }
 }
 
 function wizGoto(n) {
