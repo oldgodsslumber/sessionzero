@@ -1357,6 +1357,61 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── Skills from creation are not list entries to tidy away ───────────────
+  // Reported from a browser: "why do skills have an X after them? I deleted
+  // two of them." Every row carried a delete button that fired on one click
+  // with no confirmation — including Skills granted by your background, Race,
+  // Class and tutorial rolls, which are part of who the character is.
+  const skillSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+  const delButtons = () => ev("document.querySelectorAll('#blk-skills [onclick^=\"skillDel\"]').length");
+
+  check('[skills] a Skill from creation offers no delete button', () => {
+    skillSheet();
+    const n = delButtons();
+    return n === 0 || n + ' creation Skills can still be deleted in one click';
+  });
+  check('[skills] a Skill you added yourself can be removed', () => {
+    ev("document.body.insertAdjacentHTML('beforeend','<input id=' + JSON.stringify('sk-add-skills') + '>');");
+    ev("document.getElementById('sk-add-skills').value='Climbing';skillAdd('skills');");
+    return delButtons() === 1 || 'offered ' + delButtons() + ' delete buttons, expected 1';
+  });
+  check('[skills] deleting asks first, and refuses a creation Skill outright', () => {
+    // confirm() is stubbed true in this harness, so a refusal has to come from
+    // the guard rather than from the dialog.
+    skillSheet();
+    const before = ev("S.char.blocks.skills.skills.length");
+    ev("skillDel('skills',0);");
+    return ev("S.char.blocks.skills.skills.length") === before
+      || 'a creation Skill was deleted anyway';
+  });
+  check('[skills] the sheet notices when a granted Skill has gone missing', () => {
+    skillSheet();
+    ev("S.char.blocks.skills.skills=S.char.blocks.skills.skills.filter(function(s){return s.name!=='Club'});");
+    ev("blockRepaint('skills');");
+    const h = ev("document.getElementById('blk-skills').innerHTML");
+    if (!/missing/.test(h)) return 'nothing told the player a Skill was gone';
+    return /Club/.test(h) || 'the missing Skill was not named';
+  });
+  check('[skills] ...and can put it back', () => {
+    ev("skillRestore('skills');");
+    const names = JSON.parse(ev("JSON.stringify(S.char.blocks.skills.skills.map(function(s){return s.name}))"));
+    return names.indexOf('Club') >= 0 || 'restore did not return it: ' + JSON.stringify(names);
+  });
+  check('[skills] restoring twice does not duplicate', () => {
+    ev("skillRestore('skills');skillRestore('skills');");
+    const names = JSON.parse(ev("JSON.stringify(S.char.blocks.skills.skills.map(function(s){return s.name}))"));
+    const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+    return dupes.length === 0 || 'duplicated ' + dupes.join(', ');
+  });
+  check('[skills] a sheet with nothing missing says nothing', () => {
+    skillSheet();
+    const h = ev("document.getElementById('blk-skills').innerHTML");
+    return !/missing/.test(h) || 'the notice shows when nothing is actually missing';
+  });
+
   // ── what creation asked you about has to reach the sheet ─────────────────
   // Reported from a browser: "my weapon doesn't appear in my inventory". It
   // never did — the finish step wrote only the Hotlist, so the weapon you chose,

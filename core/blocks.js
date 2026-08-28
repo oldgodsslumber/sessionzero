@@ -429,12 +429,49 @@ registerBlockType('skillList', {
           <button class="btn btn-secondary btn-xs" onclick="skillRank('${esc(b.id)}',${i},1)">+</button>
         </div>
         <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
-        <button class="btn btn-secondary btn-xs" onclick="skillDel('${esc(b.id)}',${i})">✕</button>
+        ${skillIsYours(s)
+          ? `<button class="btn btn-secondary btn-xs" title="Remove this ${esc(b.label || 'entry')} — you added it yourself" onclick="skillDel('${esc(b.id)}',${i})">✕</button>`
+          : `<span style="width:24px" title="This came from character creation, so it is part of who you are rather than something to delete"></span>`}
       </div>`;
     });
+    // Offer to put back anything creation granted that is no longer listed.
+    const gone = skillMissing(b, ctx.char);
+    if (gone.length) {
+      h += `<div class="card-sm" style="border-color:var(--blue);margin-top:6px;display:flex;`
+        + `justify-content:space-between;align-items:center;gap:8px">`
+        + `<div style="font-size:11px;color:var(--muted)">`
+        + `${gone.length} from character creation ${gone.length === 1 ? 'is' : 'are'} missing: `
+        + `<strong style="color:var(--text)">${esc(gone.map(function (g) { return g.name; }).join(', '))}</strong></div>`
+        + `<button class="btn btn-secondary btn-xs" onclick="skillRestore('${esc(b.id)}')">Put back</button></div>`;
+    }
     return h + '</div></div>';
   },
 });
+
+// Which entries creation granted that are no longer on the sheet. A pack points
+// `granted` at whatever recomputes its starting list, so the block can offer to
+// put back anything lost — two Skills went missing off a finished sheet before
+// deletion was fenced off, and rebuilding the character to recover them is not
+// a reasonable thing to ask.
+function skillMissing(block, char) {
+  const fn = sysDerive(block.granted);
+  if (!fn || !char) return [];
+  let granted = [];
+  try { granted = fn(char) || []; } catch (e) { return []; }
+  const data = (char.blocks && char.blocks[block.id] && char.blocks[block.id].skills) || [];
+  const have = data.map(function (s) { return String(s.name).toLowerCase(); });
+  return granted.filter(function (g) { return have.indexOf(String(g.name).toLowerCase()) < 0; });
+}
+
+function skillRestore(id) {
+  const t = _skillData(id); if (!t) return;
+  const missing = skillMissing(t.block, S.char);
+  if (!missing.length) return;
+  t.ctx.data.skills = (t.ctx.data.skills || []).concat(missing.map(function (g) {
+    return Object.assign({ marked: false }, g);
+  }));
+  save(); blockRepaint(id);
+}
 
 function _skillData(id) {
   const char = S && S.char; if (!char) return null;
@@ -489,8 +526,21 @@ function skillRank(id, i, d) {
   s.rank = Math.max(0, Math.min(cap, (s.rank || 0) + d));
   save(); blockRepaint(id);
 }
+// A Skill that came from creation — your background, Race, Class or a tutorial
+// roll — is part of who the character is, not a list entry to tidy away. Only
+// something added on the sheet afterwards is yours to remove.
+function skillIsYours(s) {
+  return !!s && (s.source === 'added' || s.source === 'custom');
+}
+
 function skillDel(id, i) {
   const t = _skillData(id); if (!t) return;
+  const s = t.ctx.data.skills[i];
+  if (!skillIsYours(s)) return;
+  // Deleting used to happen on a single click with no warning, which is how
+  // two Skills went missing off a finished sheet.
+  if (typeof confirm === 'function' &&
+      !confirm('Remove ' + (s && s.name ? s.name : 'this entry') + '?')) return;
   t.ctx.data.skills.splice(i, 1); save(); blockRepaint(id);
 }
 // Resolve advancement for every marked skill, then clear the marks.

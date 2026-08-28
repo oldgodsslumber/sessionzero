@@ -129,6 +129,7 @@ registerSystem({
         statMod: 'derive.skillStatMod',
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.skillLookup',
+        granted: 'derive.grantedSkills',
         catalog: 'skills',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
@@ -139,6 +140,7 @@ registerSystem({
         statMod: 'derive.spellStatMod',
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.spellLookup',
+        granted: 'derive.grantedSpells',
         catalog: 'spells',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
@@ -183,6 +185,10 @@ registerSystem({
   // ─── formulas ─────────────────────────────────────────────────────────────
   // Pure: take the character, return a number. Called on every render.
   derive: {
+    // What creation granted, so the sheet can put back anything deleted by
+    // mistake without rebuilding the character.
+    grantedSkills: char => dccFinalSkills(char),
+    grantedSpells: char => dccStartingSpells(char),
     statMod: enhancedValue => dccStatMod(enhancedValue),
     hbSlotValue: char => dccModOf(char, 'CON'),
     // The only cap on Inventory is whether you could lift the thing: STR x 15 lb (p. 98).
