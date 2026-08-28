@@ -635,6 +635,21 @@ function invItemRow(b, c, item, where, idx, extra) {
         `<option value="${esc(sl.id)}"${sl.id === where ? ' selected' : ''}>${esc(sl.name)}</option>`
       ).join('') + `</select>`;
   }
+  // Change what an existing item works as, so a mis-added Baseball Bat can be
+  // made into a Club without deleting and retyping it.
+  const asFn = sysDerive(b.itemOptions);
+  let asPick = '';
+  if (asFn) {
+    let opts = [];
+    try { opts = asFn() || []; } catch (e) { opts = []; }
+    if (opts.length) {
+      asPick = `<select title="What this works as" style="flex:0 0 auto;font-size:11px;padding:2px 4px"
+        onchange="invSetSkill('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx},this.value)">` +
+        `<option value="">—</option>` +
+        opts.map(o => `<option value="${esc(o.value)}"${o.value === (item.skill || '') ? ' selected' : ''}>${esc(o.value)}</option>`).join('') +
+        `</select>`;
+    }
+  }
   const moves = (b.containers || []).filter(x => x.id !== c.id).map(x =>
     `<button class="btn btn-secondary btn-xs" title="Move to ${esc(x.label || x.id)}"
       onclick="invMove('${esc(b.id)}','${esc(c.id)}','${esc(x.id)}','${esc(where)}',${idx})">→ ${esc((x.label || x.id).split(' ')[0])}</button>`
@@ -644,8 +659,10 @@ function invItemRow(b, c, item, where, idx, extra) {
   // controls and an item called "Chef's Knife of Unwelcome Surprises" do not
   // share 360px.
   return `<div class="inv-row">
-    <div class="inv-name">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}</div>
-    <div class="inv-ctl">${extra || ''}${slotPick}${moves}
+    <div class="inv-name">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}
+      ${(() => { const r = invReadout(b, item, (typeof S !== 'undefined' && S) ? S.char : null);
+                 return r ? `<span class="inv-stat">${esc(r)}</span>` : ''; })()}</div>
+    <div class="inv-ctl">${extra || ''}${asPick}${slotPick}${moves}
       <button class="btn btn-secondary btn-xs" title="Remove" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx})">✕</button>
     </div>
   </div>`;
@@ -701,6 +718,28 @@ function invList(b, c, d) {
      <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},1)">+</button>`)).join('');
 }
 
+// What an item IS, as opposed to what it is called. A pack lists the things an
+// item can work as — for a weapon that is the Skill you attack with — so a
+// Baseball Bat can be a real Club rather than a label.
+function invAsPick(b, c, chosen) {
+  const fn = sysDerive(b.itemOptions);
+  if (!fn) return '';
+  let opts = [];
+  try { opts = fn() || []; } catch (e) { return ''; }
+  if (!opts.length) return '';
+  return `<select id="inv-as-${esc(b.id)}-${esc(c.id)}" title="What this works as" style="flex:0 0 132px">` +
+    `<option value="">— just an item —</option>` +
+    opts.map(o => `<option value="${esc(o.value)}"${o.value === chosen ? ' selected' : ''}>${esc(o.label)}</option>`).join('') +
+    `</select>`;
+}
+
+// The mechanical line under an item's name: what it does at the table.
+function invReadout(b, item, char) {
+  const fn = sysDerive(b.itemReadout);
+  if (!fn || !item) return '';
+  try { return fn(item, char) || ''; } catch (e) { return ''; }
+}
+
 function invAdder(b, c) {
   const slotPick = c.kind === 'slots'
     ? `<select id="inv-slot-${esc(b.id)}-${esc(c.id)}" style="flex:0 0 130px">` +
@@ -709,7 +748,7 @@ function invAdder(b, c) {
   return `<div style="display:flex;gap:6px;margin-top:6px">
     <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…" style="flex:1"
       onkeydown="if(event.key==='Enter')invAdd('${esc(b.id)}','${esc(c.id)}')">
-    ${slotPick}
+    ${slotPick}${invAsPick(b, c, '')}
     <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div>`;
 }
 
@@ -741,6 +780,15 @@ function invAdd(id, cid) {
   const c = _container(t.block, cid);
   const sel = document.getElementById('inv-slot-' + id + '-' + cid);
   const slotId = sel ? sel.value : '';
+  // What it works as: the player's pick, or an exact catalogue match on the
+  // name so typing "Club" simply is a Club.
+  const asSel = document.getElementById('inv-as-' + id + '-' + cid);
+  let works = asSel ? asSel.value : '';
+  if (!works) {
+    const look = sysDerive(t.block.lookup);
+    const hit = look ? look(name) : null;
+    if (hit && hit.name && hit.name.toLowerCase() === name.toLowerCase()) works = hit.name;
+  }
 
   // A stack container holds one entry per NAME, counted up — "You may place up
   // to 999 of the same item by name into a single slot of your Hotlist"
@@ -766,7 +814,7 @@ function invAdd(id, cid) {
       if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
       return;
     }
-    list.push({ name, qty: 1 });
+    list.push(works ? { name, qty: 1, skill: works } : { name, qty: 1 });
     if (inp) inp.value = '';
     save(); blockRepaint(id);
     return;
@@ -776,7 +824,7 @@ function invAdd(id, cid) {
     if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
     return;
   }
-  const item = { name, qty: 1 };
+  const item = works ? { name, qty: 1, skill: works } : { name, qty: 1 };
   if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
   else t.ctx.data[cid].push(item);
   if (inp) inp.value = '';
@@ -804,6 +852,15 @@ function invQty(id, cid, i, delta) {
 // Which gear slot an item belongs in. The shell cannot know a Club is held
 // rather than worn, so the pack decides; without an answer we fall back to the
 // first slot with room, which is what used to put weapons on your head.
+function invSetSkill(id, cid, where, i, value) {
+  const t = _inv(id); if (!t) return;
+  const c = _container(t.block, cid); if (!c) return;
+  const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
+  const item = list && list[i]; if (!item) return;
+  if (value) item.skill = value; else delete item.skill;
+  save(); blockRepaint(id);
+}
+
 function invSlotFor(block, container, item) {
   const fn = sysDerive(container.slotFor || block.slotFor);
   if (!fn || !item) return '';

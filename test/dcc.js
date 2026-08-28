@@ -1427,6 +1427,77 @@ function boot(entry) {
     return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
   });
 
+  // ── an item has to be something, not just a label ────────────────────────
+  // Reported from a browser: "I can add a baseball bat, but that's all it is.
+  // Just the label, it's not a real weapon." An item was {name, qty} and
+  // nothing else, so nothing it did at the table was recorded anywhere.
+  const itemSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+  const invAddAs = (name, works) => {
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value=" + JSON.stringify(name) + ";" +
+       "var a=document.getElementById('inv-as-gear-inventory');if(a)a.value=" + JSON.stringify(works || '') + ";" +
+       "invAdd('gear','inventory');");
+    return JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return x.name===" +
+                         JSON.stringify(name) + "})[0]||null)"));
+  };
+
+  check('[item] a named weapon carries the Skill it works as', () => {
+    itemSheet();
+    const bat = invAddAs('Baseball bat', 'Club');
+    if (!bat) return 'the item was not added at all';
+    return bat.skill === 'Club' || 'stored as ' + JSON.stringify(bat);
+  });
+  check('[item] ...and reads out its real mechanics', () => {
+    const line = ev("SYS.derive.gearItemReadout(S.char.blocks.gear.inventory" +
+                    ".filter(function(x){return x.name==='Baseball bat'})[0],S.char)");
+    if (!/Club/.test(line)) return 'no Skill in the readout: ' + JSON.stringify(line);
+    if (!/1d6/.test(line)) return 'no damage in the readout: ' + JSON.stringify(line);
+    return /to hit|untrained/.test(line) || 'nothing about using it: ' + JSON.stringify(line);
+  });
+  check('[item] the mechanics reach the sheet, not just the data', () => {
+    ev("blockRepaint('gear');");
+    const h = ev("document.getElementById('blk-gear').innerHTML");
+    return /Bludgeoning/.test(h) || 'the sheet still shows only a name';
+  });
+  check('[item] typing an exact catalogue name links itself', () => {
+    itemSheet();
+    const d = invAddAs('Dagger', '');
+    return (d && d.skill === 'Dagger') || 'stored as ' + JSON.stringify(d);
+  });
+  check('[item] something that is not a weapon stays a plain item', () => {
+    const eyes = invAddAs('Googly eyes', '');
+    if (!eyes) return 'not added';
+    if (eyes.skill) return 'invented a Skill for it: ' + eyes.skill;
+    return ev("SYS.derive.gearItemReadout(S.char.blocks.gear.inventory" +
+              ".filter(function(x){return x.name==='Googly eyes'})[0],S.char)") === ''
+      || 'gave a readout to a non-weapon';
+  });
+  check('[item] the weapon from creation is a real weapon too', () => {
+    itemSheet();
+    ev("dccStoreCombat('weaponName','Tire Iron');dccFinishCreation(S.char);");
+    const held = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.equipped.hands[0])"));
+    if (held.name !== 'Tire Iron') return 'hands hold ' + JSON.stringify(held);
+    if (held.skill !== 'Club') return 'a renamed weapon lost its Skill: ' + JSON.stringify(held);
+    return /1d6/.test(ev("SYS.derive.gearItemReadout(S.char.blocks.gear.equipped.hands[0],S.char)"))
+      || 'no mechanics on the held weapon';
+  });
+  check('[item] an item added wrongly can be reclassified in place', () => {
+    itemSheet();
+    invAddAs('Baseball bat', '');
+    ev("invSetSkill('gear','inventory','',S.char.blocks.gear.inventory" +
+       ".findIndex(function(x){return x.name==='Baseball bat'}),'Club');");
+    const bat = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory" +
+                              ".filter(function(x){return x.name==='Baseball bat'})[0])"));
+    if (bat.skill !== 'Club') return 'still ' + JSON.stringify(bat);
+    ev("invSetSkill('gear','inventory','',S.char.blocks.gear.inventory" +
+       ".findIndex(function(x){return x.name==='Baseball bat'}),'');");
+    return !JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory" +
+      ".filter(function(x){return x.name==='Baseball bat'})[0])")).skill
+      || 'could not be cleared again';
+  });
+
   // ── equipping a weapon ───────────────────────────────────────────────────
   // The rulebook is clear that a weapon is either in your hand or in your
   // Hotlist, never both: "Items in Hotlists do not grant you any added

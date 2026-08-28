@@ -1417,7 +1417,9 @@ function dccStartingEquipped(char) {
   // A weapon is a thing you hold. A Spell is not, and hand-to-hand is your own
   // hands, so neither of those puts anything here.
   if (cm.route === 'weapon' && (cm.weaponName || cm.weaponSkill)) {
-    eq.hands.push({ name: cm.weaponName || cm.weaponSkill, src: 'creation' });
+    // Carry the Skill it works as, so a weapon you renamed "Tire Iron" is still
+    // mechanically a Club on the sheet.
+    eq.hands.push({ name: cm.weaponName || cm.weaponSkill, skill: cm.weaponSkill, src: 'creation' });
   }
   if (String(g.clothes || '').trim()) eq.torso.push({ name: g.clothes.trim(), src: 'creation' });
   return eq;

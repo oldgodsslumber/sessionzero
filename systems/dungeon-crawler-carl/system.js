@@ -162,6 +162,10 @@ registerSystem({
         // A weapon is held, not worn. Without this the shell drops an item in
         // the first slot with room, which is Head.
         slotFor: 'derive.gearSlotFor',
+        // What an item can BE, and what it does once it is that.
+        itemOptions: 'derive.gearItemOptions',
+        itemReadout: 'derive.gearItemReadout',
+        lookup: 'derive.skillLookup',
       },
       {
         id: 'companions', type: 'entityList', label: 'Pets, Mounts & Minions',
@@ -191,6 +195,33 @@ registerSystem({
     // Where a piece of gear goes when you equip it. Anything whose name matches
     // a weapon Skill is something you hold; armour and clothing are worn, and
     // the shell's own fallback handles those well enough.
+    // A weapon is a weapon because of the Skill you swing it with. Naming a
+    // Baseball Bat is not enough — linking it to Club is what makes it a real
+    // 1d6 bludgeoning weapon that uses your Club Rank.
+    gearItemOptions: () => DCC_SKILLS
+      .filter(s => s.kind === 'attack')
+      .map(s => ({ value: s.name, label: s.name + ' (' + (s.baseDamage || s.category || '') + ')' })),
+
+    gearItemReadout: (item, char) => {
+      if (!item || !item.skill) return '';
+      const cat = dccSkillByName(item.skill);
+      if (!cat) return '';
+      const bits = [cat.name];
+      if (cat.baseDamage) bits.push(cat.baseDamage);
+      if (cat.range) bits.push(cat.range);
+      // Your Rank in it, and what you actually add to the roll.
+      const list = (char && char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+      const mine = list.find(s => String(s.name).toLowerCase() === String(cat.name).toLowerCase());
+      if (mine) {
+        const mod = cat.stat ? dccStatMod(dccStatOf(char, cat.stat)) : 0;
+        const tot = (mine.rank || 0) + mod;
+        bits.push('Rank ' + (mine.rank || 0) + ', ' + (tot >= 0 ? '+' : '') + tot + ' to hit');
+      } else {
+        bits.push('untrained');
+      }
+      return bits.join(' · ');
+    },
+
     gearSlotFor: (item) => {
       const cat = item && item.name ? dccSkillByName(item.name) : null;
       if (cat && /Weapon|Hand-To-Hand/i.test(cat.category || '')) return 'hands';
