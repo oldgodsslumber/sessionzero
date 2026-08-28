@@ -162,16 +162,45 @@ function dccScreenBackground(ctx) {
   return h;
 }
 
+// Changing the background for a stage used to throw away the Skills you had
+// already chosen there, with no warning: you would pick two, click another
+// background to compare it, and both picks silently vanished — the screen went
+// back to listing that stage as still to do, which reads as the options not
+// registering at all.
+//
+// A pick is only invalid if the new background does not offer that Skill, so
+// keep the ones that survive and say what went.
+function dccRebindPicks(char, stage, roll, picks) {
+  const tbl = dccStages(char)[stage];
+  const row = tbl && tbl.rows.find(function (r) { return r.roll === roll; });
+  const offered = row ? row.skills.map(function (x) { return x.s; }) : [];
+  const kept = (picks || []).filter(function (n) { return offered.indexOf(n) >= 0; });
+  const lost = (picks || []).filter(function (n) { return offered.indexOf(n) < 0; });
+  return { kept: kept, lost: lost };
+}
+
+// Say what was dropped, AFTER the save — save() flashes "Logged" of its own
+// accord and would otherwise wipe the explanation off the screen immediately.
+function dccReportLostPicks(lost) {
+  if (!lost || !lost.length || typeof flashSaveError !== 'function') return;
+  flashSaveError(lost.join(' and ') + (lost.length === 1 ? ' is' : ' are') + ' not offered by that background');
+}
+
 function dccPickBackground(stage, roll) {
   const c = S.char, d = dccCre(c);
   const cur = d.background[stage] || {};
-  d.background[stage] = { roll: cur.roll === roll ? null : roll, picks: [] };
-  save(); wizRepaint();
+  const next = cur.roll === roll ? null : roll;
+  const r = next === null ? { kept: [], lost: [] } : dccRebindPicks(c, stage, next, cur.picks);
+  d.background[stage] = { roll: next, picks: r.kept };
+  save(); wizRepaint(); dccReportLostPicks(r.lost);
 }
 function dccRollBackground(stage) {
-  const c = S.char, tbl = dccStages(c)[stage];
-  dccCre(c).background[stage] = { roll: wizRoll(tbl.die), picks: [] };
-  save(); wizRepaint();
+  const c = S.char, tbl = dccStages(c)[stage], d = dccCre(c);
+  const cur = d.background[stage] || {};
+  const roll = wizRoll(tbl.die);
+  const r = dccRebindPicks(c, stage, roll, cur.picks);
+  d.background[stage] = { roll: roll, picks: r.kept };
+  save(); wizRepaint(); dccReportLostPicks(r.lost);
 }
 function dccPickSkill(stage, name) {
   const c = S.char, d = dccCre(c);

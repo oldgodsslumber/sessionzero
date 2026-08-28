@@ -1357,6 +1357,78 @@ function boot(entry) {
     return body.indexOf("Register Your Crawl") >= 0 || "the heading is not the pack's copy";
   });
 
+  // ── changing a background must not silently bin your Skills ──────────────
+  // Reported from a browser as "the options are not clicked and I can't hit
+  // continue": you pick two Skills for a stage, click another background to
+  // compare it, and both picks vanish without a word — the stage goes back onto
+  // the "Still to do" list, which reads exactly like the clicks never landed.
+  const bgSetup = () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:1,complete:false};renderHero();");
+    ev("dccRollBackground('childhood');");
+  };
+  const bgRow = () => ev("JSON.stringify(dccStages(S.char).childhood.rows" +
+    ".find(function(r){return r.roll===dccCre(S.char).background.childhood.roll}).skills.map(function(x){return x.s}))");
+
+  check('[background] a pick the new background still offers survives', () => {
+    bgSetup();
+    const offered = JSON.parse(bgRow());
+    // Find another row that shares a Skill with this one, and pick that Skill.
+    const shared = ev("JSON.stringify((function(){var st=dccCre(S.char).background.childhood;" +
+      "var rows=dccStages(S.char).childhood.rows;var cur=rows.find(function(r){return r.roll===st.roll});" +
+      "for(var i=0;i<rows.length;i++){if(rows[i].roll===st.roll)continue;" +
+      "for(var j=0;j<rows[i].skills.length;j++){var n=rows[i].skills[j].s;" +
+      "if(cur.skills.some(function(x){return x.s===n}))return [rows[i].roll,n];}}return null;})())");
+    const pair = JSON.parse(shared);
+    if (!pair) return true;                    // no overlap in this table; nothing to prove
+    ev("dccPickSkill('childhood'," + JSON.stringify(pair[1]) + ");");
+    ev("dccPickBackground('childhood'," + pair[0] + ");");
+    const kept = JSON.parse(ev("JSON.stringify(dccCre(S.char).background.childhood.picks)"));
+    return kept.indexOf(pair[1]) >= 0
+      || 'a Skill the new background also offers was thrown away: ' + JSON.stringify(kept);
+  });
+  check('[background] a pick it does not offer is dropped WITH a reason', () => {
+    bgSetup();
+    const drop = JSON.parse(ev("JSON.stringify((function(){var st=dccCre(S.char).background.childhood;" +
+      "var rows=dccStages(S.char).childhood.rows;var cur=rows.find(function(r){return r.roll===st.roll});" +
+      "for(var i=0;i<rows.length;i++){if(rows[i].roll===st.roll)continue;" +
+      "var only=cur.skills.filter(function(x){return !rows[i].skills.some(function(y){return y.s===x.s})});" +
+      "if(only.length)return [rows[i].roll,only[0].s];}return null;})())"));
+    if (!drop) return true;
+    ev("dccPickSkill('childhood'," + JSON.stringify(drop[1]) + ");");
+    ev("dccPickBackground('childhood'," + drop[0] + ");");
+    const picks = JSON.parse(ev("JSON.stringify(dccCre(S.char).background.childhood.picks)"));
+    if (picks.indexOf(drop[1]) >= 0) return 'the Skill should not have survived';
+    const flash = ev("document.getElementById('save-flash').textContent");
+    return flash.indexOf(drop[1]) >= 0
+      || 'dropped silently — the flash said ' + JSON.stringify(flash);
+  });
+  check('[background] re-rolling a stage keeps what the new roll still offers', () => {
+    bgSetup();
+    ev("var st=dccCre(S.char).background.childhood;" +
+       "var row=dccStages(S.char).childhood.rows.find(function(r){return r.roll===st.roll});" +
+       "st.picks=[row.skills[0].s];");
+    const before = JSON.parse(ev("JSON.stringify(dccCre(S.char).background.childhood.picks)"));
+    ev("dccRollBackground('childhood');");
+    const after = JSON.parse(ev("JSON.stringify(dccCre(S.char).background.childhood.picks)"));
+    const offered = JSON.parse(bgRow());
+    // Whatever survived must be offered; whatever went must not have been.
+    const wrong = after.filter(n => offered.indexOf(n) < 0);
+    if (wrong.length) return 'kept a Skill the new roll does not offer: ' + wrong.join(', ');
+    const lostButOffered = before.filter(n => offered.indexOf(n) >= 0 && after.indexOf(n) < 0);
+    return lostButOffered.length === 0
+      || 'threw away a still-valid pick: ' + lostButOffered.join(', ');
+  });
+  check('[background] deselecting the background clears the stage outright', () => {
+    bgSetup();
+    ev("var st=dccCre(S.char).background.childhood;" +
+       "var row=dccStages(S.char).childhood.rows.find(function(r){return r.roll===st.roll});" +
+       "st.picks=[row.skills[0].s];");
+    ev("dccPickBackground('childhood',dccCre(S.char).background.childhood.roll);");
+    const st = JSON.parse(ev("JSON.stringify(dccCre(S.char).background.childhood)"));
+    return (st.roll === null && st.picks.length === 0)
+      || 'expected an empty stage, got ' + JSON.stringify(st);
+  });
+
   // ── the Continue gate has to keep up with what you type ──────────────────
   // Reported from a browser: you enter a name and the screen still says the
   // crawler needs one, with Continue disabled. The value WAS stored — a screen
