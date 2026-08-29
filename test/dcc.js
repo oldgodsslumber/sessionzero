@@ -1555,6 +1555,66 @@ function boot(entry) {
     return got === 'Downtown' || 'renamed a map in use to ' + JSON.stringify(got);
   });
 
+  // ── a Skill your gear lends you ───────────────
+  // Reported from a browser: a bow granting Tracking, and no Tracking anywhere
+  // on the sheet. The bonus was being computed, but the Skills list only ever
+  // rendered Skills the character owns, so a grant for something you have no
+  // Ranks in was invisible — which makes the grant worthless.
+  const lentSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Bow');dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',5);dccAssignStat('CHA',2);");
+    ev("dccSetFloor(1);dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+    ev("S.char.blocks.gear.equipped.hands[0].grantsSkill='Tracking';");
+    ev("S.char.blocks.gear.equipped.hands[0].grantsSkillN=3;blockSyncAll(null);");
+  };
+  const lentRows = () => JSON.parse(ev("JSON.stringify([].slice.call(" +
+    "document.querySelectorAll('#blk-skills .is-lent')).map(function(x){" +
+    "return x.textContent.replace(/\\s+/g,' ').trim()}))"));
+
+  check('[lent] a Skill granted by worn gear appears on the sheet', () => {
+    lentSheet();
+    const rows = lentRows();
+    if (!rows.length) return 'nothing was listed';
+    return /Tracking/.test(rows[0]) || 'listed ' + JSON.stringify(rows[0]);
+  });
+  check('[lent] it says which item is lending it', () => {
+    // Otherwise a player cannot tell why it is there or how to lose it.
+    return /from Bow/i.test(lentRows()[0] || '') || 'no source named: ' + JSON.stringify(lentRows()[0]);
+  });
+  check('[lent] it carries the Stat Mod and the bonus in its total', () => {
+    // INT Mod for this crawler plus the +3 from the bow.
+    const row = lentRows()[0] || '';
+    const m = /([+-]\d+)\s*$/.exec(row);
+    if (!m) return 'no total on the row: ' + JSON.stringify(row);
+    const want = ev("dccModOf(S.char,'INT')") + 3;
+    return Number(m[1]) === want || 'total is ' + m[1] + ', expected ' + want;
+  });
+  check('[lent] it is not written into the Skills you own', () => {
+    // It belongs to the item, not the crawler, so it must not be saved as a
+    // Skill or it would outlive the bow.
+    lentSheet();
+    return ev("S.char.blocks.skills.skills.filter(function(s){return s.name==='Tracking'}).length") === 0
+      || 'Tracking was added to the character';
+  });
+  check('[lent] it disappears when the item comes off', () => {
+    lentSheet();
+    ev("S.char.blocks.gear.equipped.hands=[];blockSyncAll(null);");
+    return lentRows().length === 0 || 'still listed after unequipping';
+  });
+  check('[lent] a Skill you already have is not listed twice', () => {
+    lentSheet();
+    ev("S.char.blocks.gear.equipped.hands[0].grantsSkill='Bow';blockSyncAll(null);");
+    const rows = lentRows();
+    return rows.length === 0 || 'Bow was listed again as lent: ' + JSON.stringify(rows);
+  });
+  check('[lent] ...it raises the Skill you have instead', () => {
+    const total = ev("(function(){var b=document.getElementById('blk-skills');" +
+      "var d=[].slice.call(b.querySelectorAll('div'));" +
+      "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length)" +
+      "return d[i].parentElement.parentElement.textContent.replace(/\\s+/g,' ').trim()}return ''})()");
+    return /\+\d+\s*$/.test(total) || 'no total on the Bow row: ' + JSON.stringify(total);
+  });
+
   // ── a gear change has to show up on the sheet ─
   // Reported from a browser: "I have a bow equipped and it's not adding the DEX
   // or tracking skill." The numbers were right in the data the whole time; the

@@ -212,6 +212,8 @@ registerSystem({
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.skillLookup',
         extra: 'derive.wornBonus',
+        // Skills your gear lends you, which you have no Ranks of your own in.
+        lent: 'derive.wornSkills',
         granted: 'derive.grantedSkills',
         catalog: 'skills',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
@@ -375,6 +377,22 @@ registerSystem({
       });
       char.blocks.spells.skills = have;
       return { ok: true, remove: true };      // the tome is spent once read
+    },
+
+    // Skills your worn gear grants that you have no Ranks in. Without this a
+    // "+3 Tracking" bow is invisible on a sheet with no Tracking Skill.
+    wornSkills: (char) => {
+      const eq = char && char.blocks && char.blocks.gear && char.blocks.gear.equipped;
+      if (!eq) return [];
+      const out = [];
+      Object.keys(eq).forEach(function (slot) {
+        (eq[slot] || []).forEach(function (it) {
+          if (!it || !it.grantsSkill) return;
+          const cat = dccSkillByName(it.grantsSkill);
+          out.push({ name: cat ? cat.name : it.grantsSkill, stat: cat ? cat.stat : '', from: it.name });
+        });
+      });
+      return out;
     },
 
     // What the gear you are WEARING adds. "Only what is in a Gear Slot gives

@@ -453,6 +453,31 @@ registerBlockType('skillList', {
       </div>`;
     });
     // Offer to put back anything creation granted that is no longer listed.
+    // Skills your gear lends you. Not editable and not advanced from use — they
+    // are only here while the item is worn.
+    skillLent(b, ctx.char).forEach(function (g) {
+      const look = sysDerive(b.lookup);
+      const cat = look ? look(g.name) : null;
+      const stat = (cat && cat.stat) || g.stat || '';
+      const statFn = sysDerive(b.statMod);
+      const mod = statFn && stat ? (statFn(ctx.char, stat) || 0) : 0;
+      const worn = blockExtra(b, 'skill', g.name, ctx.char);
+      const total = mod + worn;
+      const info = skillInfo(b, { name: g.name });
+      h += `<div class="sk-row is-lent">
+        <div style="width:18px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${esc(g.name)}
+            <span class="sk-lent-tag">from ${esc(g.from || 'gear')}</span></div>
+          <div style="font-size:10px;color:var(--muted)">${esc(stat || '\u2014')}${mod ? ' +' + mod : ''}</div>
+          ${info ? `<div class="sk-effect">${esc(info)}</div>` : ''}
+        </div>
+        <div class="num" style="min-width:34px;text-align:center;font-weight:700"
+             title="Untrained — you have no Ranks of your own">\u2014</div>
+        <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
+        <span style="width:24px"></span>
+      </div>`;
+    });
     const gone = skillMissing(b, ctx.char);
     if (gone.length) {
       h += `<div class="card-sm" style="border-color:var(--blue);margin-top:6px;display:flex;`
@@ -493,6 +518,20 @@ function skillRestore(id) {
 
 // The catalogue line for an entry: its cost, range and what it does. The pack
 // supplies the lookup, so the shell does not need to know what a Spell is.
+// Entries the character does not have, but their gear grants. A +3 to Tracking
+// on a bow is worth nothing on a sheet that never mentions Tracking, so the
+// list shows it, marked as coming from what you are carrying rather than from
+// anything you learned.
+function skillLent(block, char) {
+  const fn = sysDerive(block.lent);
+  if (!fn || !char) return [];
+  let out = [];
+  try { out = fn(char, block.id) || []; } catch (e) { return []; }
+  const have = ((char.blocks && char.blocks[block.id] && char.blocks[block.id].skills) || [])
+    .map(function (s) { return String(s.name).toLowerCase(); });
+  return out.filter(function (g) { return have.indexOf(String(g.name).toLowerCase()) < 0; });
+}
+
 function skillInfo(block, entry) {
   const look = sysDerive(block.lookup);
   if (!look || !entry) return '';

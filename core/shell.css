@@ -83,6 +83,10 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .inv-f span{font-family:var(--font-label);letter-spacing:.08em;text-transform:uppercase}
 .inv-f input,.inv-f select{font-size:11px;padding:3px 5px;min-width:96px}
 .inv-f input[type=number]{max-width:70px;min-width:60px}
+.sk-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)}
+.sk-row.is-lent{opacity:.85}
+.sk-lent-tag{font-family:var(--font-label);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--blue);border:1px solid var(--border);border-radius:2px;padding:0 4px;margin-left:5px;font-weight:500}
 .sk-effect{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:2px;overflow-wrap:anywhere}
 .inv-slotno{width:20px;flex-shrink:0;font-size:10px;color:var(--muted)}
 .inv-add{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
