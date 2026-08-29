@@ -166,6 +166,42 @@ function sweep(win, label) {
         || 'the gate could not be satisfied — the app cannot be started';
     });
 
+    // ── does the button actually WORK? ───────────────────────────────────
+    // The two guards above ask whether a handler exists and whether its
+    // attribute parses. Both pass for a handler that throws the moment it is
+    // called, which is exactly how a dead "Full Builder" button shipped: the
+    // function was defined, the markup was clean, and clicking it raised
+    // "SKILLS is not defined" into the console and did nothing visible.
+    //
+    // So: press things. State is snapshotted and restored around each press,
+    // and the tab is redrawn, so one handler cannot poison the next.
+    const pressAll = (tabName) => {
+      const broken = [];
+      let seen;
+      try { seen = w.eval('JSON.stringify(S)'); } catch (e) { return broken; }
+      const exprs = w.eval(`(function(){
+        var out=[], done={};
+        document.querySelectorAll('#page-' + ${JSON.stringify(tabName)} + ' [onclick]').forEach(function(el){
+          var h=(el.getAttribute('onclick')||'').trim();
+          if(!h||done[h])return; done[h]=1; out.push(h);
+        });
+        return JSON.stringify(out);
+      })()`);
+      JSON.parse(exprs).forEach(expr => {
+        // Skip anything that leaves the page or opens a print window.
+        if (/print|export|location|open\s*\(/i.test(expr)) return;
+        try {
+          w.eval('S=JSON.parse(' + JSON.stringify(seen) + ');');
+          w.eval('showTab(' + JSON.stringify(tabName) + ')');
+          w.eval(expr);
+        } catch (e) {
+          broken.push(expr.slice(0, 46) + ' -> ' + e.message);
+        }
+      });
+      try { w.eval('S=JSON.parse(' + JSON.stringify(seen) + ');'); } catch (e) {}
+      return broken;
+    };
+
     // Every creation screen, then the finished sheet, then every tab.
     // Only a block pack builds its character through SYS; Daring Comics has its
     // own creation flow and no newCharacter().
@@ -182,12 +218,27 @@ function sweep(win, label) {
       });
     }
     if (packMakesChars) w.eval('S.char.creation = {step:0, complete:true}; renderHero();');
-    const tabs = w.eval("[...document.querySelectorAll('#nav [data-tab]')].map(function(n){return n.getAttribute('data-tab')})");
+    // The nav buttons carry no data-tab: they are id="nb-<tab>" with an onclick.
+    // Reading the wrong attribute made this list empty, so the sweep below has
+    // only ever covered the fallback tab — which is how a dead button on the
+    // NPC tab went unnoticed.
+    // The nav buttons carry no data-tab: they are id="nb-<tab>" with an onclick.
+    // Reading the wrong attribute made this list empty, so the sweep below has
+    // only ever covered the fallback tab — which is how a dead button on the
+    // NPC tab went unnoticed.
+    const tabs = w.eval("[].slice.call(document.querySelectorAll('#nav .nb'))" +
+      ".map(function(n){ return String(n.id||'').replace(/^nb-/,'') })" +
+      // Not every nav button opens a page — the HUD pops out its own window.
+      ".filter(function(id){ return id && document.getElementById('page-'+id) })");
     for (const tab of (tabs && tabs.length ? tabs : ['hero'])) {
       check('[' + game + '] the ' + tab + ' tab is well formed', () => {
         try { w.eval('showTab(' + JSON.stringify(tab) + ')'); } catch (e) { return 'showTab threw: ' + e.message; }
         const bad = sweep(w, tab);
         return bad.length ? bad.join(' | ') : true;
+      });
+      check('[' + game + '] every control on the ' + tab + ' tab does something', () => {
+        const broken = pressAll(tab);
+        return broken.length ? broken.join(' | ') : true;
       });
     }
   }

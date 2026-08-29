@@ -1435,6 +1435,88 @@ function boot(entry) {
     return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
   });
 
+  // ── building a Mob ────────────────────────────
+  // The full NPC builder was Daring Comics' Fate NPC throughout — Aspects, a
+  // skill ladder, stress boxes, consequences, powerSets, stunts. Opening it in
+  // this game threw "SKILLS is not defined" into the console and did nothing
+  // visible, so the button looked inert. A Mob is a different creature: a
+  // Level, a Health Bar of that many slots, DR from the floor, an Evade, a
+  // Move and some attacks (pp. 270-273).
+  const npcOpen = () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(3);dccFinishCreation(S.char);");
+    ev("S.char.creation={step:0,complete:true};renderHero();S.floor=3;S.npcs=[];showTab('npcs');");
+    ev("openFullNPCBuilder(null)");
+  };
+
+  check('[mob] the full builder opens instead of throwing', () => {
+    const r = ev("(function(){try{openFullNPCBuilder(null);return 'ok'}catch(e){return e.message}})()");
+    if (r !== 'ok') return 'threw: ' + r;
+    npcOpen();
+    const h = ev("document.getElementById('npcs-content').innerHTML");
+    return /New Mob/.test(h) || 'the builder did not render';
+  });
+  check('[mob] it asks for the things a stat block has', () => {
+    npcOpen();
+    const h = ev("document.getElementById('npcs-content').innerHTML");
+    const want = ['Name', 'Type', 'Size', 'Level', 'Evade', 'Move', 'Attacks'];
+    const missing = want.filter(x => h.indexOf(x) < 0);
+    return missing.length ? 'no field for ' + missing.join(', ') : true;
+  });
+  check('[mob] Health Bar slots equal its Level, capped at ten', () => {
+    // "The number of HB slots equals the Mob's Level, up to a maximum of 10."
+    const hb = lvl => {
+      ev("S._npcDraft.level=" + lvl + ";");
+      return ev("SYS.npc.fields().filter(function(f){return f.key==='hbSlots'})[0].derive(S._npcDraft,S)");
+    };
+    npcOpen();
+    if (hb(6) !== 6) return 'a Level 6 Mob got ' + hb(6) + ' slots';
+    return hb(30) === 10 || 'a Level 30 Mob got ' + hb(30) + ' slots, expected the cap of 10';
+  });
+  check('[mob] Damage Resistance comes from the floor', () => {
+    // "A Mob's base DR is equal to the Floor Number."
+    npcOpen();
+    const dr = () => ev("SYS.npc.fields().filter(function(f){return f.key==='dr'})[0].derive(S._npcDraft,S)");
+    if (dr() !== 3) return 'on Floor 3 a Mob had DR ' + dr();
+    ev("S._npcDraft.floor=7;");
+    return dr() === 7 || 'a Mob from Floor 7 had DR ' + dr();
+  });
+  check('[mob] a Mob keeps the floor it belongs to, not the current one', () => {
+    // "If a Mob is introduced as 'from another floor', their DR base derives
+    // from their home floor and not the current one."
+    npcOpen();
+    ev("sysNpcSet('name','Visitor');sysNpcSet('floor','7');saveSysNPC();");
+    ev("S.floor=3;");
+    const mob = JSON.parse(ev("JSON.stringify(S.npcs.filter(function(n){return n.name==='Visitor'})[0])"));
+    return mob.dr === 7 || 'its DR followed the table to ' + mob.dr;
+  });
+  check('[mob] saving records the derived numbers, not just the typed ones', () => {
+    npcOpen();
+    ev("sysNpcSet('name','Tongue Lasher');sysNpcSet('level','6');saveSysNPC();");
+    const mob = JSON.parse(ev("JSON.stringify(S.npcs.filter(function(n){return n.name==='Tongue Lasher'})[0])"));
+    if (mob.hbSlots !== 6) return 'Health Bar slots not stored: ' + JSON.stringify(mob.hbSlots);
+    return mob.dr === 3 || 'DR not stored: ' + JSON.stringify(mob.dr);
+  });
+  check('[mob] a nameless Mob is refused rather than saved blank', () => {
+    npcOpen();
+    const n = ev("S.npcs.length");
+    ev("sysNpcSet('name','');saveSysNPC();");
+    return ev("S.npcs.length") === n || 'a Mob with no name was saved';
+  });
+  check('[mob] typing in the builder does not steal the caret', () => {
+    // The derived rows update in place; the field being typed into is not
+    // redrawn, which is the same discipline the Stat grid needed.
+    npcOpen();
+    ev("var i=document.querySelector('#npcs-content input');i.setAttribute('data-probe','1');i.focus();" +
+       "i.value='Gorgon';i.dispatchEvent(new window.Event('input',{bubbles:true}));");
+    const kept = ev("(document.querySelector('#npcs-content input')||{}).getAttribute&&" +
+                    "document.querySelector('#npcs-content input').getAttribute('data-probe')");
+    return kept === '1' || 'the field was replaced while typing';
+  });
+  check('[mob] _npcTab is a real variable, not a dead reference', () => {
+    // It was read from an onclick attribute before it was ever declared.
+    return ev("typeof _npcTab") !== 'undefined' || '_npcTab is still undeclared';
+  });
+
   // ── the map belongs to this game ────────────────────────────────
   // The map arrived furnished by Daring Comics: a region called "Downtown" and
   // zones called Building, Street, Rooftop and Hideout. A dungeon has hallways

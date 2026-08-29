@@ -117,6 +117,53 @@ registerSystem({
     },
   },
 
+  // A Mob stat block, in the sections the book lays out (pp. 270-273): Name,
+  // Size, Type, Level, Health Bar slots, Damage Resistance, Evade, Move, Stats,
+  // Attacks and Notes. Three of those are worked out rather than typed:
+  //
+  //   "The number of HB slots equals the Mob's Level, up to a maximum of 10."
+  //   "A Mob's base DR is equal to the Floor Number."
+  //
+  // The floor comes from the table, so a Mob built on Floor 3 and a Mob built
+  // on Floor 7 are not the same creature.
+  npc: {
+    label: 'Mob',
+    hint: 'A stat block is the way to track a Mob. Level and Floor do most of the work: '
+        + 'Health Bar slots follow the Level, and DR follows the Floor.',
+    fields: () => [
+      { key: 'name',  label: 'Name', group: 'Identity',
+        hint: 'The Tongue Lasher, The Regret Collector...' },
+      { key: 'kind',  label: 'Type', group: 'Identity',
+        hint: 'Beastly, Undead, Humanoid, Ooze...' },
+      { key: 'size',  label: 'Size', group: 'Identity',
+        options: () => DCC_SIZES.map(z => ({ value: z.n, label: z.name + ' (' + z.n + ')' })),
+        def: 4 },
+
+      { key: 'level', label: 'Level', type: 'number', def: 1, group: 'Numbers' },
+      { key: 'floor', label: 'Floor it belongs to', type: 'number', group: 'Numbers',
+        def: () => (typeof S !== 'undefined' && S && S.floor) || 1,
+        hint: 'A Mob from another floor keeps its home floor' },
+      { key: 'hbSlots', label: 'Health Bar slots', group: 'Numbers',
+        derive: (d) => Math.max(1, Math.min(10, Number(d.level) || 1)),
+        hint: 'equals its Level, up to ten' },
+      { key: 'dr', label: 'Damage Resistance', group: 'Numbers',
+        derive: (d) => Number(d.floor) || 0,
+        hint: 'equals the Floor Number' },
+      { key: 'evade', label: 'Evade', type: 'number', def: 10, group: 'Numbers' },
+      { key: 'move',  label: 'Move (feet)', type: 'number', def: DCC_BASE_MOVE, group: 'Numbers' },
+
+      { key: 'stats', label: 'Stats', group: 'Stats', rows: 2,
+        hint: 'STR 6, CON 8, DEX 4, INT 2, CHA 1' },
+
+      { key: 'attacks', label: 'Attacks', group: 'Attacks', rows: 3,
+        hint: 'Bite - 2d6 + STR Piercing, and the target gains the Bleeding Debuff' },
+
+      { key: 'desc',  label: 'What the crawlers see', group: 'Notes', rows: 2 },
+      { key: 'notes', label: 'Notes', group: 'Notes', rows: 3,
+        hint: 'Tactics, loot, what it says when it dies' },
+    ],
+  },
+
   // ─── the crawler sheet ────────────────────────────────────────────────────
   schema: {
     identity: ['name', 'crawlerNumber', 'race', 'class', 'level'],

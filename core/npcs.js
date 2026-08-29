@@ -135,11 +135,132 @@ function promoteToFullBuilder(idx){
   closeNM();openFullNPCBuilder(idx);
   if(idx===null&&S._npcDraft){if(n.trim())S._npcDraft.name=n.trim();if(ds.trim())S._npcDraft.desc=ds.trim();renderFullNPCEditor();}
 }
+// A pack can describe what one of its NPCs is made of. Everything below this
+// point is Daring Comics' Fate NPC — Aspects, a skill ladder, stress boxes,
+// consequences, powerSets, stunts. A Dungeon Crawler Carl Mob has none of
+// those: it is a Level, a Health Bar of that many slots, a DR taken from the
+// floor, an Evade, a Move and some attacks. Building one through the Fate form
+// threw on the first Daring Comics global it reached, so the button did
+// nothing at all.
+function sysNpcFields() {
+  const n = (typeof SYS !== 'undefined' && SYS && SYS.npc) || null;
+  if (!n) return null;
+  const f = typeof n.fields === 'function' ? n.fields() : n.fields;
+  return (f && f.length) ? f : null;
+}
+
+function sysNpcDefaults(existing) {
+  const fields = sysNpcFields() || [];
+  const d = { type: (existing && existing.type) || _npcTab || 'main' };
+  fields.forEach(function (f) {
+    const had = existing ? existing[f.key] : undefined;
+    d[f.key] = (had === undefined || had === null)
+      ? (typeof f.def === 'function' ? f.def() : (f.def === undefined ? '' : f.def))
+      : had;
+  });
+  if (existing && existing.id) d.id = existing.id;
+  return d;
+}
+
+// Store only; never repaint on a keystroke, or the field loses the caret.
+function sysNpcSet(key, value) {
+  if (!S._npcDraft) return;
+  const fields = sysNpcFields() || [];
+  const f = fields.filter(function (x) { return x.key === key; })[0];
+  S._npcDraft[key] = (f && f.type === 'number') ? (value === '' ? '' : Number(value)) : value;
+  save();
+  sysNpcRefreshDerived();
+}
+
+// Derived values (a Mob's DR from the floor, its Health Bar from its Level)
+// update in place, without redrawing the field being typed into.
+function sysNpcRefreshDerived() {
+  (sysNpcFields() || []).forEach(function (f) {
+    if (!f.derive) return;
+    const el = document.getElementById('npcf-' + f.key);
+    if (!el) return;
+    let v = '';
+    try { v = f.derive(S._npcDraft, S) ; } catch (e) { v = ''; }
+    el.textContent = (v === undefined || v === null) ? '' : String(v);
+  });
+}
+
+function renderSysNPCEditor() {
+  const d = S._npcDraft, fields = sysNpcFields();
+  const el = document.getElementById('npcs-content');
+  if (!d || !fields || !el) return;
+  const label = ((SYS.npc && SYS.npc.label) || lexU('npc'));
+  let h = `<div class="${_npcEditMode ? '' : 'no-edit'}">`;
+  h += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    <div class="pg-title" style="font-size:20px">${esc(_npcEdit === null ? 'New ' + label : 'Edit ' + label)}</div>
+    <button class="btn btn-secondary btn-xs" onclick="closeFullNPCBuilder()">Cancel</button></div>`;
+  if (SYS.npc && SYS.npc.hint) {
+    h += `<div class="card-sm" style="font-size:11px;color:var(--muted)">${esc(SYS.npc.hint)}</div>`;
+  }
+  let group = null;
+  fields.forEach(function (f) {
+    if (f.group !== group) {
+      if (group !== null) h += `</div>`;
+      group = f.group;
+      h += `<div class="card"><div class="label mb-1">${esc(group || label)}</div>`;
+    }
+    if (f.derive) {
+      let v = '';
+      try { v = f.derive(d, S); } catch (e) { v = ''; }
+      h += `<div class="npc-derived"><span>${esc(f.label)}</span>
+        <strong id="npcf-${esc(f.key)}">${esc(String(v === undefined || v === null ? '' : v))}</strong>
+        ${f.hint ? `<em>${esc(f.hint)}</em>` : ''}</div>`;
+      return;
+    }
+    h += `<div class="form-group"><label>${esc(f.label)}</label>`;
+    if (f.options) {
+      const opts = typeof f.options === 'function' ? f.options() : f.options;
+      h += `<select onchange="sysNpcSet('${esc(f.key)}',this.value)">` +
+        (opts || []).map(function (o) {
+          const val = o.value === undefined ? o : o.value;
+          const lab = o.label === undefined ? val : o.label;
+          return `<option value="${esc(val)}"${String(val) === String(d[f.key]) ? ' selected' : ''}>${esc(lab)}</option>`;
+        }).join('') + `</select>`;
+    } else if (f.rows) {
+      h += `<textarea rows="${f.rows}" placeholder="${esc(f.hint || '')}"
+        oninput="sysNpcSet('${esc(f.key)}',this.value)">${esc(String(d[f.key] || ''))}</textarea>`;
+    } else {
+      h += `<input type="${f.type === 'number' ? 'number' : 'text'}" value="${esc(String(d[f.key] === undefined ? '' : d[f.key]))}"
+        placeholder="${esc(f.hint || '')}" oninput="sysNpcSet('${esc(f.key)}',this.value)">`;
+    }
+    h += `</div>`;
+  });
+  if (group !== null) h += `</div>`;
+  h += `<div style="display:flex;gap:6px;margin-top:8px">
+    <button class="btn btn-secondary" style="flex:1" onclick="closeFullNPCBuilder()">Cancel</button>
+    <button class="btn btn-primary" style="flex:1" onclick="saveSysNPC()">Save ${esc(label)}</button></div></div>`;
+  el.innerHTML = h;
+}
+
+function saveSysNPC() {
+  const d = S._npcDraft;
+  if (!d) return;
+  if (!String(d.name || '').trim()) return alert('Give it a name first.');
+  // Bake the derived values in, so the roster and the printed page can read
+  // them without recomputing against a floor that may since have changed.
+  (sysNpcFields() || []).forEach(function (f) {
+    if (!f.derive) return;
+    try { d[f.key] = f.derive(d, S); } catch (e) {}
+  });
+  d.desc = d.desc || '';
+  ensureId(d);
+  if (_npcEdit !== null) S.npcs[_npcEdit] = d; else S.npcs.push(d);
+  save();
+  closeFullNPCBuilder();
+}
+
 function openFullNPCBuilder(idx){
   _npcEdit=idx;
   _npcFullMode=true;
   if(idx===null)_npcEditMode=true;
   const existing=idx!==null?S.npcs[idx]:null;
+  // A pack that describes its own NPC gets its own form.
+  if(sysNpcFields()){S._npcDraft=sysNpcDefaults(existing);renderSysNPCEditor();return;}
   // Migrate legacy powerSets into forms structure
   const forms = existing?.forms ? JSON.parse(JSON.stringify(existing.forms))
     : [{name:'Main Form', powerSets: existing?.powerSets ? JSON.parse(JSON.stringify(existing.powerSets)) : []}];
@@ -176,6 +297,7 @@ function saveFullNPC(){
 }
 function renderFullNPCEditor(){
   const d=S._npcDraft;if(!d)return;
+  if(sysNpcFields())return renderSysNPCEditor();
   const el=document.getElementById('npcs-content');
   let h=`<div class="${_npcEditMode?'':'no-edit'}">`;
   h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap"><div class="pg-title" style="font-size:22px">${NPC_TYPE_LABELS[d.type]||'NPC'} Builder</div><div style="display:flex;gap:4px;flex-wrap:wrap">${editToggleBtn(_npcEditMode,'toggleNPCEdit')}${_npcEdit!==null?`<button class="btn btn-secondary btn-xs" onclick="exportNPCToSlot(${_npcEdit})" title="Save as playable character in a save slot">→ Slot</button>`:''}<button class="btn btn-secondary btn-xs" onclick="closeFullNPCBuilder()">Close</button><button class="btn btn-primary btn-xs edit-only" onclick="saveFullNPC()">Save</button></div></div>`;
