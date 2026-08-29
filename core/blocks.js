@@ -871,7 +871,7 @@ function invAdd(id, cid) {
       }
       list[at].qty = (list[at].qty || 1) + 1;
       if (inp) inp.value = '';
-      save(); blockRepaint(id);
+      save(); blockSyncAll(id);
       return;
     }
     // A new name needs a free slot of its own.
@@ -881,7 +881,7 @@ function invAdd(id, cid) {
     }
     list.push(works ? { name, qty: 1, skill: works } : { name, qty: 1 });
     if (inp) inp.value = '';
-    save(); blockRepaint(id);
+    save(); blockSyncAll(id);
     return;
   }
 
@@ -893,7 +893,7 @@ function invAdd(id, cid) {
   if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
   else t.ctx.data[cid].push(item);
   if (inp) inp.value = '';
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
 }
 function invRemove(id, cid, slotId, i) {
   const t = _inv(id); if (!t) return;
@@ -901,7 +901,7 @@ function invRemove(id, cid, slotId, i) {
   const arr = c.kind === 'slots' ? (t.ctx.data[cid] || {})[slotId] : t.ctx.data[cid];
   if (!arr) return;
   arr.splice(i, 1);
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
 }
 function invQty(id, cid, i, delta) {
   const t = _inv(id); if (!t) return;
@@ -911,7 +911,7 @@ function invQty(id, cid, i, delta) {
   if (!it) return;
   const max = c.stackMax || 999;
   it.qty = Math.max(1, Math.min(max, (it.qty || 1) + delta));
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
 }
 // Move an item between containers, refusing when the destination is full.
 // Which gear slot an item belongs in. The shell cannot know a Club is held
@@ -967,12 +967,10 @@ function invSetField(id, cid, where, i, key, value) {
   if (value === '') delete item[key]; else item[key] = num ? Number(value) : value;
   save();
   // This runs on every keystroke, so the block being typed into is NOT
-  // repainted — that would take the field out from under the caret. Only the
-  // blocks that read this value are refreshed, and only if they are not
-  // themselves holding the caret.
-  (t.block.affects || []).forEach(function (other) {
-    if (!blockHoldsFocus(other)) blockRepaint(other);
-  });
+  // repainted — that would take the field out from under the caret. Everything
+  // else is, because a single field here can move a Stat, a Skill or your
+  // Damage Resistance.
+  blockSyncAll(null);
 }
 
 function invAct(id, cid, where, i, actionId) {
@@ -985,7 +983,7 @@ function invAct(id, cid, where, i, actionId) {
   let res;
   try { res = fn(actionId, item, S.char); } catch (e) { res = { ok: false, message: e.message }; }
   if (res && res.remove) list.splice(i, 1);
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
   if (res && res.message && typeof flashSaveError === 'function' && res.ok === false) flashSaveError(res.message);
 }
 
@@ -995,7 +993,27 @@ function invSetSkill(id, cid, where, i, value) {
   const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
   const item = list && list[i]; if (!item) return;
   if (value) item.skill = value; else delete item.skill;
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
+}
+
+// Redraw every block except the ones the player is typing into.
+//
+// A block's `affects` list works when the relationship is fixed — a Stat drives
+// Health and Mana, and always will. Gear is not like that: a ring can raise any
+// Stat, gloves can raise any Skill, armour changes Damage Resistance, and a
+// tome adds a Spell. Listing all of that on the gear block would be a lie the
+// moment a pack adds a new kind of item, so a change to what you carry redraws
+// the sheet instead.
+//
+// The caret guard is the reason this is safe to call from an oninput handler.
+function blockSyncAll(changedId) {
+  const blocks = (SYS && SYS.schema && SYS.schema.blocks) || [];
+  blocks.forEach(function (b) {
+    if (blockHoldsFocus(b.id)) return;
+    blockRepaint(b.id);
+  });
+  // The one being edited is redrawn last, and only if it is not being typed in.
+  if (changedId && !blockHoldsFocus(changedId)) blockRepaint(changedId);
 }
 
 function invSlotFor(block, container, item) {
@@ -1029,13 +1047,13 @@ function invMove(id, fromId, toId, slotId, i, wantSlot) {
   src.splice(i, 1);
   if (to.kind === 'slots') (t.ctx.data[toId][destSlot] = t.ctx.data[toId][destSlot] || []).push(item);
   else t.ctx.data[toId].push(item);
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
 }
 function invCounter(id, cid, delta) {
   const t = _inv(id); if (!t) return;
   t.ctx.data.counters = t.ctx.data.counters || {};
   t.ctx.data.counters[cid] = Math.max(0, (t.ctx.data.counters[cid] || 0) + delta);
-  save(); blockRepaint(id);
+  save(); blockSyncAll(id);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

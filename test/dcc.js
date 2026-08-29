@@ -1555,6 +1555,75 @@ function boot(entry) {
     return got === 'Downtown' || 'renamed a map in use to ' + JSON.stringify(got);
   });
 
+  // ── a gear change has to show up on the sheet ─
+  // Reported from a browser: "I have a bow equipped and it's not adding the DEX
+  // or tracking skill." The numbers were right in the data the whole time; the
+  // sheet simply never redrew. Editing gear repainted only the blocks in the
+  // gear block's `affects` list, which named `defence` alone — so Damage
+  // Resistance updated and nothing else did.
+  const bowSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Bow');dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccSetFloor(1);dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+  const gridDex = () => ev("(document.querySelector('#tg-stats-DEX-tot')||{}).textContent");
+
+  check('[sync] a Stat granted by gear reaches the Stat grid', () => {
+    bowSheet();
+    const before = gridDex();
+    ev("S.char.blocks.gear.equipped.hands[0].grantsStat='DEX';");
+    ev("S.char.blocks.gear.equipped.hands[0].grantsStatN=3;");
+    ev("invSetField('gear','equipped','hands',0,'grantsStatN',3);");
+    const after = gridDex();
+    return Number(after) === Number(before) + 3
+      || 'the grid read ' + before + ' and still reads ' + after;
+  });
+  check('[sync] a Skill granted by gear reaches that Skill total', () => {
+    bowSheet();
+    const row = () => ev("(function(){var b=document.getElementById('blk-skills');" +
+      "var d=[].slice.call(b.querySelectorAll('div'));" +
+      "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length)" +
+      "return d[i].parentElement.parentElement.textContent.replace(/\\s+/g,' ').trim()}return ''})()");
+    const before = row();
+    ev("S.char.blocks.gear.equipped.hands[0].grantsSkill='Bow';");
+    ev("invSetField('gear','equipped','hands',0,'grantsSkillN',2);");
+    const after = row();
+    if (!before || !after) return 'could not read the Bow row';
+    return before !== after || 'the Skill row did not change: ' + after;
+  });
+  check('[sync] equipping something updates the sheet, not just the gear block', () => {
+    // invMove repainted only the gear block, so a ring moved from the Inventory
+    // to a slot raised nothing visible.
+    bowSheet();
+    const before = gridDex();
+    ev("S.char.blocks.gear.inventory.push({name:'Ring',grantsStat:'DEX',grantsStatN:4});");
+    ev("invMove('gear','inventory','equipped','',0);");
+    return Number(gridDex()) === Number(before) + 4
+      || 'the grid read ' + before + ' and now reads ' + gridDex();
+  });
+  check('[sync] ...and unequipping takes it away again', () => {
+    const before = gridDex();
+    // The ring lands in whichever slot had room, so find it rather than assume.
+    const slot = ev("(function(){var e=S.char.blocks.gear.equipped;" +
+      "for(var k in e){for(var i=0;i<(e[k]||[]).length;i++){if(e[k][i].name==='Ring')return k}}return ''})()");
+    if (!slot) return 'the ring was never equipped';
+    ev("invMove('gear','equipped','inventory'," + JSON.stringify(slot) + ",0);");
+    const after = gridDex();
+    return Number(after) < Number(before) || 'the bonus survived being taken off: ' + after;
+  });
+  check('[sync] the field being typed into is never redrawn', () => {
+    // The redraw runs on every keystroke, so it has to leave the caret alone.
+    bowSheet();
+    ev("[].slice.call(document.querySelectorAll('#blk-gear button'))" +
+       ".filter(function(b){return /invDetail/.test(b.getAttribute('onclick')||'')})[0].click();");
+    ev("var i=document.querySelector('#blk-gear .inv-detail input');i.setAttribute('data-probe','1');i.focus();" +
+       "i.value='3';i.dispatchEvent(new window.Event('input',{bubbles:true}));");
+    const kept = ev("(document.querySelector('#blk-gear .inv-detail input')||{}).getAttribute&&" +
+                    "document.querySelector('#blk-gear .inv-detail input').getAttribute('data-probe')");
+    if (kept !== '1') return 'the field was replaced mid-keystroke';
+    return ev("document.activeElement.tagName") === 'INPUT' || 'focus was lost';
+  });
+
   // ── gear that raises what you are ────────────────────────────────────────
   // "Platinum: +2 Skill in the Weapon, +3 to Strength or Dexterity" (p. 116),
   // and Platinum armour gives "+3 to Catcher or Taunt Skills". Those had
