@@ -1532,6 +1532,46 @@ function boot(entry) {
     return missing.length ? 'no field for ' + missing.join(', ') : true;
   });
 
+  // ── a printed page is a whole page ────────────
+  check('[print] a page fills the sheet it is printed on', () => {
+    // .pg carried a page break but no height, so every section shrank to its
+    // own contents: a run of half-empty sheets in the preview, and rules that
+    // stop halfway down on paper.
+    const css = ev("dcSheetCSS()");
+    if (!/min-height:\s*10in/.test(css)) return 'no page height is set for Letter';
+    return /10\.69in/.test(css) || 'A4 is not accounted for';
+  });
+  check('[print] the page estimate matches the document', () => {
+    ev("S.char=SYS.newCharacter();dccSetFloor(1);dccFinishCreation(S.char);");
+    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};");
+    ev("showTab('print');prClear();prToggle('hero','@self','full');");
+    const real = (ev("prBuildBody()").match(/class="pg"/g) || []).length;
+    const said = ev("prPageCount()");
+    return real === said || 'the centre says ' + said + ' page(s) for a ' + real + '-page document';
+  });
+
+  // ── Skills and Spells print what they do ──────
+  check('[print] a Spell prints its description, not just its Rank', () => {
+    // "None of the descriptions are on the printed version" — the print rows
+    // carried name, Rank and Stat and nothing else.
+    ev("S.char=SYS.newCharacter();dccSetRoute('spell');dccSetSpell('Fire Fingers');");
+    ev("dccSetFloor(1);dccFinishCreation(S.char);S.char.name='Fenwick';");
+    ev("S.char.creation={step:0,complete:true};showTab('print');prClear();prToggle('hero','@self','full');");
+    const doc = ev("prBuildBody()");
+    if (!/pr-sub/.test(doc)) return 'no description lines in the document at all';
+    return /Health Bar slots/.test(doc) || 'Heal still prints without saying what it does';
+  });
+  check('[print] a Spell prints its Mana cost and range', () => {
+    const doc = ev("prBuildBody()");
+    if (!/Mana/.test(doc)) return 'no Mana cost printed';
+    return /Self only|Melee|feet/.test(doc) || 'no range printed';
+  });
+  check('[print] a block carrying descriptions is given the full width', () => {
+    // A line of description does not fit a half-width column.
+    const doc = ev("prBuildBody()");
+    return /pr-wide/.test(doc) || 'Skills and Spells are still squeezed into a column';
+  });
+
   // ── printing what you carry ───────────────────
   // Gear used to print as a run-on comma list squeezed into a column of the
   // main sheet, with none of the mechanics: "Gear Slots Hockey pads, Club

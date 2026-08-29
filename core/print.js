@@ -57,6 +57,9 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .pr-id-v{font-weight:600}
 .pr-note{font-size:8pt;line-height:1.35;color:#333;margin-bottom:8px;padding:5px 7px;border:.75pt solid #bbb;border-radius:3px}
 .pr-cols{column-count:2;column-gap:14px}
+/* Skills and Spells carry a line of description each, which does not fit a
+   half-width column, so those blocks span the sheet. */
+.pr-blk.pr-wide{column-span:all;break-inside:auto}
 .pr-blk{break-inside:avoid;page-break-inside:avoid;margin-bottom:9px}
 .pr-gear{margin-top:4px}
 .pr-gear th{background:#101410;color:#f7f9f6;font-family:'Oswald',sans-serif;font-size:7.5pt;
@@ -140,10 +143,17 @@ body.previewing{padding-top:44px}
 @media screen{
   body.previewing{background:#4a4a4a}
   body.previewing .sheet,body.previewing .pg{background:#fff;max-width:8.5in;margin:0 auto 14px;padding:.5in;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+  /* A sheet of Letter is 11in tall; less an inch of margins that is 10in of
+     content. Without this each section shrank to fit its own contents. */
+  body.previewing .pg{min-height:10in;display:flex;flex-direction:column}
+  body.a4.previewing .pg{min-height:10.69in}
   body.previewing .sheet-half{max-width:none;margin:0 0 10px;padding:10px;box-shadow:none}
 }
 @media print{#pv-bar{display:none!important}body.previewing{padding-top:0;background:#fff}
   body.previewing .sheet,body.previewing .pg{max-width:none;margin:0;padding:0;box-shadow:none}
+  /* On paper the @page margin does the spacing, so the box is the full page. */
+  body.previewing .pg{min-height:10in}
+  body.a4.previewing .pg{min-height:10.69in}
   body.previewing .sheet-half{padding:10px}}
 @page{size:letter portrait;margin:.5in}
 body.a4 .sheet,body.a4 .pg{max-width:8.27in}
@@ -335,8 +345,25 @@ function prDD(e,t){e.preventDefault();e.currentTarget.classList.remove('pr-over'
 
 // Runs of consecutive same-layout items share pages, so the estimate has to walk
 // the list in order rather than just totalling per-item fractions.
+// How many pages a block-pack character adds beyond its own sheet: one for what
+// is worn, and one for each other container. The estimate in the print centre
+// said "1 page" for a document that was actually five.
+function prCarriedPageCount(){
+  if(!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))return 0;
+  const block=((SYS.schema&&SYS.schema.blocks)||[]).filter(b=>b.type==='inventory')[0];
+  if(!block)return 0;
+  const cs=block.containers||[];
+  return (cs.some(c=>c.kind==='slots')?1:0)+cs.filter(c=>c.kind!=='slots').length;
+}
 function prPageCount(){prLoadPrefs();const runs=prRuns();let n=_prOpts.toc?1:0;
-  runs.forEach(r=>{const per=(PR_DENS[r.d]||PR_DENS.full).per;n+=Math.ceil(r.items.length/per);});return n;}
+  const extra=prCarriedPageCount();
+  runs.forEach(r=>{const per=(PR_DENS[r.d]||PR_DENS.full).per;
+    n+=Math.ceil(r.items.length/per);
+    // Only a character sheet grows those pages; maps and reference do not.
+    if(extra&&(r.d==='full'||r.d==='half'||r.d==='card')){
+      n+=extra*r.items.filter(x=>x.k==='hero'||x.k==='slot'||x.k==='player').length;
+    }});
+  return n;}
 function prRuns(){prLoadPrefs();const runs=[];
   _prSel.forEach(s=>{const last=runs[runs.length-1];
     if(last&&last.d===s.d&&s.d!=='full'&&s.d!=='flow'&&s.d!=='table')last.items.push(s);
@@ -448,8 +475,13 @@ function prBlockRows(block, ctx) {
       rows.push([it.label, String(blockValue(it.value, ctx, '')), '']);
     });
   } else if (block.type === 'skillList') {
+    // A fourth cell is a sub-line under the name. A Spell called "Heal" tells a
+    // player nothing, and the catalogue has carried the answer all along.
     (d.skills || []).slice().sort(function (a, b) { return (b.rank || 0) - (a.rank || 0); })
-      .forEach(function (sk) { rows.push([sk.name, 'Rank ' + (sk.rank || 0), sk.stat || '']); });
+      .forEach(function (sk) {
+        const info = (typeof skillInfo === 'function') ? skillInfo(block, sk) : '';
+        rows.push([sk.name, 'Rank ' + (sk.rank || 0), sk.stat || '', info]);
+      });
   } else if (block.type === 'inventory') {
     (block.containers || []).forEach(function (cn) {
       // A 'slots' container is an object of slot-name -> array of items, so it
@@ -599,9 +631,13 @@ function prBlockSheetHTML(char, opts) {
     if (!rows.length) return;
     // Not every block declares a label; an id is a poor heading, so tidy it.
     const heading = b.label || String(b.id).replace(/([A-Z])/g, ' $1').replace(/^./, function (c) { return c.toUpperCase(); });
-    h += '<div class="pr-blk"><div class="pr-blk-t">' + prE(heading) + '</div><table class="pr-t">';
+    const wide = rows.some(function (r) { return r[3]; });
+    h += '<div class="pr-blk' + (wide ? ' pr-wide' : '') + '"><div class="pr-blk-t">' +
+         prE(heading) + '</div><table class="pr-t">';
     rows.forEach(function (r) {
-      h += '<tr><td>' + prE(r[0]) + '</td><td class="pr-n">' + prE(r[1]) + '</td><td class="pr-n">' + prE(r[2]) + '</td></tr>';
+      h += '<tr><td>' + prE(r[0]) +
+        (r[3] ? '<div class="pr-sub">' + prE(r[3]) + '</div>' : '') +
+        '</td><td class="pr-n">' + prE(r[1]) + '</td><td class="pr-n">' + prE(r[2]) + '</td></tr>';
     });
     h += '</table></div>';
   });
