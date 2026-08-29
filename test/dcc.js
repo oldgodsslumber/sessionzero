@@ -1743,6 +1743,85 @@ function boot(entry) {
     return missing.length ? 'no field for ' + missing.join(', ') : true;
   });
 
+  // ── an upgrade you have actually earned ───────
+  // Weapon and Spell upgrades unlock at Rank 5, 10 and 15. Nothing showed them
+  // anywhere, so a crawler at Rank 9 was dealing an extra 1d6 and had to
+  // remember that from the book.
+  const upSheet = (rank) => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Bow');dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccSetFloor(3);dccRollBumps();dccFinishCreation(S.char);S.char.creation={step:0,complete:true};");
+    ev("S.char.blocks.skills.skills.filter(function(s){return s.name==='Bow'})[0].rank=" + rank + ";renderHero();");
+  };
+  const active = () => JSON.parse(ev("JSON.stringify(SYS.derive.activeUpgrades(S.char,'Bow').map(function(u){return u.rank}))"));
+
+  check('[upgrade] only the tiers your Rank has reached are active', () => {
+    upSheet(3);
+    if (active().length) return 'a Rank 3 crawler had ' + JSON.stringify(active());
+    upSheet(9);
+    if (active().join(',') !== '5') return 'a Rank 9 crawler had ' + JSON.stringify(active());
+    upSheet(15);
+    return active().join(',') === '5,10,15' || 'a Rank 15 crawler had ' + JSON.stringify(active());
+  });
+  check('[upgrade] the sheet shows the earned one and not the rest', () => {
+    // Listing a Rank 15 upgrade to a Rank 9 crawler is an invitation, not
+    // information.
+    upSheet(9);
+    const h = ev("document.getElementById('blk-skills').innerHTML");
+    if (!/Rank 5:/.test(h)) return 'the earned upgrade is not shown';
+    return !/Rank 1[05]:/.test(h) || 'an unearned upgrade is being shown';
+  });
+
+  // ── the printed row carries more than a name ──
+  const carried = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Bow');dccStatMethod('array');");
+    ev("dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
+    ev("dccSetFloor(3);dccRollBumps();dccFinishCreation(S.char);S.char.name='Fenwick';");
+    ev("S.char.creation={step:0,complete:true};");
+    ev("S.char.blocks.skills.skills.filter(function(s){return s.name==='Bow'})[0].rank=9;");
+    ev("S.char.blocks.gear.equipped.torso=[{name:'Hockey pads',dr:2,resist:'Fire',notes:'Smells.'}];");
+    ev("S.char.blocks.gear.equipped.accessories=[{name:'Ring',grantsStat:'STR',grantsStatN:3,grantsSkill:'Tracking',grantsSkillN:3}];");
+    ev("showTab('print');prClear();prToggle('hero','@self','full');");
+    const doc = ev("prBuildBody()");
+    const pg = doc.split('<section class="pg">').slice(1).filter(x => x.indexOf('WORN AND HELD') >= 0)[0] || '';
+    return { html: pg, text: pg.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ') };
+  };
+
+  check('[carry] an item can carry a note you wrote', () => {
+    const keys = JSON.parse(ev("JSON.stringify(SYS.derive.gearItemFields().map(function(f){return f.key}))"));
+    if (keys.indexOf('notes') < 0) return 'there is no field for a description';
+    return /Smells/.test(carried().text) || 'the note did not print';
+  });
+  check('[carry] the row is labelled, not one run-on sentence', () => {
+    const t2 = carried().text;
+    const want = ['Attack', 'To hit', 'Grants', 'Note'];
+    const missing = want.filter(l => t2.indexOf(l) < 0);
+    return missing.length ? 'no label for ' + missing.join(', ') : true;
+  });
+  check('[carry] a weapon prints the upgrade its Rank has earned', () => {
+    const t2 = carried().text;
+    if (!/Rank 5/.test(t2)) return 'the earned upgrade did not print';
+    return !/Rank 15/.test(t2) || 'an unearned upgrade printed';
+  });
+  check('[carry] the page gathers what the gear is granting', () => {
+    // Scattered one row at a time, this is unreadable at a table.
+    const t2 = carried().text;
+    if (!/Damage Resistance/.test(t2)) return 'no DR total';
+    if (!/Resists/.test(t2)) return 'resistances are not gathered';
+    return /From gear/.test(t2) || 'the Stat and Skill grants are not gathered';
+  });
+  check('[carry] an ordinary item stays one line', () => {
+    // "Doesn't need to be fully described" — only the lines an item has print.
+    ev("S.char.blocks.gear.equipped.accessories=[{name:'Bit of string'}];");
+    ev("showTab('print');prClear();prToggle('hero','@self','full');");
+    const doc = ev("prBuildBody()");
+    const pg = doc.split('<section class="pg">').slice(1).filter(x => x.indexOf('WORN AND HELD') >= 0)[0] || '';
+    const row = /Bit of string([\s\S]{0,220}?)<\/td>/.exec(pg);
+    if (!row) return 'the item did not print at all';
+    return (row[1].match(/pr-sub/g) || []).length === 0
+      || 'a plain item printed extra lines';
+  });
+
   // ── a printed page is a whole page ────────────
   check('[print] a page fills the sheet it is printed on', () => {
     // .pg carried a page break but no height, so every section shrank to its
@@ -1820,7 +1899,7 @@ function boot(entry) {
     const page = pageWith(printed(), 'WORN AND HELD');
     if (page.indexOf('Tire Iron') < 0) return 'the weapon is not on the page';
     if (!/1d6/.test(page)) return 'no damage printed';
-    return /to hit/.test(page) || 'no to-hit printed';
+    return /to\s*hit/i.test(page.replace(/<[^>]*>/g, ' ')) || 'no to-hit printed';
   });
   check('[print] armour prints its DR, and the page totals it', () => {
     const page = pageWith(printed(), 'WORN AND HELD');
@@ -1839,7 +1918,10 @@ function boot(entry) {
   });
   check('[print] a scroll on the Hotlist says what it casts', () => {
     const page = pageWith(printed(), 'HOTLIST');
-    return /casts Fireball/.test(page) || 'the scroll printed as a bare name';
+    // Labels are marked up now, so "Casts" and "Fireball" are separated by a
+    // tag in the source. Read the text the way a person does.
+    const text = page.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    return /casts\s+Fireball/i.test(text) || 'the scroll printed as a bare name';
   });
   check('[print] gear is no longer squeezed onto the main sheet', () => {
     const page = pageWith(printed(), 'HERO SHEET');

@@ -68,6 +68,11 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .pr-gear td.pr-w{width:86pt;font-family:'Oswald',sans-serif;font-size:8pt;letter-spacing:.4px;color:#3d4a3e}
 .pr-gear td.pr-box{width:26pt;border-left:.5pt solid #b9c3ba}
 .pr-gear td.pr-empty{height:15pt}
+.pr-nm{font-weight:600}
+.pr-sub b{font-family:'Oswald',sans-serif;font-size:7pt;letter-spacing:.9px;text-transform:uppercase;
+  color:#68786a;font-weight:500;margin-right:4pt}
+.pr-sub.is-upgrade{color:#0a5c2b}
+.pr-tot{display:flex;gap:14pt;flex-wrap:wrap;align-items:baseline}
 .pr-sub{font-size:7.5pt;color:#4a5a4c;line-height:1.35;margin-top:1pt}
 .pr-q{color:#4a5a4c}
 .pr-tot{margin-top:7pt;font-family:'Oswald',sans-serif;font-size:9pt;letter-spacing:.6px;
@@ -521,13 +526,30 @@ function prBlockRows(block, ctx) {
 // Worn gear and the Hotlist each get a page. On the crawler sheet they are the
 // two things you actually reach for mid-fight, and a comma-separated line in
 // the corner of page one does not survive contact with a table.
-function prCarriedRow(item, extra) {
+// One item as a labelled stack rather than a run-on sentence, so a reader can
+// find "to hit" without reading the rest. Only the lines an item actually has
+// are printed: most items are one line, a magic weapon is three or four.
+function prCarriedLines(item) {
+  const fn = sysDerive((sysBlock('gear') || {}).itemLines);
+  if (fn) {
+    try { return fn(item, S.char) || []; } catch (e) { return []; }
+  }
+  // A pack that does not describe its items falls back to the single line the
+  // sheet already shows.
   const line = (typeof invReadout === 'function')
     ? invReadout(sysBlock('gear') || {}, item, S.char) : '';
+  return line ? [{ label: '', text: line }] : [];
+}
+
+function prCarriedRow(item, extra) {
+  const lines = prCarriedLines(item);
   return '<tr><td class="pr-w">' + prE(extra || '') + '</td>' +
-    '<td>' + prE(item && item.name ? item.name : '—') +
+    '<td><span class="pr-nm">' + prE(item && item.name ? item.name : '—') + '</span>' +
     (item && item.qty > 1 ? ' <span class="pr-q">×' + item.qty + '</span>' : '') +
-    (line ? '<div class="pr-sub">' + prE(line) + '</div>' : '') +
+    lines.map(function (l) {
+      return '<div class="pr-sub' + (l.kind ? ' is-' + l.kind : '') + '">' +
+        (l.label ? '<b>' + prE(l.label) + '</b>' : '') + prE(l.text) + '</div>';
+    }).join('') +
     '</td><td class="pr-box"></td></tr>';
 }
 
@@ -564,8 +586,21 @@ function prCarriedPages(char, name, kick) {
     if (dr) {
       let n = 0;
       try { n = dr(char) || 0; } catch (e) { n = 0; }
-      h += '<div class="pr-tot">Damage Resistance <strong>' + prE(String(n)) + '</strong>' +
-           '<span class="pr-note-sm">only what is in a slot counts</span></div>';
+      h += '<div class="pr-tot"><span>Damage Resistance <strong>' + prE(String(n)) + '</strong></span>';
+      // Everything the worn gear is granting, gathered rather than scattered
+      // down the page one row at a time.
+      const grants = [], resists = [];
+      Object.keys(d.equipped || {}).forEach(function (slot) {
+        ((d.equipped || {})[slot] || []).forEach(function (it) {
+          if (!it) return;
+          if (it.resist) resists.push(it.resist);
+          if (it.grantsStat && it.grantsStatN) grants.push((it.grantsStatN > 0 ? '+' : '') + it.grantsStatN + ' ' + it.grantsStat);
+          if (it.grantsSkill && it.grantsSkillN) grants.push((it.grantsSkillN > 0 ? '+' : '') + it.grantsSkillN + ' ' + it.grantsSkill);
+        });
+      });
+      if (resists.length) h += '<span>Resists <strong>' + prE(resists.join(', ')) + '</strong></span>';
+      if (grants.length) h += '<span>From gear <strong>' + prE(grants.join(' · ')) + '</strong></span>';
+      h += '<span class="pr-note-sm">only what is in a slot counts</span></div>';
     }
     out += prPage(name, 'WORN AND HELD' + marks, h);
   }

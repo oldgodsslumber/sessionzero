@@ -214,6 +214,7 @@ registerSystem({
         extra: 'derive.wornBonus',
         // Skills your gear lends you, which you have no Ranks of your own in.
         lent: 'derive.wornSkills',
+        upgrades: 'derive.activeUpgrades',
         granted: 'derive.grantedSkills',
         catalog: 'skills',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
@@ -225,6 +226,7 @@ registerSystem({
         statMod: 'derive.spellStatMod',
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.spellLookup',
+        upgrades: 'derive.activeUpgrades',
         granted: 'derive.grantedSpells',
         catalog: 'spells',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
@@ -250,6 +252,7 @@ registerSystem({
         // What an item can BE, and what it does once it is that.
         itemOptions: 'derive.gearItemOptions',
         itemReadout: 'derive.gearItemReadout',
+        itemLines: 'derive.gearItemLines',
         itemFields: 'derive.gearItemFields',
         itemActions: 'derive.gearItemActions',
         itemAct: 'derive.gearItemAct',
@@ -295,6 +298,53 @@ registerSystem({
 
     // One line describing what the thing actually does at the table, whichever
     // kind of thing it is.
+    // The same facts as the one-line readout, but labelled and split, for print.
+    // Deliberately brief: an item is usually one line, a magic weapon three.
+    gearItemLines: (item, char) => {
+      if (!item) return [];
+      const out = [];
+      if (item.skill) {
+        const cat = dccSkillByName(item.skill);
+        if (cat) {
+          const bits = [];
+          if (cat.baseDamage) bits.push(cat.baseDamage);
+          if (cat.range) bits.push(cat.range);
+          out.push({ label: 'Attack', text: cat.name + ' \u00b7 ' + bits.join(' \u00b7 ') });
+          const list = (char && char.blocks && char.blocks.skills && char.blocks.skills.skills) || [];
+          const mine = list.filter(function (x) {
+            return String(x.name).toLowerCase() === String(cat.name).toLowerCase();
+          })[0];
+          if (mine) {
+            const mod = cat.stat ? dccStatMod(dccStatOf(char, cat.stat)) : 0;
+            const worn = SYS.derive.wornBonus(char, 'skill', cat.name);
+            const tot = (mine.rank || 0) + mod + worn;
+            out.push({ label: 'To hit', text: (tot >= 0 ? '+' : '') + tot +
+              '  (Rank ' + (mine.rank || 0) + ', ' + (cat.stat || '') + ' Mod ' +
+              (mod >= 0 ? '+' : '') + mod + ')' });
+          } else {
+            out.push({ label: 'To hit', text: 'untrained' });
+          }
+        }
+      }
+      const grants = [];
+      if (item.dr) grants.push('+' + item.dr + ' DR');
+      if (item.resist) grants.push(item.resist + ' Resistance');
+      if (item.grantsStat && item.grantsStatN) grants.push((item.grantsStatN > 0 ? '+' : '') + item.grantsStatN + ' ' + item.grantsStat);
+      if (item.grantsSkill && item.grantsSkillN) grants.push((item.grantsSkillN > 0 ? '+' : '') + item.grantsSkillN + ' ' + item.grantsSkill);
+      if (grants.length) out.push({ label: 'Grants', text: grants.join(', ') });
+      if (item.casts) {
+        const sp = dccSpellByName(item.casts);
+        out.push({ label: 'Casts', text: item.casts + (item.rank ? ' at Rank ' + item.rank : '') + ', untrained' });
+        if (sp && sp.effect) out.push({ label: '', text: sp.mana + ' Mana \u00b7 ' + (sp.range || '') + ' \u00b7 ' + sp.effect });
+      }
+      if (item.teaches) out.push({ label: 'Teaches', text: item.teaches });
+      // Only the upgrades this crawler has actually earned.
+      SYS.derive.activeUpgrades(char, item.skill || item.casts || '')
+        .forEach(function (u) { out.push({ label: 'Rank ' + u.rank, text: u.text, kind: 'upgrade' }); });
+      if (item.notes) out.push({ label: 'Note', text: item.notes });
+      return out;
+    },
+
     gearItemReadout: (item, char) => {
       if (!item) return '';
       const out = [];
@@ -332,6 +382,10 @@ registerSystem({
           out.push(bits.join(' · '));
         }
       }
+      if (item.notes) out.push(item.notes);
+      // Only what this crawler's Rank has actually unlocked.
+      SYS.derive.activeUpgrades(char, item.skill || item.casts || '')
+        .forEach(function (u) { out.push('Rank ' + u.rank + ': ' + u.text); });
       return out.filter(Boolean).join('  —  ');
     },
 
@@ -353,6 +407,7 @@ registerSystem({
       { key: 'grantsStatN', label: 'by',           type: 'number', hint: '0' },
       { key: 'grantsSkill', label: 'Grants Skill', options: () => DCC_SKILLS.map(x => x.name) },
       { key: 'grantsSkillN', label: 'by',          type: 'number', hint: '0' },
+      { key: 'notes', label: 'Note', hint: 'What it is, where it came from' },
     ],
 
     // A tome is the one item that changes your sheet by being used.
@@ -393,6 +448,30 @@ registerSystem({
         });
       });
       return out;
+    },
+
+    // Weapon and Spell upgrades unlock at Rank 5, 10 and 15. A crawler at Rank
+    // 9 has the Rank 5 upgrade live and nothing has ever said so. Only what is
+    // EARNED is returned: showing a Rank 15 upgrade to a Rank 9 crawler is an
+    // invitation rather than information.
+    activeUpgrades: (char, name) => {
+      if (!name) return [];
+      const cat = dccSkillByName(name) || dccSpellByName(name);
+      if (!cat || !cat.upgrades) return [];
+      let rank = 0;
+      [(char && char.blocks && char.blocks.skills && char.blocks.skills.skills) || [],
+       (char && char.blocks && char.blocks.spells && char.blocks.spells.skills) || []]
+        .forEach(function (l) {
+          l.forEach(function (x) {
+            if (String(x.name).toLowerCase() === String(cat.name).toLowerCase()) {
+              rank = Math.max(rank, x.rank || 0);
+            }
+          });
+        });
+      return Object.keys(cat.upgrades).map(Number)
+        .filter(function (n) { return n <= rank; })
+        .sort(function (a, b) { return a - b; })
+        .map(function (n) { return { rank: n, text: cat.upgrades[String(n)] }; });
     },
 
     // What the gear you are WEARING adds. "Only what is in a Gear Slot gives

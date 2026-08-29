@@ -532,7 +532,8 @@ function skillLent(block, char) {
   return out.filter(function (g) { return have.indexOf(String(g.name).toLowerCase()) < 0; });
 }
 
-function skillInfo(block, entry) {
+function skillInfo(block, entry, char) {
+  char = char || ((typeof S !== 'undefined' && S) ? S.char : null);
   const look = sysDerive(block.lookup);
   if (!look || !entry) return '';
   let cat = null;
@@ -542,6 +543,13 @@ function skillInfo(block, entry) {
   if (cat.mana !== undefined && cat.mana !== null) bits.push(cat.mana + ' Mana');
   if (cat.range) bits.push(cat.range);
   if (cat.baseDamage) bits.push(cat.baseDamage);
+  // What this crawler's Rank has unlocked, where the pack tracks that.
+  const upFn = sysDerive(block.upgrades);
+  if (upFn) {
+    let ups = [];
+    try { ups = upFn(char, cat.name) || []; } catch (e) { ups = []; }
+    ups.forEach(function (u) { bits.push('Rank ' + u.rank + ': ' + u.text); });
+  }
   if (cat.effect) {
     // The printed entry repeats its own Base Damage and AI Favor lines inside
     // the effect text; both are shown separately, so trim them rather than
