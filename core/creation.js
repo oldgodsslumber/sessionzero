@@ -5,6 +5,10 @@ function sysUsesBlocks(){return !!(SYS&&SYS.schema&&SYS.schema.blocks&&SYS.schem
 
 function renderHero(){
   const creation=document.getElementById('hero-creation'),sheet=document.getElementById('hero-sheet');
+  // The floor only exists once a character does, and the strip is drawn at boot
+  // — before that. Without this a player finishing creation would not see the
+  // control until they reloaded.
+  if(typeof renderFloorStrip==='function')renderFloorStrip();
   if(sysUsesBlocks()){
     // No block-based creation wizard yet (that is phase D5), so a pack with
     // blocks starts you straight on a blank sheet.

@@ -426,23 +426,10 @@ function refreshUniverseUI(){try{renderHero();}catch(e){}try{if(document.getElem
 function universeBarHTML(){const u=currentUniverse();const nm=u?u.name:'No universe';return `<div class="uni-bar" onclick="openUniverseManager()" title="Your game world — tap to manage universes"><span class="uni-ico">\u{1F30C}</span><span class="uni-name">${esc(nm)}</span>${_uniFloorHTML()}<span class="uni-caret">▾</span></div>`;}
 // A pack whose lexicon renames the log break to something the table tracks —
 // Dungeon Crawler Carl's Floor — shows it here, because that is the clock.
-function _uniFloorHTML(){
-  if(!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))return '';
-  const f=(S&&S.floor);
-  if(f===undefined||f===null)return '';
-  // A stepper, not a label. The floor was written once at the end of creation
-  // and never again, yet it is the clock this whole game runs on: Mob DR is the
-  // floor number, salvage bands and pet Ranks follow it, and crawlers descend
-  // constantly. The bar is where it is shown, so it is where it changes.
-  // stopPropagation keeps a click off the universe manager underneath.
-  return `<span class="uni-floor">
-    <button class="uni-fbtn" title="Up a ${esc(lexL('logBreak'))}"
-      onclick="event.stopPropagation();sysFloorStep(-1)">&minus;</button>
-    <span class="uni-fnum">${esc(lexU('logBreak'))} ${esc(String(f))}</span>
-    <button class="uni-fbtn" title="Down a ${esc(lexL('logBreak'))}"
-      onclick="event.stopPropagation();sysFloorStep(1)">+</button>
-  </span>`;
-}
+// The floor lives in the strip above the pages, where it is visible on every
+// tab. Two controls for one number is one too many, so the bar no longer
+// carries its own.
+function _uniFloorHTML(){ return ''; }
 
 // Descending is the normal direction, so + goes down a floor. Everything that
 // reads the floor is redrawn, which is most of the sheet.
@@ -452,6 +439,7 @@ function sysFloorStep(delta){
   if(next===S.floor)return;
   S.floor=next;
   save();
+  if(typeof renderFloorStrip==='function')renderFloorStrip();
   if(typeof renderAll==='function')renderAll();
   else{
     if(typeof renderHero==='function')try{renderHero();}catch(e){}
@@ -535,6 +523,7 @@ function submitUniverseSetup(editId){
 // Shared by both ways out of the first-run gate: creating a universe, or
 // joining someone else's from the multiplayer lobby.
 function finishUniverseGate(){
+  if(typeof renderFloorStrip==='function')setTimeout(renderFloorStrip,0);
   _uniRequired=false;
   closeUniverseModal();
   migrateSlotsToSaves();

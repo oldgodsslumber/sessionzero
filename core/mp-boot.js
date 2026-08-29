@@ -69,6 +69,7 @@ function openMultiplayer(){
   // S.universeId null: the wiki refused to open, the universe bar read "No
   // universe", and anything added to the bestiary was written nowhere.
   if(typeof sysUsesBlocks==='function'&&sysUsesBlocks())bindUniverse();
+  if(typeof renderFloorStrip==='function')renderFloorStrip();
   renderHero();
   // Only a pack that uses save files can be missing one.
   if(currentSaveId===null&&!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))openSlotModal();

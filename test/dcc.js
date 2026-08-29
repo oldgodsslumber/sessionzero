@@ -1442,32 +1442,39 @@ function boot(entry) {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
     ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
   };
-  const chip = () => ev("(document.querySelector('.uni-fnum')||{}).textContent||''");
+  const chip = () => ev("(document.querySelector('#floor-strip .fs-num')||{}).textContent||''").trim();
 
-  check('[floor] the bar offers a way to change it', () => {
+  check('[floor] the control is on every tab, not just some of them', () => {
+    // It first lived in the universe bar, which only three tabs draw — and not
+    // the Map or the Conflict tracker, which are exactly where descending
+    // matters. It sits above the pages now.
     floorSheet();
-    const n = ev("document.querySelectorAll('.uni-fbtn').length");
-    return n === 2 || 'the bar has ' + n + ' floor controls';
+    const tabs = JSON.parse(ev("JSON.stringify([].slice.call(document.querySelectorAll('#nav .nb'))" +
+      ".map(function(n){return String(n.id||'').replace(/^nb-/,'')})" +
+      ".filter(function(id){return id&&document.getElementById('page-'+id)}))"));
+    const bare = tabs.filter(tab => {
+      ev("showTab(" + JSON.stringify(tab) + ")");
+      return ev("document.querySelectorAll('#floor-strip .uni-fbtn').length") !== 2;
+    });
+    return bare.length ? 'no floor control on: ' + bare.join(', ') : true;
   });
-  check('[floor] descending changes it, and the bar says so', () => {
+  check('[floor] descending changes it, and the strip says so', () => {
     floorSheet();
-    if (!/1/.test(chip())) return 'the chip started at ' + JSON.stringify(chip());
-    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[1].click();");
+    if (chip() !== 'Floor 1') return 'it started at ' + JSON.stringify(chip());
+    ev("[].slice.call(document.querySelectorAll('#floor-strip .uni-fbtn'))[1].click();");
     if (ev('S.floor') !== 2) return 'the floor is ' + ev('S.floor');
-    return /2/.test(chip()) || 'the chip still reads ' + JSON.stringify(chip());
+    return chip() === 'Floor 2' || 'the strip still reads ' + JSON.stringify(chip());
   });
   check('[floor] it cannot go above the first floor', () => {
     floorSheet();
-    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[0].click();");
-    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[0].click();");
+    ev("[].slice.call(document.querySelectorAll('#floor-strip .uni-fbtn'))[0].click();");
+    ev("[].slice.call(document.querySelectorAll('#floor-strip .uni-fbtn'))[0].click();");
     return ev('S.floor') === 1 || 'went to ' + ev('S.floor');
   });
-  check('[floor] changing it does not open the universe manager underneath', () => {
-    // The chip sits inside the bar, and the bar opens the manager on click.
-    floorSheet();
-    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[1].click();");
-    const cls = ev("(document.getElementById('universe-modal')||{}).className||''");
-    return cls.indexOf('open') < 0 || 'the manager opened as well';
+  check('[floor] a game with no floor gets no strip', () => {
+    // The strip belongs to a pack that tracks one, not to the shell.
+    const html = ev("(document.getElementById('floor-strip')||{}).innerHTML||''");
+    return html !== '' || 'this game tracks a floor and has no strip';
   });
   check('[floor] the sheet header follows the party down', () => {
     // It used to show the floor the character was BUILT for, which stops being
@@ -2553,11 +2560,15 @@ function boot(entry) {
     return bar || 'no universe bar on the sheet';
   });
   check('[chrome] ...and the floor it is on, because the floor is the clock', () => {
-    // The chip carries its own stepper now, so read the number inside it.
-    const chip = () => ev("(document.querySelector('.uni-fnum')||{}).textContent||''").trim();
-    if (chip() !== 'Floor 1') return 'chip reads ' + JSON.stringify(chip());
-    ev("S.floor=4;renderHero();");
-    return chip() === 'Floor 4' || 'the chip did not follow the floor';
+    // The floor moved to its own strip above the pages so that every tab has
+    // it; the universe bar deliberately no longer duplicates it.
+    const read = () => ev("(document.querySelector('#floor-strip .fs-num')||{}).textContent||''").trim();
+    ev("S.floor=1;renderFloorStrip();");
+    if (read() !== 'Floor 1') return 'the strip reads ' + JSON.stringify(read());
+    ev("S.floor=4;renderFloorStrip();");
+    if (read() !== 'Floor 4') return 'the strip did not follow the floor';
+    return ev("document.querySelectorAll('.uni-bar .uni-fbtn').length") === 0
+      || 'the universe bar still carries a duplicate control';
   });
   check('[sheet] every block heading shares one class a pack can style', () => {
     ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");

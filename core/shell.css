@@ -59,6 +59,13 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .trk-slot.is-spent{border-color:var(--border);background:var(--surface);opacity:.4}
 .trk-v{font-weight:700;font-size:14px;color:var(--accent)}
 .trk-slot.is-spent .trk-v{color:var(--muted)}
+#floor-strip{display:flex;align-items:center;gap:6px;padding:6px 14px;
+  border-bottom:1px solid var(--border);background:var(--surface)}
+#floor-strip:empty{display:none}
+.fs-num{font-family:var(--font-label);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);min-width:58px;text-align:center;font-weight:600}
+.fs-hint{font-size:10px;color:var(--muted);margin-left:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:560px){ .fs-hint{display:none} }
 .uni-floor{display:inline-flex;align-items:center;gap:4px;border-left:1px solid var(--border);
   margin-left:8px;padding-left:8px;white-space:nowrap}
 .uni-fnum{font-family:var(--font-label);font-size:10px;letter-spacing:.12em;text-transform:uppercase;

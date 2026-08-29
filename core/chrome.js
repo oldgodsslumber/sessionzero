@@ -39,6 +39,11 @@ const SHELL_CHROME = `<nav id="nav">
   </button>
   <div id="theme-wrap"></div>
 </nav>
+<!-- The table clock. It lives outside the pages because the floor matters on
+     every one of them: the map you are drawing, the Mobs you are fighting and
+     the salvage you are rolling all follow it. Empty for a pack with no such
+     idea, which is every pack but one so far. -->
+<div id="floor-strip"></div>
 <div class="page active" id="page-hero"><div id="hero-main"><div id="hero-creation"></div><div id="hero-sheet" style="display:none"></div></div><div id="hero-dice-sidebar"></div></div>
 <div class="page" id="page-npcs"><div id="npcs-content"></div></div>
 <div class="page" id="page-map"><div id="map-content"></div></div>
@@ -82,6 +87,22 @@ function applySysFonts() {
 // The swatch row was hardcoded comic-book colours in the markup. Each pack now
 // declares its own [value, label, gradientStops] triples; a pack with none gets
 // no swatch row at all, rather than another game's palette.
+// The persistent floor control. A pack that does not track a floor gets nothing,
+// and the strip collapses.
+function renderFloorStrip() {
+  const el = document.getElementById('floor-strip');
+  if (!el) return;
+  const uses = typeof sysUsesBlocks === 'function' && sysUsesBlocks()
+    && typeof S !== 'undefined' && S && S.floor !== undefined && S.floor !== null;
+  if (!uses) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML =
+    '<button class="uni-fbtn" title="Up a ' + esc(lexL('logBreak')) + '" onclick="sysFloorStep(-1)">\u2212</button>' +
+    '<span class="fs-num">' + esc(lexU('logBreak')) + ' ' + esc(String(S.floor)) + '</span>' +
+    '<button class="uni-fbtn" title="Down a ' + esc(lexL('logBreak')) + '" onclick="sysFloorStep(1)">+</button>' +
+    '<span class="fs-hint">' + esc(lexU('logBreak')) + ' sets Mob DR, salvage and pet Ranks</span>';
+}
+
 function renderThemeSwatches() {
   const wrap = document.getElementById('theme-wrap');
   if (!wrap) return;
