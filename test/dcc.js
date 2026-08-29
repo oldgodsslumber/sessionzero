@@ -1435,6 +1435,65 @@ function boot(entry) {
     return head.indexOf('Goblin Helm') >= 0 || 'head holds ' + JSON.stringify(head);
   });
 
+  // ── the floor is the clock, so it has to move ─
+  // S.floor was written exactly once, at the end of creation, and never again —
+  // while eight things read it. A crawl that cannot descend is not a crawl.
+  const floorSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+  };
+  const chip = () => ev("(document.querySelector('.uni-fnum')||{}).textContent||''");
+
+  check('[floor] the bar offers a way to change it', () => {
+    floorSheet();
+    const n = ev("document.querySelectorAll('.uni-fbtn').length");
+    return n === 2 || 'the bar has ' + n + ' floor controls';
+  });
+  check('[floor] descending changes it, and the bar says so', () => {
+    floorSheet();
+    if (!/1/.test(chip())) return 'the chip started at ' + JSON.stringify(chip());
+    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[1].click();");
+    if (ev('S.floor') !== 2) return 'the floor is ' + ev('S.floor');
+    return /2/.test(chip()) || 'the chip still reads ' + JSON.stringify(chip());
+  });
+  check('[floor] it cannot go above the first floor', () => {
+    floorSheet();
+    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[0].click();");
+    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[0].click();");
+    return ev('S.floor') === 1 || 'went to ' + ev('S.floor');
+  });
+  check('[floor] changing it does not open the universe manager underneath', () => {
+    // The chip sits inside the bar, and the bar opens the manager on click.
+    floorSheet();
+    ev("[].slice.call(document.querySelectorAll('.uni-fbtn'))[1].click();");
+    const cls = ev("(document.getElementById('universe-modal')||{}).className||''");
+    return cls.indexOf('open') < 0 || 'the manager opened as well';
+  });
+  check('[floor] the sheet header follows the party down', () => {
+    // It used to show the floor the character was BUILT for, which stops being
+    // true the moment they descend.
+    floorSheet();
+    ev("sysFloorStep(1);sysFloorStep(1);");
+    const h = ev("document.getElementById('hero-sheet').innerHTML");
+    return /Floor 3/.test(h) || 'the header did not follow';
+  });
+  check('[floor] a new Mob defaults to the floor you are on', () => {
+    // "A Mob's base DR is equal to the Floor Number."
+    return ev("SYS.npc.fields().filter(function(f){return f.key==='floor'})[0].def()") === 3
+      || 'a Mob would be built for floor ' + ev("SYS.npc.fields().filter(function(f){return f.key==='floor'})[0].def()");
+  });
+  check('[floor] a pet Rank follows it too', () => {
+    // A pet "rolls at the Floor Number however green it is."
+    ev("S.char.blocks.companions={entries:[{name:'Rat',kind:'pet',levelsGained:0}]};blockSyncAll(null);");
+    const txt = ev("document.getElementById('blk-companions').innerHTML.replace(/<[^>]*>/g,' ')");
+    return /Floor 3/.test(txt) || 'the pet readout still reads: ' + txt.replace(/\s+/g, ' ').slice(0, 90);
+  });
+  check('[floor] it survives a reload', () => {
+    ev("save();");
+    const sess = JSON.parse(ev("JSON.stringify(sysScratchSession())") || 'null');
+    return (sess && sess.floor === 3) || 'the saved session has floor ' + JSON.stringify(sess && sess.floor);
+  });
+
   // ── building a Mob ────────────────────────────
   // The full NPC builder was Daring Comics' Fate NPC throughout — Aspects, a
   // skill ladder, stress boxes, consequences, powerSets, stunts. Opening it in
@@ -2494,11 +2553,11 @@ function boot(entry) {
     return bar || 'no universe bar on the sheet';
   });
   check('[chrome] ...and the floor it is on, because the floor is the clock', () => {
-    const chip = ev("(document.querySelector('.uni-floor')||{}).textContent||''");
-    if (chip !== 'Floor 1') return 'chip reads ' + JSON.stringify(chip);
+    // The chip carries its own stepper now, so read the number inside it.
+    const chip = () => ev("(document.querySelector('.uni-fnum')||{}).textContent||''").trim();
+    if (chip() !== 'Floor 1') return 'chip reads ' + JSON.stringify(chip());
     ev("S.floor=4;renderHero();");
-    return ev("(document.querySelector('.uni-floor')||{}).textContent") === 'Floor 4'
-      || 'the chip did not follow the floor';
+    return chip() === 'Floor 4' || 'the chip did not follow the floor';
   });
   check('[sheet] every block heading shares one class a pack can style', () => {
     ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");

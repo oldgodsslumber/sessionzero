@@ -89,9 +89,12 @@ function renderSysSheet(){
   h+=`<button class="btn btn-secondary btn-xs" onclick="exportJSON()" title="Download this ${esc(lex('hero'))} as JSON">Export</button>`;
   h+=`<button class="btn btn-secondary btn-xs" onclick="sysNewCharacter()" title="Start a new ${esc(lex('hero'))}">New</button>`;
   h+=`</div></div>`;
-  // The character's own floor, not the table's. A Level 1 crawler starting on
-  // the First Floor read "Floor 3" here, because this took the session default.
-  const shownFloor=(ch&&ch.floor!==undefined&&ch.floor!==null)?ch.floor:(S.floor||3);
+  // Where the table is NOW, falling back to the floor this character was built
+  // for. It used to be the other way round, to stop a Level 1 crawler being
+  // labelled "Floor 3" by a stale session default — but the session floor is
+  // set at the end of creation and steppable from the bar now, so it is the
+  // truthful answer and it follows the party down.
+  const shownFloor=(S&&S.floor)||((ch&&ch.floor!==undefined&&ch.floor!==null)?ch.floor:3);
   h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${esc(String(shownFloor))}</div>`;
   h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
   ids.forEach(f=>{

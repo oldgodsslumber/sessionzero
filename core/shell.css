@@ -59,8 +59,14 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .trk-slot.is-spent{border-color:var(--border);background:var(--surface);opacity:.4}
 .trk-v{font-weight:700;font-size:14px;color:var(--accent)}
 .trk-slot.is-spent .trk-v{color:var(--muted)}
-.uni-floor{font-family:var(--font-label);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--blue);border-left:1px solid var(--border);margin-left:8px;padding-left:8px;white-space:nowrap}
+.uni-floor{display:inline-flex;align-items:center;gap:4px;border-left:1px solid var(--border);
+  margin-left:8px;padding-left:8px;white-space:nowrap}
+.uni-fnum{font-family:var(--font-label);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--blue);min-width:52px;text-align:center}
+.uni-fbtn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:var(--radius-btn);width:20px;height:20px;line-height:1;cursor:pointer;
+  font-size:13px;display:flex;align-items:center;justify-content:center;padding:0}
+.uni-fbtn:hover{color:var(--accent);border-color:var(--accent)}
 /* Creation wizard. The rung strip reads as a descent: steps behind you are
    solid and clickable, the one you are on is lit, the rest are unlit. */
 .wiz-title{font-family:var(--font-title);font-size:22px;color:var(--accent);letter-spacing:.3px}

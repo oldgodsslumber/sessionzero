@@ -430,7 +430,34 @@ function _uniFloorHTML(){
   if(!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))return '';
   const f=(S&&S.floor);
   if(f===undefined||f===null)return '';
-  return `<span class="uni-floor">${esc(lexU('logBreak'))} ${esc(String(f))}</span>`;
+  // A stepper, not a label. The floor was written once at the end of creation
+  // and never again, yet it is the clock this whole game runs on: Mob DR is the
+  // floor number, salvage bands and pet Ranks follow it, and crawlers descend
+  // constantly. The bar is where it is shown, so it is where it changes.
+  // stopPropagation keeps a click off the universe manager underneath.
+  return `<span class="uni-floor">
+    <button class="uni-fbtn" title="Up a ${esc(lexL('logBreak'))}"
+      onclick="event.stopPropagation();sysFloorStep(-1)">&minus;</button>
+    <span class="uni-fnum">${esc(lexU('logBreak'))} ${esc(String(f))}</span>
+    <button class="uni-fbtn" title="Down a ${esc(lexL('logBreak'))}"
+      onclick="event.stopPropagation();sysFloorStep(1)">+</button>
+  </span>`;
+}
+
+// Descending is the normal direction, so + goes down a floor. Everything that
+// reads the floor is redrawn, which is most of the sheet.
+function sysFloorStep(delta){
+  if(!S)return;
+  const next=Math.max(1,(Number(S.floor)||1)+delta);
+  if(next===S.floor)return;
+  S.floor=next;
+  save();
+  if(typeof renderAll==='function')renderAll();
+  else{
+    if(typeof renderHero==='function')try{renderHero();}catch(e){}
+    if(typeof renderConflict==='function'&&document.getElementById('conflict-content'))try{renderConflict();}catch(e){}
+    if(typeof renderNPCs==='function'&&document.getElementById('npcs-content'))try{renderNPCs();}catch(e){}
+  }
 }
 function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New heroes join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
 function closeUniverseModal(){const m=document.getElementById('universe-modal');if(m)m.classList.remove('open','locked');}

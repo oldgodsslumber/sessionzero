@@ -193,7 +193,16 @@ function sweep(win, label) {
         try {
           w.eval('S=JSON.parse(' + JSON.stringify(seen) + ');');
           w.eval('showTab(' + JSON.stringify(tabName) + ')');
-          w.eval(expr);
+          // Click the element rather than evaluating its handler text: a real
+          // click supplies `event`, which inline handlers legitimately use.
+          const hit = w.eval(`(function(){
+            var els=document.querySelectorAll('#page-' + ${JSON.stringify(tabName)} + ' [onclick]');
+            for(var i=0;i<els.length;i++){
+              if((els[i].getAttribute('onclick')||'').trim()===${JSON.stringify(expr)}){els[i].click();return 1}
+            }
+            return 0;
+          })()`);
+          if (!hit) w.eval(expr);
         } catch (e) {
           broken.push(expr.slice(0, 46) + ' -> ' + e.message);
         }
