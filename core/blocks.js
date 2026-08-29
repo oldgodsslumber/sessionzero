@@ -9,7 +9,7 @@
 // bug, and a vocabulary that repeated the pattern would multiply it across every
 // system. Call blockRepaint(id) after mutating state, not a full sheet render.
 //
-// Implemented so far: traitGrid, track, pool, readout, skillList, inventory,
+// Implemented so far: traitGrid, track, pool, tally, readout, skillList, inventory,
 // entityList.
 // Still to come: textList, catalogItems, groups, variants, richText,
 // statusEffects, progression.
@@ -321,7 +321,86 @@ function trackHeal(id, slots) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// pool — a current/max resource (Mana, AI Favor, Popularity, Gold).
+// tally — a quantity that gets large.
+//
+// A pool with plus and minus buttons is right for Mana or AI Favor, where the
+// numbers are small and every single point is a decision. It is useless for
+// money: the book prices an Engineering Table at 2,000 gold and a Sapper's
+// Table at 3,000, and prints a reward of 250,000. Nobody is clicking a ticker
+// a quarter of a million times.
+//
+// So: a grouped readout, an amount box with gained/spent, and a way to type the
+// exact figure when it needs correcting. What actually happens at a table is
+// "we found 2d8" or "that costs 2,000", which is an adjustment — so that is the
+// control nearest to hand, and the absolute set sits quieter underneath.
+// ════════════════════════════════════════════════════════════════════════════
+registerBlockType('tally', {
+  init(block) { return { current: block.start || 0 }; },
+  render(ctx) {
+    const b = ctx.block, d = ctx.data;
+    const id = esc(b.id);
+    return `<div class="card">
+      <div class="blk-title">${esc(b.label || b.id)}</div>
+      ${b.hint ? `<div class="tal-hint">${esc(b.hint)}</div>` : ''}
+      <div class="tal-n" id="tal-n-${id}">${esc(tallyFormat(d.current))}</div>
+      <div class="tal-row">
+        <input id="tal-adj-${id}" type="number" min="0" step="1" placeholder="amount"
+               onkeydown="if(event.key==='Enter')tallyAdjust('${id}',1)">
+        <button class="btn btn-primary btn-xs" onclick="tallyAdjust('${id}',1)">Gained</button>
+        <button class="btn btn-secondary btn-xs" onclick="tallyAdjust('${id}',-1)">Spent</button>
+      </div>
+      <div class="tal-row tal-set">
+        <input id="tal-set-${id}" type="number" min="0" step="1" placeholder="or set the exact total">
+        <button class="btn btn-secondary btn-xs" onclick="tallySet('${id}')">Set</button>
+      </div>
+    </div>`;
+  },
+});
+
+// Grouped in threes so six figures can be read at a glance rather than counted.
+function tallyFormat(n) {
+  const v = Math.max(0, Math.round(Number(n) || 0));
+  return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Never below zero: you cannot owe the System money, and a negative total is a
+// typo every time.
+function tallyWrite(id, value) {
+  const char = S && S.char; if (!char) return;
+  const block = sysBlock(id); if (!block) return;
+  const ctx = blockCtx(block, char);
+  ctx.data.current = Math.max(0, Math.round(Number(value) || 0));
+  save();
+  // Only the readout changed. Repainting the whole block would wipe the boxes
+  // the player is mid-way through typing in.
+  const el = document.getElementById('tal-n-' + id);
+  if (el) el.textContent = tallyFormat(ctx.data.current);
+  (block.affects || []).forEach(function (other) {
+    if (!blockHoldsFocus(other)) blockRepaint(other);
+  });
+}
+
+function tallyAdjust(id, sign) {
+  const char = S && S.char; if (!char) return;
+  const block = sysBlock(id); if (!block) return;
+  const inp = document.getElementById('tal-adj-' + id);
+  const amount = Math.abs(Math.round(Number(inp && inp.value) || 0));
+  if (!amount) return;
+  const cur = Number(blockCtx(block, char).data.current) || 0;
+  tallyWrite(id, cur + sign * amount);
+  if (inp) inp.value = '';
+}
+
+function tallySet(id) {
+  const inp = document.getElementById('tal-set-' + id);
+  if (!inp || String(inp.value).trim() === '') return;
+  tallyWrite(id, inp.value);
+  inp.value = '';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// pool — a small current/max resource (Mana, AI Favor, Popularity).
+// For anything that reaches four figures, use `tally` — see above.
 // `max` may be a literal, a derive reference, or absent for an open-ended count.
 // ════════════════════════════════════════════════════════════════════════════
 registerBlockType('pool', {

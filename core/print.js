@@ -475,6 +475,13 @@ function prBlockRows(block, ctx) {
   } else if (block.type === 'pool') {
     const max = block.max === undefined ? null : val(block.max);
     rows.push([block.label || block.id, (d.current || 0) + (max === null ? '' : ' / ' + max), '']);
+  } else if (block.type === 'tally') {
+    // A printed sheet has no buttons, so it gets the current figure and a ruled
+    // space to cross it out and write the new one — which is what a paper
+    // sheet is for once the gold starts moving in thousands.
+    rows.push([block.label || block.id,
+               (typeof tallyFormat === 'function' ? tallyFormat(d.current) : String(d.current || 0)),
+               '…………………']);
   } else if (block.type === 'readout') {
     (block.items || []).forEach(function (it) {
       rows.push([it.label, String(blockValue(it.value, ctx, '')), '']);

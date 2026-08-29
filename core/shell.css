@@ -112,6 +112,14 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .npc-derived span{font-family:var(--font-label);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);flex:1 1 auto}
 .npc-derived strong{font-size:16px;font-weight:700;color:var(--accent)}
 .npc-derived em{font-style:normal;font-size:10px;color:var(--muted);flex:1 1 100%}
+.tal-hint{font-size:11px;color:var(--muted);margin-bottom:8px}
+.tal-n{font-size:32px;font-weight:800;color:var(--accent);line-height:1.05;margin-bottom:10px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.tal-row{display:flex;gap:6px;align-items:center}
+.tal-row+.tal-row{margin-top:6px}
+.tal-row input{flex:1 1 90px;min-width:0}
+.tal-set{opacity:.7}
+.tal-set input{font-size:11px}
 .inv-stat{display:block;font-size:10px;color:var(--blue);font-family:var(--font-label);letter-spacing:.02em;margin-top:1px}
 .inv-ctl{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}
 .inv-slot{display:flex;gap:8px;align-items:flex-start;padding:3px 0}

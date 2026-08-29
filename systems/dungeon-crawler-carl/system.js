@@ -270,7 +270,11 @@ registerSystem({
       },
       { id: 'aiFavor',    type: 'pool', label: 'AI Favor',   hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
       { id: 'popularity', type: 'pool', label: 'Popularity', hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
-      { id: 'gold',       type: 'pool', label: 'Gold',       hint: 'All of it fits in one Inventory slot.' },
+      // Not a pool. The book prices a Sapper's Table at 3,000 gold and hands out
+      // a 250,000 reward; two buttons that step by one do not reach those
+      // numbers. See the `tally` block type.
+      { id: 'gold', type: 'tally', label: 'Gold',
+        hint: 'All of it fits in one Inventory slot, however much of it there is.' },
     ],
   },
 

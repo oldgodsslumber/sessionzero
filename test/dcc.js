@@ -189,6 +189,89 @@ function boot(entry) {
   ev("for(let i=0;i<50;i++)poolAdj('mana',-1)");
   eq(ev('S.char.blocks.mana.current'), 0, '[pool] never goes below zero');
 
+  // ── gold is not a pool ───────────────────────────────────────────────────
+  // It was declared as one, which meant two buttons stepping by a single coin.
+  // The book prices a Sapper's Table at 3,000 gold and hands out a reward of
+  // 250,000; that is a quarter of a million clicks.
+  const goldSheet = () => {
+    ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};");
+    ev("S.char.blocks.gold={current:0};renderHero();");
+  };
+  check('[gold] it is not a click-per-coin ticker', () => {
+    const type = ev("(sysBlock('gold')||{}).type");
+    return type === 'tally' || 'gold is still declared as a ' + JSON.stringify(type);
+  });
+  check('[gold] no plus/minus buttons on the block', () => {
+    goldSheet();
+    const html = ev("(document.getElementById('blk-gold')||{}).innerHTML||''");
+    if (!html) return 'the gold block did not render';
+    return html.indexOf('poolAdj') < 0 || 'the block still calls poolAdj';
+  });
+  check('[gold] six figures arrive in one go', () => {
+    // "250,000 gold" is a printed reward, not a hypothetical.
+    goldSheet();
+    ev("document.getElementById('tal-adj-gold').value='250000';tallyAdjust('gold',1);");
+    return ev('S.char.blocks.gold.current') === 250000
+      || 'the total is ' + ev('S.char.blocks.gold.current');
+  });
+  check('[gold] spending a table price subtracts it', () => {
+    ev("document.getElementById('tal-adj-gold').value='3000';tallyAdjust('gold',-1);");
+    return ev('S.char.blocks.gold.current') === 247000
+      || 'the total is ' + ev('S.char.blocks.gold.current');
+  });
+  check('[gold] the readout groups the digits', () => {
+    const txt = ev("(document.getElementById('tal-n-gold')||{}).textContent||''");
+    return txt === '247,000' || 'the readout reads ' + JSON.stringify(txt);
+  });
+  check('[gold] the amount box empties after it is applied', () => {
+    // Otherwise the next click spends it a second time.
+    return ev("document.getElementById('tal-adj-gold').value") === ''
+      || 'the box still holds ' + JSON.stringify(ev("document.getElementById('tal-adj-gold').value"));
+  });
+  check('[gold] setting an exact total replaces it rather than adding', () => {
+    ev("document.getElementById('tal-set-gold').value='412';tallySet('gold');");
+    return ev('S.char.blocks.gold.current') === 412
+      || 'the total is ' + ev('S.char.blocks.gold.current');
+  });
+  check('[gold] it cannot go negative', () => {
+    // You cannot owe the System money.
+    ev("document.getElementById('tal-adj-gold').value='99999';tallyAdjust('gold',-1);");
+    return ev('S.char.blocks.gold.current') === 0
+      || 'the total is ' + ev('S.char.blocks.gold.current');
+  });
+  check('[gold] an empty amount box does nothing', () => {
+    goldSheet();ev("S.char.blocks.gold={current:75};renderHero();");
+    ev("tallyAdjust('gold',1);tallySet('gold');");
+    return ev('S.char.blocks.gold.current') === 75
+      || 'an empty box changed it to ' + ev('S.char.blocks.gold.current');
+  });
+  check('[gold] typing an amount does not repaint the box out from under you', () => {
+    // The whole reason the readout is updated by hand instead of by repaint.
+    goldSheet();ev("S.char.blocks.gold={current:1};renderHero();");
+    ev("document.getElementById('tal-adj-gold').focus();" +
+       "document.getElementById('tal-adj-gold').value='500';tallyAdjust('gold',1);");
+    const live = ev("document.activeElement && document.activeElement.id");
+    return live === 'tal-adj-gold' || 'focus jumped to ' + JSON.stringify(live);
+  });
+  check('[gold] it survives a save and reload', () => {
+    ev("S.char.blocks.gold={current:186420};save();");
+    const raw = JSON.parse(ev("JSON.stringify(JSON.parse(localStorage.getItem(sysKey('scratch'))).char.blocks.gold)") || 'null');
+    return (raw && raw.current === 186420) || 'the saved value is ' + JSON.stringify(raw);
+  });
+  check('[gold] the printed sheet shows the grouped figure, not a bare count', () => {
+    ev("S.char.blocks.gold={current:186420};");
+    const html = ev("prBlockSheetHTML(S.char)");
+    return html.indexOf('186,420') >= 0 || 'the print sheet does not carry the grouped total';
+  });
+  check('[tally] formatting groups from the right and leaves small numbers alone', () => {
+    const f = n => ev('tallyFormat(' + n + ')');
+    const cases = [[0, '0'], [7, '7'], [999, '999'], [1000, '1,000'],
+                   [25000, '25,000'], [250000, '250,000'], [1234567, '1,234,567']];
+    for (const [n, want] of cases) if (f(n) !== want) return n + ' formatted as ' + f(n);
+    return true;
+  });
+
   // ── dice engine ──────────────────────────────────────────────────────────
   check('[dice] a plain roll is one d20 in 1..20', () => {
     for (let i = 0; i < 300; i++) {
