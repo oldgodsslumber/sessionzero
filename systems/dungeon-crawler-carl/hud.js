@@ -192,6 +192,30 @@ function dccHudIsAttack(s, cat) {
   return s.checkType === 'evade';
 }
 
+// What is actually in your hands. Only the Gear Slots count — "only what is in
+// a Gear Slot gives you anything" (p. 112) — so a weapon in the Hotlist is
+// reachable in one Action but is not what you are holding this second.
+function dccHeldWeapons(char) {
+  const b = (typeof sysBlock === 'function') ? sysBlock('gear') : null;
+  const d = (char && char.blocks && char.blocks.gear) || {};
+  const out = [];
+  ((b && b.containers) || []).filter(function (c) { return c.kind === 'slots'; })
+    .forEach(function (c) {
+      const held = d[c.id] || {};
+      Object.keys(held).forEach(function (sl) {
+        (held[sl] || []).forEach(function (it) {
+          if (!it) return;
+          const name = it.skill || it.grantsSkill;
+          if (!name) return;
+          const cat = dccSkillByName(name);
+          if (cat && cat.kind !== 'attack') return;
+          out.push({ skill: cat ? cat.name : name, item: it, cat: cat });
+        });
+      });
+    });
+  return out;
+}
+
 function dccHudActions(char, blockId) {
   const spells = blockId === 'spells';
   const list = ((char.blocks && char.blocks[blockId] && char.blocks[blockId].skills) || [])
@@ -199,8 +223,29 @@ function dccHudActions(char, blockId) {
   const look = spells ? dccSpellByName : dccSkillByName;
   let rows = list.map(function (s) { return { s: s, cat: look(s.name) }; });
   if (!spells) rows = rows.filter(function (r) { return dccHudIsAttack(r.s, r.cat); });
-  // Attack Spells first — mid-fight the healing ones are the exception.
+
+  // The weapon in your hand belongs at the top of the Attacks list, and belongs
+  // there even when you have no Ranks in it — a Skill may be attempted untrained
+  // (p. 174), which is exactly what picking up somebody else's bow means.
+  //
+  // Without this the section was a list of Skills rather than a list of what you
+  // can attack with right now: a crawler holding a Bow they had no Ranks in saw
+  // their Handgun sitting at the top as though it were the live weapon.
+  if (!spells) {
+    dccHeldWeapons(char).forEach(function (h) {
+      const key = h.skill.toLowerCase();
+      const owned = rows.find(function (r) { return r.s.name.toLowerCase() === key; });
+      if (owned) { owned.held = h.item; return; }
+      rows.push({
+        s: { name: h.skill, rank: 0, stat: h.cat ? h.cat.stat : '', checkType: 'evade', untrained: true },
+        cat: h.cat, held: h.item,
+      });
+    });
+  }
+
   rows.sort(function (a, z) {
+    // In hand first, then attack Spells before the healing ones.
+    if (!!a.held !== !!z.held) return a.held ? -1 : 1;
     const ak = (a.cat && a.cat.kind === 'attack') ? 0 : 1;
     const zk = (z.cat && z.cat.kind === 'attack') ? 0 : 1;
     return ak - zk || a.s.name.localeCompare(z.s.name);
@@ -213,11 +258,11 @@ function dccHudActions(char, blockId) {
       '</div>';
     return h + '</div>';
   }
-  rows.forEach(function (r) { h += dccHudCard(char, r.s, r.cat, spells); });
+  rows.forEach(function (r) { h += dccHudCard(char, r.s, r.cat, spells, r.held); });
   return h + '</div>';
 }
 
-function dccHudCard(char, s, cat, spells) {
+function dccHudCard(char, s, cat, spells, held) {
   const rank = s.rank || 0;
   const stat = s.stat || (spells ? 'INT' : '');
   const statMod = stat ? dccModOf(char, stat) : 0;
@@ -230,13 +275,21 @@ function dccHudCard(char, s, cat, spells) {
   const ups = dccHudUpgrades(char, s.name);
   const gate = spells ? dccHudHotlistGate(char, s.name) : '';
 
-  const ico = dccAttackIcon(char, s);
+  // The thing in your hand supplies the picture when there is one.
+  const ico = (held && held.icon) || dccAttackIcon(char, s);
 
-  let h = '<div class="hud-act">' +
+  let h = '<div class="hud-act' + (held ? ' is-held' : '') + '">' +
     (ico ? '<div class="hud-act-ico">' + iconHTML(ico) + '</div>' : '') +
     '<div class="hud-act-body">' +
     '<div class="hud-act-top">' +
-    '<div class="hud-act-name">' + esc(s.name) + '</div>' +
+    '<div class="hud-act-name">' + esc(s.name) +
+    // Which weapon this actually is, when it is not simply named after the
+    // Skill — "Ol Betsy" tells you more than "Handgun" does.
+    (held && String(held.name || '').toLowerCase() !== String(s.name).toLowerCase()
+      ? ' <span class="hud-act-of">' + esc(held.name) + '</span>' : '') +
+    (held ? ' <span class="hud-held">in hand</span>' : '') +
+    (s.untrained ? ' <span class="hud-untrained">untrained</span>' : '') +
+    '</div>' +
     '<button class="btn btn-primary btn-xs" onclick="dccHudRoll(' + dccHudArg(s.name) + ')">\u{1F3B2} Roll</button>' +
     '</div>' +
     '<div class="hud-act-nums">' +

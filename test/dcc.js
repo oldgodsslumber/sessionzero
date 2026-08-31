@@ -3727,11 +3727,14 @@ function boot(entry) {
   // One card, not the whole screen. Searching the HUD's full text for "to hit"
   // passes whenever ANY card has it, which made the first version of the
   // healing-Spell check unfalsifiable — it stayed green with the bug put back.
+  // The Skill name is the LEADING TEXT NODE of .hud-act-name; a held weapon adds
+  // badge spans after it ("Ol Betsy", "in hand", "untrained"), so matching the
+  // element's whole textContent finds nothing.
   function hudCard(name, sel) {
     return ev("(function(){var c=[].slice.call(" +
       "document.querySelectorAll('#hud-content .hud-act')).find(function(x){" +
       "var n=x.querySelector('.hud-act-name');" +
-      "return n&&n.textContent.trim()===" + JSON.stringify(name) + "});" +
+      "return n&&n.firstChild&&n.firstChild.textContent.trim()===" + JSON.stringify(name) + "});" +
       "if(!c)return null;" +
       (sel ? "var m=c.querySelector(" + JSON.stringify(sel) + ");return m?m.textContent.trim():'';"
            : "return c.textContent.replace(/\\s+/g,' ').trim();") + "})()");
@@ -3770,7 +3773,7 @@ function boot(entry) {
     return ev("(function(){var c=[].slice.call(" +
       "document.querySelectorAll('#hud-content .hud-act')).find(function(x){" +
       "var n=x.querySelector('.hud-act-name');" +
-      "return n&&n.textContent.trim()===" + JSON.stringify(name) + "});" +
+      "return n&&n.firstChild&&n.firstChild.textContent.trim()===" + JSON.stringify(name) + "});" +
       "if(!c)return null;var i=c.querySelector('.hud-act-ico .pw-icon');" +
       // iconUrl() encodes the id but not the path separator, so the mask reads
       // .../game-icons%3Awood-club.svg — decode it back to the stored value.
@@ -3810,6 +3813,72 @@ function boot(entry) {
       const got = gunIcon(c[1]);
       return got === 'game-icons:pistol-gun' || 'the card shows ' + JSON.stringify(got);
     });
+  });
+
+  // Reported from the app: "my character has the asshole's bow equipped. Do you
+  // know what it shows on the HUD? It shows the handgun as the active attack."
+  // The Attacks section was a list of SKILLS, so a weapon you were holding but
+  // had no Ranks in produced no card at all, and a Handgun you did have Ranks in
+  // sat at the top looking like the live weapon.
+  function heldScene() {
+    hudSheet([{ name: 'Handgun', rank: 5, stat: 'DEX', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.hotlist=[{name:'Handgun',icon:'game-icons:pistol-gun',qty:1}];" +
+       "S.char.blocks.gear.equipped={hands:[{name:\"The Asshole's Bow\",skill:'Bow'," +
+       "icon:'game-icons:crossbow'}]};save();renderHUD();");
+    return ev("[].slice.call(document.querySelectorAll('#hud-content .hud-act-name'))" +
+      ".map(function(n){return n.textContent.replace(/\\s+/g,' ').trim()})");
+  }
+
+  check('[hud] the weapon in your hand leads the Attacks list', () => {
+    const names = heldScene();
+    return /^Bow\b/.test(names[0] || '') ||
+      'the list reads ' + JSON.stringify(names);
+  });
+
+  check('[hud] a weapon you have no Ranks in still gets a card', () => {
+    heldScene();
+    // A Skill may be attempted untrained (p. 174) — which is what picking up
+    // somebody else's bow is.
+    const hit = hudCard('Bow', '.hud-hit');
+    if (hit === null) return 'no Bow card at all — the held weapon produced nothing';
+    return hit === '+0' || 'the Bow card reads ' + JSON.stringify(hit) + ', expected +0';
+  });
+
+  check('[hud] the held weapon says whose it is and that it is untrained', () => {
+    const names = heldScene();
+    const first = names[0] || '';
+    if (first.indexOf("The Asshole's Bow") < 0) return 'the card does not name the weapon: ' + first;
+    if (first.indexOf('in hand') < 0) return 'the card is not marked in hand: ' + first;
+    return first.indexOf('untrained') >= 0 || 'no untrained mark: ' + first;
+  });
+
+  check('[hud] the held weapon supplies the card’s icon', () => {
+    heldScene();
+    return hudCardIcon('Bow') === 'game-icons:crossbow'
+      || 'the Bow card shows ' + JSON.stringify(hudCardIcon('Bow'));
+  });
+
+  // The player's own words: "I don't think it understands that the Hotlist is
+  // inventory and not the thing that is actually equipped." Only a Gear Slot
+  // counts — "only what is in a Gear Slot gives you anything" (p. 112).
+  check('[hud] a weapon in the Hotlist is not treated as in hand', () => {
+    const names = heldScene();
+    const gun = names.find(function (n) { return /^Handgun\b/.test(n); });
+    if (!gun) return 'the Handgun card vanished: ' + JSON.stringify(names);
+    return gun.indexOf('in hand') < 0 ||
+      'the Hotlist Handgun is marked in hand: ' + JSON.stringify(gun);
+  });
+
+  check('[hud] holding a weapon you DO have Ranks in marks it, not duplicates it', () => {
+    hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Club',skill:'Club'}]};save();renderHUD();");
+    const names = ev("[].slice.call(document.querySelectorAll('#hud-content .hud-act-name'))" +
+      ".map(function(n){return n.textContent.replace(/\\s+/g,' ').trim()})");
+    const clubs = names.filter(function (n) { return /^Club\b/.test(n); });
+    if (clubs.length !== 1) return 'expected one Club card, got ' + JSON.stringify(clubs);
+    if (clubs[0].indexOf('in hand') < 0) return 'the Club is not marked in hand: ' + clubs[0];
+    // It keeps its real Rank rather than dropping to the untrained pseudo-entry.
+    return hudCard('Club', '.hud-hit') !== '+0' || 'the held Club lost its Ranks';
   });
 
   check('[hud] the weapon you are holding beats the one in your bag', () => {
