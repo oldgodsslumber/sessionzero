@@ -40,34 +40,44 @@ function blockCtx(block, char) {
   };
 }
 
-function blockElId(id) { return 'blk-' + id; }
+// A block can be on screen more than once: the Health Bar is block two of the
+// crawler sheet AND the first thing on the HUD. The id stays unique per mount
+// so nothing is duplicated, and every lookup goes through the data attribute so
+// a repaint reaches all of them. Taking damage on one screen and leaving the
+// other showing stale hit points is the bug this shape exists to prevent.
+function blockElId(id, mount) { return (mount ? mount + '-' : '') + 'blk-' + id; }
+function blockMounts(id) {
+  return [].slice.call(document.querySelectorAll('[data-blk="' + id + '"]'));
+}
 
 // Render one block into its own wrapper.
-function renderBlock(block, char) {
+function renderBlock(block, char, mount) {
   const t = BLOCK_TYPES[block.type];
   const inner = block.render ? block.render(blockCtx(block, char))
               : t ? t.render(blockCtx(block, char))
               : `<div class="card"><div class="label">${esc(block.id)}</div>
                  <div style="font-size:12px;color:var(--muted)">No renderer for block type
                  "${esc(block.type || 'none')}" yet.</div></div>`;
-  return `<div id="${blockElId(block.id)}" class="blk">${inner}</div>`;
+  return `<div id="${blockElId(block.id, mount)}" class="blk" data-blk="${esc(block.id)}">${inner}</div>`;
 }
 
-// Re-render a single block in place. This is the whole point of the layer.
+// Re-render a block in place, on every screen currently showing it.
 function blockRepaint(id) {
   if (!SYS) return;
   const block = sysBlock(id);
-  const el = document.getElementById(blockElId(id));
-  if (!block || !el) return;
+  const mounts = blockMounts(id);
+  if (!block || !mounts.length) return;
   const char = (typeof S !== 'undefined' && S) ? S.char : null;
   if (!char) return;
   const t = BLOCK_TYPES[block.type];
-  el.innerHTML = block.render ? block.render(blockCtx(block, char))
-               : t ? t.render(blockCtx(block, char)) : '';
+  const html = block.render ? block.render(blockCtx(block, char))
+             : t ? t.render(blockCtx(block, char)) : '';
+  mounts.forEach(function (el) { el.innerHTML = html; });
 }
 
-// Render every declared block, in order.
-function renderBlockSheet(char, targetEl) {
+// Render every declared block, in order. `mount` namespaces the wrapper ids so
+// a second screen showing the same blocks does not collide with the sheet.
+function renderBlockSheet(char, targetEl, mount) {
   const el = typeof targetEl === 'string' ? document.getElementById(targetEl) : targetEl;
   if (!el || !SYS) return;
   const blocks = (SYS.schema && SYS.schema.blocks) || [];
@@ -77,7 +87,7 @@ function renderBlockSheet(char, targetEl) {
   // Now the rest of the sheet survives and the broken block says what happened.
   el.innerHTML = blocks.map(function (b) {
     try {
-      return renderBlock(b, char);
+      return renderBlock(b, char, mount);
     } catch (e) {
       return '<div class="card" style="border-color:var(--red)">' +
         '<div class="label mb-1" style="color:var(--red)">' + esc(b.label || b.id) +
@@ -206,12 +216,13 @@ function traitSet(blockId, traitId, layer, v) {
 }
 
 // Is the caret inside this block right now? Repainting it would take the
-// element out from under the player mid-keystroke.
+// element out from under the player mid-keystroke. True if ANY mount holds it:
+// the repaint is all-or-nothing, so one screen being typed into protects the
+// other as well rather than letting them fall out of step.
 function blockHoldsFocus(id) {
-  const el = document.getElementById('blk-' + id);
   const a = document.activeElement;
-  if (!el || !a || a === document.body) return false;
-  return el.contains(a);
+  if (!a || a === document.body) return false;
+  return blockMounts(id).some(function (el) { return el.contains(a); });
 }
 
 // On blur, redraw the grid once so anything else it shows is normalised.
@@ -464,7 +475,19 @@ registerBlockType('readout', {
 // (DCC RPG p. 169). The mark is the mechanic, so it is part of the block rather
 // than a note. Generic enough for any system with use-based advancement: the
 // pack supplies the cadence text and the advancement roll.
+//
+// A row also loads itself into the roller. Reading a Skill and rolling it are
+// the same motion at the table, and splitting them across a sheet and a tab was
+// how a whole game shipped with nowhere to roll. Nothing is offered to a pack
+// with no dice contract, and a passive Skill is not something you roll.
 // ════════════════════════════════════════════════════════════════════════════
+function skillRollBtn(s) {
+  if (typeof rollSurfaces !== 'function' || rollSurfaces() !== 'sys') return '';
+  if (s && s.passive) return '<span style="width:26px"></span>';
+  return '<button class="btn btn-secondary btn-xs" style="padding:3px 6px" title="Load into the roller"' +
+    ' onclick="sysLoadRoll(&#39;' + esc(String(s.name).replace(/'/g, "\\'")) + '&#39;)">\u{1F3B2}</button>';
+}
+
 registerBlockType('skillList', {
   init() { return { skills: [] }; },
   render(ctx) {
@@ -526,6 +549,7 @@ registerBlockType('skillList', {
         <div class="num" style="min-width:34px;text-align:center;font-weight:700"
              title="Rank. Skills advance from use, not by hand.">${s.rank || 0}</div>
         <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
+        ${skillRollBtn(s)}
         ${skillIsYours(s)
           ? `<button class="btn btn-secondary btn-xs" title="Remove this ${esc(b.label || 'entry')} — you added it yourself" onclick="skillDel('${esc(b.id)}',${i})">✕</button>`
           : `<span style="width:24px" title="This came from character creation, so it is part of who you are rather than something to delete"></span>`}

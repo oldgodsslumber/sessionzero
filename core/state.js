@@ -251,7 +251,7 @@ function save(){
   S.npcs=_n;
   if(_bound)saveUniverses();
   if(okay)flashSaved();
-  hudBroadcast();
+  secondScreenPush();
 }
 function loadSave(id){
   currentSaveId=id;
@@ -607,7 +607,8 @@ function showTab(id){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   const nb=document.getElementById('nb-'+id);if(nb)nb.classList.add('active');
-  if(id==='hero')renderHero();if(id==='npcs')renderNPCs();if(id==='map')renderMap();
+  if(id==='hero')renderHero();if(id==='hud')renderHUD();
+  if(id==='npcs')renderNPCs();if(id==='map')renderMap();
   if(id==='dice')renderDice();if(id==='conflict')renderConflict();if(id==='notes')renderNotes();
   if(id==='wiki')renderWiki();if(id==='print')renderPrintCentre();
 }

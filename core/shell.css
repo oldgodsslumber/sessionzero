@@ -102,6 +102,18 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
   color:var(--blue);border:1px solid var(--border);border-radius:2px;padding:0 4px;margin-left:5px;font-weight:500}
 .sk-effect{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:2px;overflow-wrap:anywhere}
 .inv-slotno{width:20px;flex-shrink:0;font-size:10px;color:var(--muted)}
+/* HUD action cards — one attack or Spell, with the two numbers a round needs. */
+.hud-act{padding:8px 0;border-bottom:1px solid var(--border)}
+.hud-act:last-child{border-bottom:none}
+.hud-act-top{display:flex;align-items:center;gap:8px}
+.hud-act-name{flex:1;min-width:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}
+.hud-act-nums{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:2px}
+.hud-hit{font-size:22px;font-weight:900;color:var(--accent);font-family:var(--font-title);line-height:1}
+.hud-act-vs{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;
+  font-family:var(--font-label)}
+.hud-dmg{font-size:12px;font-weight:700;margin-left:auto;overflow-wrap:anywhere}
+.hud-act-meta{font-size:10.5px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.hud-gate{font-size:10.5px;color:var(--yellow);margin-top:3px}
 .inv-add{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .inv-add > input{flex:1 1 140px;min-width:0}
 .inv-add-opts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -397,8 +409,14 @@ select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:u
 /* Wiki took over the mobile nav slot the Theme button used to hold, so the
    swatches ride along at the bottom of the Wiki page on small screens. */
 .wiki-theme-strip{margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
-#nb-hud{display:none}
-#nb-dice{display:none}
+#nb-second{display:none}
+/* The Dice tab is hidden on a phone ONLY when the sheet is carrying a roller of
+   its own, which is what .has-sheet-roller says. It used to be hidden
+   unconditionally — true for Daring Comics, whose sheet draws the mobile bar,
+   and catastrophic for Dungeon Crawler Carl, whose sheet did not: there was no
+   way to roll a die at all below 700px. core/dice.js sets the class from the
+   DOM, so the rule can only fire when its premise holds. See DEBRIEF.md §4. */
+body.has-sheet-roller #nb-dice{display:none}
 /* Collating paper sheets is a desktop job — same gating as the HUD. */
 #nb-print{display:none}
 .pr-wrap{display:flex;gap:14px;align-items:flex-start}
@@ -437,13 +455,16 @@ select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:u
   body{margin-left:80px;max-width:900px;padding-bottom:16px}
   #theme-wrap{display:block!important;margin-top:auto}
   .wiki-theme-strip{display:none}
-  #nb-hud{display:flex!important}
+  #nb-second{display:flex!important}
   #nb-print{display:flex!important}
   #nb-dice{display:flex!important}
   #page-hero{display:none}
   #page-hero.active{display:flex!important;gap:20px;align-items:flex-start}
   #hero-main{flex:1;min-width:0}
   #hero-dice-sidebar{display:block!important;width:280px;position:sticky;top:16px;flex-shrink:0}
+  /* A pack with no roller reserved the column anyway, so its sheet was squeezed
+     by 280px of nothing. An empty container is not a harmless no-op. */
+  #hero-dice-sidebar:empty{display:none!important}
   #hero-dice-mobile{display:none!important}
 }
 

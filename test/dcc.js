@@ -1761,7 +1761,9 @@ function boot(entry) {
       "var d=[].slice.call(b.querySelectorAll('div'));" +
       "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length)" +
       "return d[i].parentElement.parentElement.textContent.replace(/\\s+/g,' ').trim()}return ''})()");
-    return /\+\d+\s*$/.test(total) || 'no total on the Bow row: ' + JSON.stringify(total);
+    // The total is still the last thing on the row apart from the roll control,
+    // which sits in the action column beside the remove button.
+    return /\+\d+\s*\u{1F3B2}?\s*$/u.test(total) || 'no total on the Bow row: ' + JSON.stringify(total);
   });
 
   // ── a gear change has to show up on the sheet ─
@@ -2660,9 +2662,11 @@ function boot(entry) {
   });
   check('[sheet] a spent track slot is marked as spent, not coloured inline', () => {
     // Inline styles cannot be themed. Health reads better as what is left.
+    // Scoped to the sheet: the Health Bar is also mounted on the HUD, so a
+    // document-wide count reads every slot twice once that tab has been opened.
     ev("S.char.blocks.health={marked:3};blockRepaint('health');");
-    const live = ev("document.querySelectorAll('.trk-slot:not(.is-spent)').length");
-    const spent = ev("document.querySelectorAll('.trk-slot.is-spent').length");
+    const live = ev("document.querySelectorAll('#sys-blocks .trk-slot:not(.is-spent)').length");
+    const spent = ev("document.querySelectorAll('#sys-blocks .trk-slot.is-spent').length");
     if (spent !== 3) return spent + ' slots marked spent, expected 3';
     return live > 0 || 'no live slots left to read';
   });
@@ -3681,9 +3685,9 @@ function boot(entry) {
 
   // ── every shared tab must survive a pack with none of Fate's fields ──────
   // The map crashed here first: heroMarker() read S.char.costumedName directly.
-  check('[tabs] all eight tabs render under a non-Fate pack', () => {
+  check('[tabs] all nine tabs render under a non-Fate pack', () => {
     const broke = [];
-    ['hero', 'npcs', 'map', 'dice', 'conflict', 'notes', 'print', 'wiki'].forEach(t => {
+    ['hero', 'hud', 'npcs', 'map', 'dice', 'conflict', 'notes', 'print', 'wiki'].forEach(t => {
       try { ev(`showTab('${t}')`); } catch (e) { broke.push(t + ': ' + e.message); }
     });
     return broke.length ? broke.join(' | ') : true;
@@ -3695,6 +3699,109 @@ function boot(entry) {
   check('[tabs] the marker falls back cleanly with no name at all', () => {
     ev("S.char.name='';");
     return ev('heroMarker()') === 'H' || 'got ' + ev('heroMarker()');
+  });
+
+  // ── the HUD, the crawler's fight screen ───────────────────────────────────
+  // Reachability lives in test/dice.js; these are the rules the cards state.
+  // Getting the maths wrong here is worse than not showing it, because a player
+  // reads a damage line mid-fight and does not go back to the book.
+  function hudSheet(skills, spells, hotlist) {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};" +
+       "S.char.blocks.stats={STR:{base:10,bonus:0},INT:{base:10,bonus:0}};" +
+       "S.char.blocks.skills={skills:" + JSON.stringify(skills || []) + "};" +
+       "S.char.blocks.spells={skills:" + JSON.stringify(spells || []) + "};" +
+       "S.char.blocks.gear=Object.assign(S.char.blocks.gear||{},{hotlist:" +
+       JSON.stringify(hotlist || []) + "});" +
+       "renderHero();showTab('hud');");
+    return ev("document.getElementById('hud-content').textContent.replace(/\\s+/g,' ')");
+  }
+  // One card, not the whole screen. Searching the HUD's full text for "to hit"
+  // passes whenever ANY card has it, which made the first version of the
+  // healing-Spell check unfalsifiable — it stayed green with the bug put back.
+  function hudCard(name, sel) {
+    return ev("(function(){var c=[].slice.call(" +
+      "document.querySelectorAll('#hud-content .hud-act')).find(function(x){" +
+      "var n=x.querySelector('.hud-act-name');" +
+      "return n&&n.textContent.trim()===" + JSON.stringify(name) + "});" +
+      "if(!c)return null;" +
+      (sel ? "var m=c.querySelector(" + JSON.stringify(sel) + ");return m?m.textContent.trim():'';"
+           : "return c.textContent.replace(/\\s+/g,' ').trim();") + "})()");
+  }
+
+  check('[hud] an attack card carries base damage AND the Rank dice', () => {
+    // Bow is 1d6 + STR Piercing (catalogue); Rank 7 adds +1d6 (Table 37, p. 176).
+    hudSheet([{ name: 'Bow', rank: 7, stat: 'DEX', checkType: 'evade' }]);
+    const dmg = hudCard('Bow', '.hud-dmg');
+    return dmg === '1d6 + STR Piercing ' + ev('dccRankDamage(7)')
+      || 'the Bow damage line reads ' + JSON.stringify(dmg);
+  });
+
+  check('[hud] to-hit is Rank plus the Stat Mod', () => {
+    hudSheet([{ name: 'Warhammer', rank: 7, stat: 'STR', checkType: 'evade' }]);
+    const mod = ev("SYS.derive.skillStatMod(S.char,'STR')");
+    const hit = hudCard('Warhammer', '.hud-hit');
+    return hit === '+' + (7 + mod)
+      || 'expected +' + (7 + mod) + ', the card shows ' + JSON.stringify(hit);
+  });
+
+  check('[hud] a Skill that is not an attack stays off the Attacks list', () => {
+    const t = hudSheet([{ name: 'Perception', rank: 5, stat: 'INT', checkType: 'unopposed' },
+                        { name: 'Warhammer', rank: 2, stat: 'STR', checkType: 'evade' }]);
+    return (t.indexOf('Warhammer') >= 0 && t.indexOf('Perception') < 0)
+      || 'the Attacks list reads: ' + JSON.stringify(t.slice(0, 300));
+  });
+
+  check('[hud] a healing Spell is not given damage dice', () => {
+    // Heal has a Rank like anything else, and dccRankDamage(1) is "+1" — printed
+    // under a healing Spell it read as though it hurt someone.
+    hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }], [{ name: 'Heal', qty: 1 }]);
+    const dmg = hudCard('Heal', '.hud-dmg');
+    if (dmg === null) return 'no Heal card on the HUD at all';
+    return dmg === '' || 'the Heal card carries a damage line: ' + JSON.stringify(dmg);
+  });
+
+  check('[hud] a healing Spell is cast, not aimed', () => {
+    hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }], [{ name: 'Heal', qty: 1 }]);
+    const vs = hudCard('Heal', '.hud-act-vs');
+    return vs === 'to cast' || 'the Heal card reads ' + JSON.stringify(vs);
+  });
+
+  check('[hud] a Spell out of the Hotlist says so', () => {
+    // "A Spell has to be in your Hotlist to cast it under pressure" has sat in
+    // the Spells block hint since the pack was written, enforced by nobody.
+    const out = hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }], []);
+    if (out.indexOf('Not in your Hotlist') < 0) return 'no warning when the Spell is not carried';
+    const carried = hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }], [{ name: 'Heal', qty: 1 }]);
+    return carried.indexOf('Not in your Hotlist') < 0
+      || 'warned about a Spell that IS in the Hotlist';
+  });
+
+  check('[hud] the Hotlist shows every slot, empty ones included', () => {
+    const t = hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 5 }]);
+    const slots = ev("document.querySelectorAll('#hud-content .inv-slotno').length");
+    return (slots === 10 && /1 of 10/.test(t))
+      || 'showed ' + slots + ' slots; header reads ' + JSON.stringify(t.slice(0, 160));
+  });
+
+  check('[hud] using an item from the Hotlist spends it on the sheet too', () => {
+    hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 5 }]);
+    ev('dccHudQty(0,-1)');
+    return ev('S.char.blocks.gear.hotlist[0].qty') === 4
+      || 'qty is ' + ev('S.char.blocks.gear.hotlist[0].qty');
+  });
+
+  check('[hud] a Spell name with an apostrophe does not break its card', () => {
+    // Wrasslin' would close the onclick string and take the rest of the card.
+    hudSheet([{ name: "Wrasslin'", rank: 3, stat: 'STR', checkType: 'evade' }]);
+    const btn = ev("(function(){var b=[].slice.call(" +
+      "document.querySelectorAll('#hud-content button'))" +
+      ".find(function(x){return /dccHudRoll/.test(x.getAttribute('onclick')||'')});" +
+      "return b?b.getAttribute('onclick'):''})()");
+    ev('S.dice=null');
+    ev("(function(){var b=[].slice.call(document.querySelectorAll('#hud-content button'))" +
+       ".find(function(x){return /dccHudRoll/.test(x.getAttribute('onclick')||'')});if(b)b.click()})()");
+    return ev("S.dice&&S.dice.skill") === "Wrasslin'"
+      || 'onclick was ' + JSON.stringify(btn) + ', rolled ' + JSON.stringify(ev('S.dice&&S.dice.skill'));
   });
 
   console.log('\nPASS ' + ok.length);

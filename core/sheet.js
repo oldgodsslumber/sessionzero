@@ -26,9 +26,9 @@ function renderSheet(){
   h+=`<div class="card"><div class="label mb-1">Consequences</div><div class="conseq-row"><div class="conseq-label">Mild (2)</div><div class="conseq-input"><input value="${esc(ch.consequences.mild)}" oninput="S.char.consequences.mild=this.value;save()" placeholder="\u2014"></div></div><div class="conseq-row"><div class="conseq-label">Moderate (4)</div><div class="conseq-input"><input value="${esc(ch.consequences.moderate)}" oninput="S.char.consequences.moderate=this.value;save()" placeholder="\u2014"></div></div><div class="conseq-row"><div class="conseq-label">Severe (6)</div><div class="conseq-input"><input value="${esc(ch.consequences.severe)}" oninput="S.char.consequences.severe=this.value;save()" placeholder="\u2014"></div></div>${_hcExtra(ch)}</div>`;
   // Skills
   // Quick roll toast area
-  h+=`<div id="quick-roll-toast" style="position:sticky;top:0;z-index:50"></div>`;
+  h+=rollToastHTML();
   // Mobile dice bar
-  h+=`<div id="hero-dice-mobile"><div class="dice-bar-toggle" onclick="document.getElementById('dice-bar-body').classList.toggle('open')"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:16px">&#127922;</span><span class="fw-700" style="font-size:13px;font-family:var(--font-label)">Dice Roller</span><span id="dm-loaded" style="font-size:10px;color:var(--accent)"></span></div><span class="text-muted" style="font-size:11px">tap to expand</span></div><div class="dice-bar-body" id="dice-bar-body"><div id="dm-loaded-info" style="margin-bottom:6px"></div><div style="display:flex;gap:6px;align-items:end"><div style="flex:1"><div class="label" style="margin-bottom:2px">Skill</div><select id="dm-sk" style="font-size:12px;padding:7px" onchange="_loadedPower='';updateLoadedInfo('m')"><option value="">— None —</option>${SKILLS.map(sk=>`<option value="${sk}">${sk} (+${ch?.skills?.[sk]||0})</option>`).join('')}</select></div><div style="width:50px"><div class="label" style="margin-bottom:2px">Mod</div><input type="number" id="dm-mod" value="0" style="font-size:12px;padding:7px"></div><div style="width:50px"><div class="label" style="margin-bottom:2px">TN</div><input type="number" id="dm-tn" value="0" style="font-size:12px;padding:7px"></div><button class="roll-btn" style="width:44px;height:44px;font-size:14px;flex-shrink:0" onclick="doMobileRoll()">ROLL</button></div></div></div>`;
+  h+=rollBarHTML();
   h+=`<div class="card"><div class="label mb-1">Skills <span class="text-muted" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">tap to load into roller</span></div>`;
   SKILLS.filter(sk=>(ch.skills[sk]||0)>0).sort((a,b)=>(ch.skills[b]||0)-(ch.skills[a]||0)).forEach(sk=>{h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);cursor:pointer" onclick="loadRoll('${sk}',0)"><div><span class="fw-700">${sk}</span><div style="font-size:10px;color:var(--muted);line-height:1.2">${SKILL_DESC[sk]||''}</div></div><span class="fw-700 text-accent" style="white-space:nowrap;margin-left:8px">${ladderName(ch.skills[sk])} (+${ch.skills[sk]})</span></div>`;});h+='</div>';
   // Forms (tabs)
@@ -71,9 +71,10 @@ function renderSheet(){
   h+=`<button onclick="printCharSheet()" style="width:100%;padding:11px;border-radius:var(--radius-btn);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-label)">Print Character Sheet</button>`;
   h+=`</div>`;
   document.getElementById('hero-sheet').innerHTML=h;
-  // Render dice panels
-  const diceHtml=buildDicePanel();
-  document.getElementById('hero-dice-sidebar').innerHTML=diceHtml;
+  // The sidebar lives outside #hero-sheet (#page-hero is a flex row), so it is
+  // filled once the sheet is in the DOM. Both sheet renderers reach it through
+  // the same shell call now.
+  renderRollSidebar();
 }
 function buildDicePanel(){
   const ch=S.char;

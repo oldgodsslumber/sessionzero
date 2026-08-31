@@ -31,6 +31,7 @@ function renderHero(){
     if((SYS.creation||[]).length&&!(S.char.creation&&S.char.creation.complete)){
       creation.style.display='block';sheet.style.display='none';
       renderWizard('hero-creation');
+      markRollSurfaces();
       return;
     }
     creation.style.display='none';sheet.style.display='block';
@@ -38,7 +39,7 @@ function renderHero(){
     return;
   }
   if(S.char){creation.style.display='none';sheet.style.display='block';renderSheet();}
-  else{creation.style.display='block';sheet.style.display='none';renderCreationStep();}
+  else{creation.style.display='block';sheet.style.display='none';renderCreationStep();markRollSurfaces();}
 }
 
 
@@ -111,9 +112,16 @@ function renderSysSheet(){
       &mdash; this sheet autosaves to its own scratch slot and never touches your ${esc(lex('saves'))}.</div>`;
   // A pack may have prose that no block type covers.
   if(typeof SYS.sheetExtra==='function'){try{h+=SYS.sheetExtra(ch)||'';}catch(e){}}
+  // The same three roll surfaces Daring Comics has always had. A block pack got
+  // none of them, and core/shell.css hides the Dice tab below 700px on the
+  // assumption that this bar is here instead — so on a phone there was no way
+  // to roll at all. See DEBRIEF.md.
+  h+=rollToastHTML();
+  h+=rollBarHTML();
   h+=`<div id="sys-blocks"></div>`;
   el.innerHTML=h;
   renderBlockSheet(ch,'sys-blocks');
+  renderRollSidebar();
 }
 function sysIdentitySet(field,v){
   if(!S.char)return;

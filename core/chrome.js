@@ -13,6 +13,9 @@ const SHELL_CHROME = `<nav id="nav">
   <button class="nb active" onclick="showTab('hero')" id="nb-hero">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Hero
   </button>
+  <button class="nb" onclick="showTab('hud')" id="nb-hud">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 5.6a5.5 5.5 0 0 0-7.8 0L12 6.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 22l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>HUD
+  </button>
   <button class="nb" onclick="showTab('npcs')" id="nb-npcs">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 2.7-5 6-5m4 0c3.3 0 6 2 6 5"/></svg>NPCs
   </button>
@@ -28,8 +31,8 @@ const SHELL_CHROME = `<nav id="nav">
   <button class="nb" onclick="showTab('notes')" id="nb-notes">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Notes
   </button>
-  <button class="nb" onclick="openHUD()" id="nb-hud">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>HUD
+  <button class="nb" onclick="openSecondScreen()" id="nb-second">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Screen
   </button>
   <button class="nb" onclick="showTab('print')" id="nb-print">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print
@@ -45,6 +48,7 @@ const SHELL_CHROME = `<nav id="nav">
      idea, which is every pack but one so far. -->
 <div id="floor-strip"></div>
 <div class="page active" id="page-hero"><div id="hero-main"><div id="hero-creation"></div><div id="hero-sheet" style="display:none"></div></div><div id="hero-dice-sidebar"></div></div>
+<div class="page" id="page-hud"><div id="hud-content"></div></div>
 <div class="page" id="page-npcs"><div id="npcs-content"></div></div>
 <div class="page" id="page-map"><div id="map-content"></div></div>
 <div class="page" id="page-dice"><div id="dice-content"></div></div>
@@ -69,6 +73,30 @@ function buildShellChrome() {
   while (host.firstChild) document.body.appendChild(host.firstChild);
   applySysFonts();
   renderThemeSwatches();
+  applyHudTab();
+}
+
+// The HUD tab is a pack's own play screen — what you need in front of you
+// mid-fight, rather than the whole sheet. The shell owns the nav slot and the
+// container and knows nothing else about it: a pack that declares no
+// renderHUD() has no tab at all, the same way a pack that declares no themes
+// gets no swatch row. The button is REMOVED rather than hidden, because .nb
+// carries display:flex and would win against [hidden] or an inline style.
+function applyHudTab() {
+  const btn = document.getElementById('nb-hud');
+  if (!btn) return;
+  if (!(SYS && typeof SYS.renderHUD === 'function')) btn.remove();
+}
+
+// Filled by the pack. Kept in the shell so showTab() has one thing to call and
+// a pack cannot end up owning a surface the shell cannot see — the mistake that
+// left Dungeon Crawler Carl with no dice roller. See DEBRIEF.md.
+function renderHUD() {
+  const el = document.getElementById('hud-content');
+  if (!el) return;
+  el.innerHTML = (SYS && typeof SYS.renderHUD === 'function')
+    ? (SYS.renderHUD(typeof S !== 'undefined' && S ? S.char : null) || '') : '';
+  if (typeof markRollSurfaces === 'function') markRollSurfaces();
 }
 
 // A pack asks for the web fonts its theme uses. The shell ships none, so a pack

@@ -284,6 +284,9 @@ registerSystem({
 
   creation: DCC_SCREENS,
   finishCreation: dccFinishCreation,
+  // The fight screen. Declaring this is what gives the pack a HUD tab at all;
+  // a pack that omits it has no such tab. See systems/…/hud.js.
+  renderHUD: dccRenderHUD,
   // Prose the block schema has nowhere to put: Race and Class benefits.
   sheetExtra: dccSheetTraits,
 

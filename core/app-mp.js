@@ -499,8 +499,11 @@
     };
 
     // Dice → shared feed, stamped with the HERO's name rather than the Google
-    // account, so the log reads as fiction.
-    ['doRoll','doSidebarRoll','doMobileRoll'].forEach(function(fn){
+    // account, so the log reads as fiction. sysRollSkill is the single choke
+    // point every pack roll goes through — the three roller surfaces and the
+    // HUD's attack cards all end up there — so wrapping it alone catches them
+    // all, and catches each roll exactly once.
+    ['doRoll','doSidebarRoll','doMobileRoll','sysRollSkill'].forEach(function(fn){
       const orig=window[fn];
       if(typeof orig!=='function')return;
       window[fn]=function(){

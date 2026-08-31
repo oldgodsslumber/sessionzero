@@ -10,6 +10,7 @@ const SUITES = [
   ['series', 'Universe series + first-run gate'],
   ['mp',     'Multiplayer: sync, GM secret isolation, collaboration'],
   ['dcc',    'Dungeon Crawler Carl: rules maths, blocks, system selection'],
+  ['dice',   'Dice: a roll control is reachable, at every width, in every pack'],
   ['rules',  'Database rules: GM boundary invariants, doc/file agreement'],
   ['focus',  'Focus + markup: no handler repaints its own input or breaks its own tag']
 ];
