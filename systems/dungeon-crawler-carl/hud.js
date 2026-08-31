@@ -273,25 +273,59 @@ function dccHudCard(char, s, cat, spells) {
   return h + '</div></div>';
 }
 
-// The picture on an attack card. The WEAPON's icon wins: an attack is the thing
-// in your hand, and a crawler who has given their Club an icon should see the
-// Club, not a generic Bashing Weapon glyph. Falls back to the Skill's own icon —
-// which is all a Spell or an unarmed attack has — and to nothing at all, in
-// which case the card renders exactly as it did before icons existed.
-function dccAttackIcon(char, s) {
-  const eq = (char.blocks && char.blocks.gear && char.blocks.gear.equipped) || {};
-  const want = String(s.name || '').toLowerCase();
-  let hit = '';
-  Object.keys(eq).forEach(function (slot) {
-    (eq[slot] || []).forEach(function (it) {
-      if (!it || !it.icon || hit) return;
-      // Either the item works as this Skill, or it lends it to you.
-      const asSkill = String(it.skill || '').toLowerCase();
-      const lends = String(it.grantsSkill || '').toLowerCase();
-      if (asSkill === want || lends === want) hit = it.icon;
-    });
+// Every item the crawler is carrying, wherever it lives, flagged with whether
+// it is actually worn or held. The gear block declares its own containers, so
+// this does not need to know that they are called equipped/hotlist/inventory.
+function dccGearItems(char) {
+  const b = (typeof sysBlock === 'function') ? sysBlock('gear') : null;
+  const d = (char && char.blocks && char.blocks.gear) || {};
+  const out = [];
+  ((b && b.containers) || []).forEach(function (c) {
+    const held = d[c.id];
+    if (!held) return;
+    if (c.kind === 'slots') {
+      Object.keys(held).forEach(function (sl) {
+        (held[sl] || []).forEach(function (it) { if (it) out.push({ it: it, worn: true }); });
+      });
+    } else {
+      (held || []).forEach(function (it) { if (it) out.push({ it: it, worn: false }); });
+    }
   });
-  return hit || s.icon || '';
+  return out;
+}
+
+// The picture on an attack card. The WEAPON's icon wins: an attack is the thing
+// in your hand, and a crawler who has given their Handgun an icon should see the
+// Handgun, not a generic Ranged Weapon glyph.
+//
+// Finding the weapon is the whole difficulty, and the first version got it
+// wrong in four of five realistic cases. It only searched the Gear Slots and
+// only matched item.skill — the "Works as" field — so a gun named "Handgun"
+// with an icon and no "Works as" set showed nothing, and so did one kept in the
+// Hotlist, which is where a crawler puts the thing they want to reach fastest.
+//
+// Matching the item's NAME against the Skill is what the pack already does
+// elsewhere: gearItemTap resolves a Hotlist entry by name so that {name:'Heal'}
+// rolls Heal. So: an explicit link beats a name, and something worn beats
+// something stowed, but any of the four connects.
+function dccAttackIcon(char, s) {
+  const want = String(s.name || '').toLowerCase();
+  if (!want) return s.icon || '';
+  let best = '', bestRank = 99;
+  dccGearItems(char).forEach(function (g) {
+    const it = g.it;
+    if (!it.icon) return;
+    const asSkill = String(it.skill || '').toLowerCase();
+    const lends = String(it.grantsSkill || '').toLowerCase();
+    const named = String(it.name || '').toLowerCase();
+    let rank = 99;
+    if (asSkill === want || lends === want) rank = g.worn ? 0 : 2;
+    else if (named === want) rank = g.worn ? 1 : 3;
+    if (rank < bestRank) { bestRank = rank; best = it.icon; }
+  });
+  // Then the Skill's own icon — all a Spell or an unarmed attack has — and then
+  // nothing, in which case the card renders as it did before icons existed.
+  return best || s.icon || '';
 }
 
 // "A Spell has to be in your Hotlist to cast it under pressure." That rule has

@@ -3787,6 +3787,39 @@ function boot(entry) {
     return got === 'game-icons:wood-club' || 'the card shows ' + JSON.stringify(got);
   });
 
+  // Reported from the app: "the handgun has an icon but it's not working."
+  // The first version searched only the Gear Slots and matched only the "Works
+  // as" field, so four of the five ways a player actually carries a weapon
+  // showed nothing at all. Each case below failed before this was widened.
+  function gunIcon(setup) {
+    ev("S.char.blocks.gear.hotlist=[];S.char.blocks.gear.inventory=[];" +
+       "S.char.blocks.gear.equipped={};" + setup + ";save();renderHUD();");
+    return hudCardIcon('Handgun');
+  }
+  [['equipped with no "Works as" set — just a named item with an icon',
+    "S.char.blocks.gear.equipped={hands:[{name:'Handgun',icon:'game-icons:pistol-gun'}]}"],
+   ['kept in the Hotlist, which is where a fast-draw weapon lives',
+    "S.char.blocks.gear.hotlist=[{name:'Handgun',icon:'game-icons:pistol-gun'}]"],
+   ['stowed in Inventory',
+    "S.char.blocks.gear.inventory=[{name:'Handgun',icon:'game-icons:pistol-gun'}]"],
+   ['renamed, with "Works as" pointing at the Skill',
+    "S.char.blocks.gear.equipped={hands:[{name:'Ol Betsy',skill:'Handgun',icon:'game-icons:pistol-gun'}]}"],
+  ].forEach(function (c) {
+    check('[hud] the weapon icon connects when ' + c[0], () => {
+      hudSheet([{ name: 'Handgun', rank: 5, stat: 'DEX', checkType: 'evade' }]);
+      const got = gunIcon(c[1]);
+      return got === 'game-icons:pistol-gun' || 'the card shows ' + JSON.stringify(got);
+    });
+  });
+
+  check('[hud] the weapon you are holding beats the one in your bag', () => {
+    hudSheet([{ name: 'Handgun', rank: 5, stat: 'DEX', checkType: 'evade' }]);
+    const got = gunIcon("S.char.blocks.gear.equipped={hands:[{name:'Handgun'," +
+      "icon:'game-icons:worn-gun'}]};S.char.blocks.gear.inventory=[{name:'Handgun'," +
+      "icon:'game-icons:stowed-gun'}]");
+    return got === 'game-icons:worn-gun' || 'the card shows ' + JSON.stringify(got);
+  });
+
   check('[hud] with nothing equipped it falls back to the Skill’s own icon', () => {
     hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade',
                 icon: 'game-icons:swap-bag' }]);
