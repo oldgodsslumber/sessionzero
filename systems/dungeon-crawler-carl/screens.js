@@ -1395,7 +1395,10 @@ function dccStartingHotlist(char) {
 // twice. Anything creation put here is replaced; anything the player has picked
 // up since is left exactly where it is.
 function dccApplyStartingGear(gear, char) {
-  const mine = function (e) { return !(e && e.src === 'creation'); };
+  // A stack keeps its slot numbers by leaving holes, so drop those too —
+  // concat() below repacks the list anyway, and carrying nulls through would
+  // put empty slots in the middle of a freshly built Hotlist.
+  const mine = function (e) { return !!e && e.src !== 'creation'; };
   const kept = (gear.hotlist || []).filter(mine);
   gear.hotlist = dccStartingHotlist(char).concat(kept);
 

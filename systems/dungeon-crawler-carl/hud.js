@@ -26,7 +26,11 @@ function dccRenderHUD(char) {
       'No crawler yet. Finish creation and this is where the fight lives.</div>';
   }
   return dccHudHeader(char) +
-    '<div id="hud-roll"></div>' +
+    // The HUD wears the Hero page's layout: the shell fills a sticky roller
+    // beside it on desktop, and this is the mobile half of that pair. The
+    // attack cards below answer into the same instance, so there is one place
+    // on this screen where a result appears.
+    rollBarHTML('hm', { sheet: false, resultIn: 'hm-result', toast: false }) +
     dccHudVitals(char) +
     dccHudHotlist(char) +
     dccHudActions(char, 'skills') +
@@ -56,68 +60,125 @@ function dccHudVitals(char) {
   }).join('');
 }
 
-// ── the Hotlist ─────────────────────────────────────────────────────────────
+// ── the Hotlist keypad ──────────────────────────────────────────────────────
 // "Ten slots, reachable with one Action" is the book's own description of a
-// quick bar, so it is drawn as one. The controls call the same inv* handlers
-// the Gear block uses, so an item drunk here is drunk on the sheet too; the HUD
-// then redraws itself, because it is not a gear-block mount and would otherwise
-// go stale under its own buttons.
+// quick bar, so it is drawn as one — ten big buttons laid out like an
+// old telephone: 3×3 with the tenth centred underneath on a phone, 5×2 on
+// desktop. Empty slots stay rendered, because a fixed shape is the whole point:
+// what makes this fast at the table is knowing that Slot 4 is your Heal without
+// reading it.
+//
+// One tap does the thing. What "the thing" is depends on the item and only the
+// pack knows — a potion is drunk, a scroll is cast and then spent, a weapon is
+// rolled and costs nothing — so it comes from derive.gearItemTap. The controls
+// go through the same inv* handlers the Gear block uses, so an item spent here
+// is spent on the sheet too.
+//
+// The sheet's own Hotlist is left alone: that is the management view, where you
+// add things, move them between containers and set quantities. This is the one
+// you use while something is trying to kill you.
 function dccHudHotlist(char) {
   const b = (typeof sysBlock === 'function') ? sysBlock('gear') : null;
   if (!b) return '';
   const c = (b.containers || []).find(function (x) { return x.id === 'hotlist'; });
   if (!c) return '';
-  const d = (char.blocks && char.blocks.gear) || {};
-  const items = d.hotlist || [];
+  const items = ((char.blocks && char.blocks.gear) || {}).hotlist || [];
   const size = c.size || 10;
   const used = items.filter(Boolean).length;
   let h = '<div class="card"><div style="display:flex;justify-content:space-between;' +
-    'align-items:center;margin-bottom:6px"><div class="blk-title">' + esc(c.label || 'Hotlist') +
+    'align-items:center;margin-bottom:8px"><div class="blk-title">' + esc(c.label || 'Hotlist') +
     '</div><span style="font-size:11px;color:var(--muted)">' + used + ' of ' + size +
-    ' · one Action to reach</span></div>';
-  for (let i = 0; i < size; i++) {
-    const it = items[i];
-    h += '<div class="inv-row"><div class="inv-slotno">' + (i + 1) + '</div>';
-    if (!it) { h += '<div class="inv-name" style="color:var(--muted)">empty</div></div>'; continue; }
-    const line = invReadout(b, it, char);
-    // A weapon works as a Skill; a scroll or tome casts a Spell. Either way
-    // there is something to roll, so offer it here rather than sending the
-    // player to another tab to find the name again.
-    const rollable = it.skill || it.casts || dccHudRollableName(char, it.name);
-    h += '<div class="inv-name">' + esc(it.name) +
-      (line ? '<span class="inv-stat">' + esc(line) + '</span>' : '') + '</div>' +
-      '<div class="inv-ctl">' +
-      (rollable ? '<button class="btn btn-secondary btn-xs" title="Roll ' + esc(rollable) +
-        '" onclick="dccHudRoll(' + dccHudArg(rollable) + ')">\u{1F3B2}</button>' : '') +
-      '<button class="btn btn-secondary btn-xs" title="Use one" ' +
-      'onclick="dccHudQty(' + i + ',-1)">−</button>' +
-      '<div class="num" style="min-width:28px;text-align:center;font-weight:700">' +
-      (it.qty || 1) + '</div>' +
-      '<button class="btn btn-secondary btn-xs" onclick="dccHudQty(' + i + ',1)">+</button>' +
-      '</div></div>';
+    ' · one Action to reach</span></div><div class="hot-pad">';
+  for (let i = 0; i < size; i++) h += dccHudSlot(b, char, items[i], i);
+  return h + '</div><div id="hot-undo"></div></div>';
+}
+
+function dccHudSlot(b, char, it, i) {
+  const n = '<span class="hot-no">' + (i + 1) + '</span>';
+  if (!it) {
+    return '<div class="hot-slot is-empty" title="Slot ' + (i + 1) + ' — empty">' + n +
+      '<span class="hot-ico"></span><span class="hot-name">empty</span></div>';
   }
-  return h + '</div>';
+  const tap = dccHudTapFor(it, char);
+  const qty = it.qty || 1;
+  // The icon is the point of the button: at arm's length on a phone you read the
+  // picture, not the label. Falls back to the first letter so an item with no
+  // icon chosen is still distinguishable from its neighbours.
+  const ico = it.icon
+    ? iconHTML(it.icon, 34)
+    : '<span class="hot-letter">' + esc(String(it.name || '?').charAt(0).toUpperCase()) + '</span>';
+  const attrs = tap
+    ? ' onclick="dccHudTap(' + i + ')" title="' + esc(tap.label || it.name) + '"'
+    : ' title="' + esc(it.name) + ' — nothing to tap; hold for detail"';
+  return '<button type="button" class="hot-slot' + (tap ? '' : ' is-inert') + '"' + attrs +
+    ' oncontextmenu="return dccHudSlotDetail(' + i + ',event)">' + n +
+    (qty > 1 ? '<span class="hot-qty">' + qty + '</span>' : '') +
+    '<span class="hot-ico">' + ico + '</span>' +
+    '<span class="hot-name">' + esc(it.name) + '</span></button>';
 }
 
-// A Hotlist entry is often just a name — creation writes {name:'Heal'} for a
-// Spell. If that name is a Skill or Spell the crawler actually has, it is
-// rollable from here.
-function dccHudRollableName(char, name) {
-  const n = String(name || '').toLowerCase();
-  if (!n) return '';
-  const has = dccHudKnown(char).find(function (s) { return s.name.toLowerCase() === n; });
-  return has ? has.name : '';
+// What one tap on this slot does, asked of the pack. A pack that declares no
+// gearItemTap gets inert buttons rather than a guess.
+function dccHudTapFor(it, char) {
+  const fn = sysDerive('gearItemTap');
+  if (!fn) return null;
+  try { return fn(it, char) || null; } catch (e) { return null; }
 }
 
-function dccHudKnown(char) {
-  return ['skills', 'spells'].reduce(function (out, id) {
-    const b = char.blocks && char.blocks[id];
-    return out.concat((b && b.skills) || []);
-  }, []);
+// The tap. Roll first so the result is on screen, then spend, then offer the way
+// back — a button that takes a potion with no ± to correct it needs an undo.
+function dccHudTap(i) {
+  const char = S.char;
+  const items = ((char.blocks && char.blocks.gear) || {}).hotlist || [];
+  const it = items[i];
+  if (!it) return;
+  const tap = dccHudTapFor(it, char);
+  if (!tap) return;
+  if (tap.roll) dccHudRoll(tap.roll);
+  let undo = null;
+  if (tap.spend) undo = invSpend('gear', 'hotlist', i);
+  renderHUD();
+  if (undo) dccHudUndo(undo, it.name);
 }
 
-function dccHudQty(i, delta) {
-  invQty('gear', 'hotlist', i, delta);
+let _hudUndo = null;
+function dccHudUndo(undo, name) {
+  _hudUndo = undo;
+  const el = document.getElementById('hot-undo');
+  if (!el) return;
+  el.innerHTML = '<div class="hot-undo">Spent ' + esc(name) +
+    (undo.emptied ? ' — the slot is empty now' : '') +
+    ' <button class="btn btn-secondary btn-xs" onclick="dccHudUndoTake()">Undo</button></div>';
+}
+
+function dccHudUndoTake() {
+  if (!_hudUndo) return;
+  invUnspend(_hudUndo);
+  _hudUndo = null;
+  renderHUD();
+}
+
+// Long-press / right-click: what the thing actually is, without leaving the HUD.
+function dccHudSlotDetail(i, ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  const char = S.char;
+  const it = (((char.blocks && char.blocks.gear) || {}).hotlist || [])[i];
+  if (!it) return false;
+  const b = sysBlock('gear');
+  const line = b ? invReadout(b, it, char) : '';
+  const tap = dccHudTapFor(it, char);
+  popOpen('<div class="pg-title" style="font-size:15px;margin-bottom:4px">' + esc(it.name) + '</div>' +
+    (line ? '<div class="sk-effect">' + esc(line) + '</div>' : '') +
+    '<div style="font-size:11px;color:var(--muted);margin:6px 0">Slot ' + (i + 1) +
+    ' · ' + (it.qty || 1) + ' carried' + (tap ? ' · tap to ' + esc(tap.label) : '') + '</div>' +
+    '<button class="btn btn-danger btn-xs" onclick="dccHudSlotClear(' + i + ')">Remove from Hotlist</button>',
+    ev && ev.currentTarget);
+  return false;
+}
+
+function dccHudSlotClear(i) {
+  invRemove('gear', 'hotlist', '', i);
+  popClose();
   renderHUD();
 }
 
@@ -241,11 +302,9 @@ function dccHudArg(name) {
 function dccHudRoll(name) {
   if (!SYS.dice || typeof SYS.dice.resolve !== 'function') return;
   sysRollSkill(name);
-  sysRenderRollInto('hud-roll', true);
-  const el = document.getElementById('hud-roll');
-  if (el && typeof el.scrollIntoView === 'function') {
-    try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
-  }
+  // Into every roller on this screen: the HUD has two (a sidebar and a
+  // collapsible bar) and the CSS decides which one the player can see.
+  sysRenderRollAll();
 }
 
 function dccHudSpend(n) {

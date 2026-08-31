@@ -77,6 +77,44 @@ impossible for it to become the next `core/sheet.js`, and when a second pack
 wants one the shared parts move UP into `core/` — the direction that costs
 nobody anything.
 
+**Icons are one component too.** `core/icons.js` — `iconField(id, opts)`,
+`iconSearch(id)`, `iconPick(id, val)`, and `iconHTML(value, size, color, cls)`
+for rendering. Same instance-scoped shape as the roller. It exists because the
+picker had already been written twice, for Daring Comics' powers and for map
+cells, with the same fetch and the same markup under different element ids;
+items and Skills would have made four. Note what it actually is: **Iconify's
+search API filtered to the game-icons set**, not a game-icons.net API, and the
+icons are CSS masks so they take the pack's theme colour. A stored icon renders
+from a remote URL, so it will not appear offline — the search says so, the
+rendering cannot.
+
+**The popover is generic.** `popOpen(html, anchor)` / `popClose()` in
+`core/chrome.js`. The roller uses it, and so does the Skill icon picker. It
+mounts on `<body>` because a block repaint replaces the row it is anchored to.
+
+**The roller is one component, instantiated.** `rollerHTML(id, opts)` and
+`rollerBarHTML(id, opts)` each stamp every field, button and result element with
+the instance id, and the helpers find live instances by querying `[data-roller]`
+rather than holding a list — a list goes stale the moment a tab repaints. Where
+an instance answers is written on its own wrapper as `data-result`, so nothing
+has to special-case the fact that the hero sheet's bar answers in a sticky toast
+while the rest answer in place. There are six: the Dice tab, a sidebar and a bar
+on the Hero page, the same pair on the HUD, and the popover. Add a seventh by
+calling the function — do not copy the markup.
+
+**Rollable things are named by ref, not by name.** `stat:stats:STR`,
+`skill:spells:Heal` — kind, block, name. A Stat called Strength and a Skill
+called Strength are different rolls and a bare name cannot say which.
+`sysRollSkill()` still accepts a bare name so a card can say
+`dccHudRoll('Unarmed Combat')` without knowing which block it lives in, but
+anything generated from a row should emit a ref.
+
+**A page that carries a roller wears `.roller-page`.** Main column
+`.roller-main`, sticky rail `.roller-side`, mobile bar `.roller-bar`. This was
+four `#hero-*` rules until the HUD wanted the same layout; copying them under a
+second id is how a rule ends up depending on what some other file happens to
+draw, which is the whole subject of `DEBRIEF.md`.
+
 **A block can be on screen twice.** `renderBlock(block, char, mount)` namespaces
 the wrapper id, every lookup goes through `[data-blk="…"]`, and `blockRepaint()`
 walks all mounts. That is what lets the HUD show the real Health Bar rather than
@@ -124,10 +162,14 @@ actually calls it:
 
 | Contract | Renderer that reads it | Other surfaces that should |
 |---|---|---|
-| `SYS.dice` | `renderDice()`, `renderRollSidebar()`, `rollBarHTML()`, `skillRollBtn()`, MP roll feed | conflict tracker |
+| `SYS.dice` | `renderDice()`, `renderRollSidebar()`, `rollBarHTML()`, `rollRowBtn()`, the popover, MP roll feed | conflict tracker |
+| `SYS.dice.skillBlocks` / `.statBlocks` | `rollEntries()` — what the roller offers | — |
+| `SYS.dice.statKind` | `sysRollSkill()` — the difficulty a raw trait rolls against | — |
 | `SYS.schema.blocks` | `renderBlockSheet()` | print cards, MP sync, export |
 | `SYS.creation` | `renderWizard()` | "Edit creation" on the sheet |
 | `SYS.renderHUD` | `renderHUD()` (the HUD tab) | — |
+| `itemFields` entry `{type:'icon'}` | `invDetailHTML()` — draws the shared picker | — |
+| `derive.gearItemTap` | the Hotlist keypad — what ONE tap does | — |
 | `SYS.themes` / `SYS.fonts` | `renderThemeSwatches()` / `applySysFonts()` | — |
 | `SYS.lexicon` | everywhere via `lex()`/`lexU()` | check the tabs you don't use |
 

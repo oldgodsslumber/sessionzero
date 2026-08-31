@@ -1094,7 +1094,10 @@ function boot(entry) {
   check('[dice] rolling works and adds Rank, Stat Mod and modifier', () => {
     ev("S.char.blocks.skills={skills:[{name:'Club',stat:'STR',rank:6}]};" +
        "S.char.blocks.stats={STR:{base:6,bonus:10}};showTab('dice');");
-    ev("document.getElementById('sd-skill').value='Club';document.getElementById('sd-mod').value='2';sysDoRoll();");
+    // The option value is a ref, not a bare name: a Stat called Strength and a
+    // Skill called Strength are different rolls and a name cannot say which.
+    ev("document.getElementById('sd-skill').value=rollRef('skill','skills','Club');" +
+       "document.getElementById('sd-mod').value='2';sysDoRoll();");
     const d = JSON.parse(ev('JSON.stringify(S.dice)'));
     const mod = ev("dccStatMod(dccStatOf(S.char,'STR'))");
     return d.total === d.nat + 6 + mod + 2
@@ -1757,13 +1760,16 @@ function boot(entry) {
     return rows.length === 0 || 'Bow was listed again as lent: ' + JSON.stringify(rows);
   });
   check('[lent] ...it raises the Skill you have instead', () => {
+    // Read the total OUT OF ITS OWN ELEMENT. This used to match the end of the
+    // row's text, which broke every time the row gained a control — first the
+    // roll button, then the icon button. What the check means is "the Bow row
+    // shows a total", and .sk-total says that directly.
     const total = ev("(function(){var b=document.getElementById('blk-skills');" +
       "var d=[].slice.call(b.querySelectorAll('div'));" +
-      "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length)" +
-      "return d[i].parentElement.parentElement.textContent.replace(/\\s+/g,' ').trim()}return ''})()");
-    // The total is still the last thing on the row apart from the roll control,
-    // which sits in the action column beside the remove button.
-    return /\+\d+\s*\u{1F3B2}?\s*$/u.test(total) || 'no total on the Bow row: ' + JSON.stringify(total);
+      "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length){" +
+      "var row=d[i].parentElement.parentElement;var t=row.querySelector('.sk-total');" +
+      "return t?t.textContent.trim():'(no .sk-total on the row)'}}return '(no Bow row)'})()");
+    return /^[+-]?\d+$/.test(total) || 'no total on the Bow row: ' + JSON.stringify(total);
   });
 
   // ── a gear change has to show up on the sheet ─
@@ -2214,7 +2220,9 @@ function boot(entry) {
     ev("[].slice.call(document.querySelectorAll('#blk-gear button'))" +
        ".filter(function(b){return /invDetail/.test(b.getAttribute('onclick')||'')}).pop().click();");
     const h = ev("document.getElementById('blk-gear').innerHTML");
-    const n = (h.match(/class="inv-f"/g) || []).length;
+    // By class, not by an exact attribute string: the icon field carries a
+    // second class for its full-width row and a substring match missed it.
+    const n = ev("document.querySelectorAll('#blk-gear .inv-f').length");
     const want = ev("SYS.derive.gearItemFields().length");
     if (n !== want) return 'showed ' + n + ' fields, the pack declares ' + want;
     return /invAct/.test(h) || 'the tome offered no action in the panel';
@@ -2317,7 +2325,8 @@ function boot(entry) {
   });
   check('[equip] a weapon is in one place at a time, never both', () => {
     const eq = gearOf();
-    const hot = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x.name}))"));
+    // filter(Boolean): a stack keeps its slot numbers by leaving holes in the array.
+    const hot = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.hotlist.filter(Boolean).map(function(x){return x.name}))"));
     const held = eq.hands.some(x => x.name === 'Club');
     return (held && hot.indexOf('Club') < 0) || 'Club is held=' + held + ' and in the Hotlist=' + (hot.indexOf('Club') >= 0);
   });
@@ -3745,10 +3754,15 @@ function boot(entry) {
   });
 
   check('[hud] a Skill that is not an attack stays off the Attacks list', () => {
-    const t = hudSheet([{ name: 'Perception', rank: 5, stat: 'INT', checkType: 'unopposed' },
-                        { name: 'Warhammer', rank: 2, stat: 'STR', checkType: 'evade' }]);
-    return (t.indexOf('Warhammer') >= 0 && t.indexOf('Perception') < 0)
-      || 'the Attacks list reads: ' + JSON.stringify(t.slice(0, 300));
+    // Scoped to the cards. The HUD also carries a roller whose dropdown lists
+    // every Skill you have, so searching the whole screen's text for
+    // "Perception" finds it there and the check passes with the bug in.
+    hudSheet([{ name: 'Perception', rank: 5, stat: 'INT', checkType: 'unopposed' },
+              { name: 'Warhammer', rank: 2, stat: 'STR', checkType: 'evade' }]);
+    const names = ev("[].slice.call(document.querySelectorAll(" +
+      "'#hud-content .hud-act-name')).map(function(n){return n.textContent.trim()})");
+    return (names.indexOf('Warhammer') >= 0 && names.indexOf('Perception') < 0)
+      || 'the cards read: ' + JSON.stringify(names);
   });
 
   check('[hud] a healing Spell is not given damage dice', () => {
@@ -3776,18 +3790,180 @@ function boot(entry) {
       || 'warned about a Spell that IS in the Hotlist';
   });
 
-  check('[hud] the Hotlist shows every slot, empty ones included', () => {
-    const t = hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 5 }]);
-    const slots = ev("document.querySelectorAll('#hud-content .inv-slotno').length");
-    return (slots === 10 && /1 of 10/.test(t))
-      || 'showed ' + slots + ' slots; header reads ' + JSON.stringify(t.slice(0, 160));
+  // ── game-icons ────────────────────────────────────────────────────────────
+  // The icons come from Iconify's search filtered to the game-icons set, drawn
+  // as CSS masks so they take the pack's theme colour. The network is stubbed:
+  // a suite that depends on api.iconify.design being up is a suite that fails
+  // on a train.
+  function stubIcons(list) {
+    ev("window.fetch=function(){return Promise.resolve({json:function(){" +
+       "return Promise.resolve({icons:" + JSON.stringify(list || ['game-icons:broadsword']) +
+       "})}})}");
+  }
+  const settle = () => new Promise(r => setTimeout(r, 350));
+
+  check('[icons] a slug renders as a mask, and legacy emoji pass through', () => {
+    const mask = ev("iconHTML('game-icons:broadsword',20)");
+    const emoji = ev("iconHTML('\\u2694',20)");
+    if (!/mask-image/.test(mask) || !/pw-icon/.test(mask)) return 'slug rendered as ' + JSON.stringify(mask);
+    if (/mask-image/.test(emoji)) return 'an emoji was treated as a slug: ' + JSON.stringify(emoji);
+    return ev("iconHTML('',20)") === '' || 'no icon should render nothing';
   });
 
-  check('[hud] using an item from the Hotlist spends it on the sheet too', () => {
+  check('[icons] search degrades instead of throwing when there is no fetch', () => {
+    ev("window.fetch=undefined;iconInit('probe',{});");
+    ev("document.body.insertAdjacentHTML('beforeend','<div id=\"probe-icon-results\"></div>')");
+    ev("iconSearch('probe')");
+    const t = ev("document.getElementById('probe-icon-results').textContent");
+    ev("document.getElementById('probe-icon-results').remove()");
+    return /connection/i.test(t) || 'the results panel reads ' + JSON.stringify(t);
+  });
+
+  await (async () => {
+    stubIcons(['game-icons:health-potion', 'game-icons:broadsword']);
+    kindSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Odd Flask'}];blockRepaint('gear');");
+    // _invDetailOpen is module state and an earlier check left a panel open, so
+    // clicking would have TOGGLED IT SHUT rather than opening this one.
+    ev("_invDetailOpen='';blockRepaint('gear');");
+    ev("[].slice.call(document.querySelectorAll('#blk-gear button'))" +
+       ".filter(function(b){return /invDetail/.test(b.getAttribute('onclick')||'')}).pop().click();");
+    await settle();
+    check('[icons] the item detail panel offers the picker', () => {
+      const n = ev("document.querySelectorAll('#inv-icon-results .ic-opt').length");
+      return n === 2 || 'the picker showed ' + n + ' options';
+    });
+    check('[icons] picking one stores it on the item', () => {
+      ev("iconPick('inv','game-icons:health-potion')");
+      return ev("S.char.blocks.gear.inventory[0].icon") === 'game-icons:health-potion'
+        || 'item.icon is ' + JSON.stringify(ev("S.char.blocks.gear.inventory[0].icon"));
+    });
+    check('[icons] clicking the chosen one again clears it', () => {
+      // invSetField deletes a key set to '', so a cleared icon is absent rather
+      // than empty — which is what the renderers already test for.
+      ev("iconPick('inv','game-icons:health-potion')");
+      return !ev("S.char.blocks.gear.inventory[0].icon")
+        || 'item.icon is ' + JSON.stringify(ev("S.char.blocks.gear.inventory[0].icon"));
+    });
+  })();
+
+  await (async () => {
+    stubIcons(['game-icons:broadsword']);
+    hudSheet([{ name: 'Club', rank: 3, stat: 'STR', checkType: 'evade' }]);
+    ev("showTab('hero')");
+    const has = ev("!!([].slice.call(document.querySelectorAll('#blk-skills button'))" +
+      ".find(function(b){return /skillIconOpen/.test(b.getAttribute('onclick')||'')}))");
+    check('[icons] a Skill row offers an icon button', () => has || 'no icon control on any Skill row');
+    if (has) {
+      ev("[].slice.call(document.querySelectorAll('#blk-skills button'))" +
+         ".find(function(b){return /skillIconOpen/.test(b.getAttribute('onclick')||'')}).click();");
+      await settle();
+      check('[icons] it opens the picker in the shell popover', () =>
+        ev("!!document.getElementById('shell-pop')&&document.getElementById('shell-pop').classList.contains('open')")
+        || 'no popover opened');
+      check('[icons] picking one stores it on the Skill', () => {
+        ev("iconPick('skill','game-icons:broadsword')");
+        const got = ev("S.char.blocks.skills.skills[0].icon");
+        ev("popClose()");
+        return got === 'game-icons:broadsword' || 'skill.icon is ' + JSON.stringify(got);
+      });
+    }
+  })();
+
+  // ── the Hotlist keypad ────────────────────────────────────────────────────
+  // Ten fixed slots, because what makes it fast at the table is knowing Slot 4
+  // is your Heal without reading it. Empty slots stay rendered for that reason.
+  check('[hud] the Hotlist shows every slot, empty ones included', () => {
+    const t = hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 5 }]);
+    const slots = ev("document.querySelectorAll('#hud-content .hot-slot').length");
+    const empty = ev("document.querySelectorAll('#hud-content .hot-slot.is-empty').length");
+    if (slots !== 10) return 'showed ' + slots + ' slots, not 10';
+    if (empty !== 9) return slots + ' slots but ' + empty + ' marked empty, expected 9';
+    return /1 of 10/.test(t) || 'header reads ' + JSON.stringify(t.slice(0, 160));
+  });
+
+  check('[hud] tapping a consumable spends one, on the sheet too', () => {
     hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 5 }]);
-    ev('dccHudQty(0,-1)');
+    ev('dccHudTap(0)');
     return ev('S.char.blocks.gear.hotlist[0].qty') === 4
       || 'qty is ' + ev('S.char.blocks.gear.hotlist[0].qty');
+  });
+
+  // invQty clamps at 1 so the ± controls can never silently bin an item. Drinking
+  // your LAST potion has to be possible, or the keypad stops working exactly when
+  // it matters and sends you to the sheet mid-fight.
+  check('[hud] tapping the last one empties the slot', () => {
+    hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 1 }]);
+    ev('dccHudTap(0)');
+    if (ev('!!S.char.blocks.gear.hotlist[0]')) {
+      return 'the slot still holds ' + JSON.stringify(ev('S.char.blocks.gear.hotlist[0]'));
+    }
+    return ev("document.querySelectorAll('#hud-content .hot-slot.is-empty').length") === 10
+      || 'the keypad did not redraw the slot as empty';
+  });
+
+  // Found by two playtesters independently: spending an item spliced the array,
+  // so everything after it moved down a slot — the Hotlist rearranged itself at
+  // the exact moment a player is going on muscle memory. A stack leaves a hole.
+  check('[hud] spending an item does not renumber the slots after it', () => {
+    hudSheet([], [], [{ name: 'Ration', qty: 1 }, { name: 'Club', skill: 'Club', qty: 1 },
+                      { name: 'Torch', qty: 1 }]);
+    const names = () => ev("[].slice.call(document.querySelectorAll('#hud-content .hot-slot'))" +
+      ".slice(0,3).map(function(b){var n=b.querySelector('.hot-name');" +
+      "return n?n.textContent:''}).join(',')");
+    const before = names();
+    if (before !== 'Ration,Club,Torch') return 'setup wrong, slots read ' + before;
+    ev('dccHudTap(0)');
+    const after = names();
+    return after === 'empty,Club,Torch' ||
+      'after spending slot 1 the keypad reads ' + after;
+  });
+
+  check('[hud] a new item drops into the first empty slot, not the end', () => {
+    hudSheet([], [], [{ name: 'Ration', qty: 1 }, { name: 'Torch', qty: 1 }]);
+    ev('dccHudTap(0)');                                   // slot 1 goes empty
+    ev("invAdd('gear','hotlist')");                        // no input element: no-op
+    ev("S.char.blocks.gear.hotlist[0]=null;" +
+       "invPlace(S.char.blocks.gear.hotlist,{name:'Rope',qty:1},10);save();renderHUD();");
+    return ev("S.char.blocks.gear.hotlist[0].name") === 'Rope'
+      || 'it landed at ' + ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x&&x.name}))");
+  });
+
+  check('[hud] a spent item can be put back', () => {
+    hudSheet([], [], [{ name: 'Standard Mana Potion', qty: 1 }]);
+    ev('dccHudTap(0)');
+    if (!ev("!!document.querySelector('#hud-content .hot-undo')")) return 'no undo was offered';
+    ev('dccHudUndoTake()');
+    const back = ev('JSON.stringify(S.char.blocks.gear.hotlist)');
+    return /Standard Mana Potion/.test(back) || 'after undo the Hotlist reads ' + back;
+  });
+
+  // Three different taps, and only the pack knows which is which.
+  check('[hud] a weapon in the Hotlist rolls without being spent', () => {
+    hudSheet([{ name: 'Club', rank: 3, stat: 'STR', checkType: 'evade' }], [],
+             [{ name: 'Club', skill: 'Club', qty: 1 }]);
+    ev('S.dice=null;dccHudTap(0);');
+    const d = ev('S.dice');
+    if (!d || d.skill !== 'Club') return 'tapping it rolled ' + JSON.stringify(d && d.skill);
+    return ev('S.char.blocks.gear.hotlist.length') === 1
+      || 'rolling a weapon consumed it';
+  });
+
+  check('[hud] a scroll is cast and spent in one tap', () => {
+    hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }],
+             [{ name: 'Scroll of Heal', casts: 'Heal', qty: 1 }]);
+    ev('S.dice=null;dccHudTap(0);');
+    const d = ev('S.dice');
+    if (!d || d.skill !== 'Heal') return 'the scroll rolled ' + JSON.stringify(d && d.skill);
+    return !ev('S.char.blocks.gear.hotlist[0]') || 'the scroll survived being cast';
+  });
+
+  check('[hud] a Spell parked in the Hotlist rolls and stays', () => {
+    hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }], [{ name: 'Heal', qty: 1 }]);
+    ev('S.dice=null;dccHudTap(0);');
+    const d = ev('S.dice');
+    if (!d || d.skill !== 'Heal') return 'tapping it rolled ' + JSON.stringify(d && d.skill);
+    return ev('S.char.blocks.gear.hotlist.length') === 1 || 'casting a known Spell ate the slot';
   });
 
   check('[hud] a Spell name with an apostrophe does not break its card', () => {

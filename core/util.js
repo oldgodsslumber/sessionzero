@@ -83,13 +83,23 @@ function _saveFlashEl(){var el=document.getElementById('save-flash');if(!el){el=
 function flashSaved(){var el=_saveFlashEl();el.textContent=voice('saved','Saved ✓');el.style.background='';el.style.color='';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},900);}
 // A failed write used to still flash "Saved ✓" — the flash now tells the truth.
 function flashSaveError(msg){var el=_saveFlashEl();el.textContent='⚠ '+(msg||'Not saved');el.style.background='var(--red)';el.style.color='#fff';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},2600);}
-function pdIconUrl(id){return 'https://api.iconify.design/'+encodeURIComponent(id)+'.svg';}
-function powerIco(pw,size){size=size||18;if(!pw||!pw.icon)return'';var u=pdIconUrl(pw.icon);return '<span class="pw-icon" style="width:'+size+'px;height:'+size+'px;-webkit-mask-image:url(\''+u+'\');mask-image:url(\''+u+'\')"></span> ';}
-var _pdIcon='',_pdIconTimer=null;
-function pdIconPreview(){var el=document.getElementById('pw-icon-preview');if(!el)return;el.innerHTML=_pdIcon?'<span class="pw-icon" style="width:26px;height:26px;color:var(--accent);-webkit-mask-image:url(\''+pdIconUrl(_pdIcon)+'\');mask-image:url(\''+pdIconUrl(_pdIcon)+'\')"></span>':'<span style="font-size:9px;color:var(--muted);text-align:center;line-height:1.1">no icon</span>';}
-function selectPdIcon(id){_pdIcon=(id===_pdIcon)?'':id;pdIconPreview();document.querySelectorAll('#pw-icon-results .ic-opt').forEach(function(b){b.classList.toggle('sel',b.dataset.icon===_pdIcon);});}
-function renderPdIcons(icons){var res=document.getElementById('pw-icon-results');if(!res)return;if(!icons||!icons.length){res.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">No icons found — try another word (fire, claw, star, shield).</div>';return;}res.innerHTML=icons.map(function(id){var u=pdIconUrl(id);return '<button type="button" class="ic-opt'+(id===_pdIcon?' sel':'')+'" data-icon="'+esc(id)+'" onclick="selectPdIcon(\''+esc(id)+'\')" title="'+esc(id.replace('game-icons:',''))+'"><span class="pw-icon" style="width:24px;height:24px;-webkit-mask-image:url(\''+u+'\');mask-image:url(\''+u+'\')"></span></button>';}).join('');}
-function pdIconSearch(q){var inp=document.getElementById('pw-icon-search');var query=(typeof q==='string'?q:(inp?inp.value:''))||'';var res=document.getElementById('pw-icon-results');var pw=POWERS.find(function(p){return p.id===window._pdId;});var term=query.trim()||(pw?pw.name:'power');clearTimeout(_pdIconTimer);if(res&&!res.innerHTML)res.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Searching game-icons.net…</div>';_pdIconTimer=setTimeout(function(){fetch('https://api.iconify.design/search?query='+encodeURIComponent(term)+'&prefix=game-icons&limit=48').then(function(r){return r.json();}).then(function(d){renderPdIcons(d.icons||[]);}).catch(function(){if(res)res.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Couldn\'t reach game-icons.net. Check your connection and try again.</div>';});},250);}
+// One icon, at a size. Kept under its old name: six renderers call it.
+function powerIco(pw,size){return (pw&&pw.icon)?iconHTML(pw.icon,size||18)+' ':'';}
+// Daring Comics' power editor, on the shared picker in core/icons.js. Its own
+// element ids and its _pdIcon variable are kept: core/creation.js writes that
+// markup and reads that variable in five places, and migrating the reference
+// pack's power editor buys nothing a player can see.
+var _pdIcon='';
+function _pdPicker(){
+  var pw=(typeof POWERS!=='undefined'?POWERS:[]).find(function(p){return p.id===window._pdId;});
+  return iconInit('pd',{value:_pdIcon,fallback:pw?pw.name:'power',
+    els:{preview:'pw-icon-preview',search:'pw-icon-search',results:'pw-icon-results'},
+    onPick:function(v){_pdIcon=v;}});
+}
+function pdIconPreview(){_pdPicker();iconPreview('pd');}
+function selectPdIcon(id){_pdPicker();iconPick('pd',id);}
+function renderPdIcons(icons){_pdPicker();iconResults('pd',icons);}
+function pdIconSearch(q){_pdPicker();iconSearch('pd',q);}
 // ═══════════════════════════════════════════════════════════
 // LLM (Gemini + any OpenAI-compatible local endpoint)
 // ═══════════════════════════════════════════════════════════

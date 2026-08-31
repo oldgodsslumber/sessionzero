@@ -114,6 +114,11 @@ function reachableAt(rules, el, width) {
 
 const PHONE = 400, DESKTOP = 1200;
 
+// The hero sheet's own roller instance, whichever pack drew it. The ids used to
+// be literals here (#hero-dice-mobile, #dice-bar-body); they are per-instance
+// now, so the sheet flags itself instead.
+function sheetBar(doc){ return doc.querySelector('[data-roller-sheet]'); }
+
 async function boot(entry, setup) {
   const errs = [];
   const vc = new VirtualConsole().on('jsdomError', e => errs.push(e.message));
@@ -164,12 +169,13 @@ const PACKS = [
     // ── THE CHECK THAT WAS MISSING ────────────────────────────────────────────
     // A player at phone width must be able to press something that rolls. Not
     // "renderDice() produces markup" — a control, reachable, at that width.
-    // #hero-dice-mobile is the control, not #dice-bar-body: the body is
-    // collapsed until you tap the toggle, so testing the body would call a
-    // perfectly good roller unreachable.
+    // The bar's toggle strip is the control, not its body: the body is
+    // collapsed until you tap it open, so testing the body would call a
+    // perfectly good roller unreachable. [data-roller-sheet] is how the sheet's
+    // own instance identifies itself, whichever pack drew it.
     check(P + 'a roll control is reachable at phone width', () => {
       const tab = reachableAt(rules, $('nb-dice'), PHONE);
-      const bar = reachableAt(rules, $('hero-dice-mobile'), PHONE);
+      const bar = reachableAt(rules, sheetBar(doc), PHONE);
       return tab || bar ||
         'no roll control at ' + PHONE + 'px: Dice tab ' +
         (($('nb-dice')) ? 'is hidden' : 'is absent') + ' and the sheet has no dice bar';
@@ -186,13 +192,13 @@ const PACKS = [
     // on the grounds it claims: that the sheet is carrying a roller instead.
     check(P + 'the Dice tab is hidden only when the sheet carries a roller', () => {
       if (reachableAt(rules, $('nb-dice'), PHONE)) return true;
-      return reachableAt(rules, $('hero-dice-mobile'), PHONE) ||
+      return reachableAt(rules, sheetBar(doc), PHONE) ||
         'the Dice tab is hidden at phone width and nothing replaces it';
     });
 
     check(P + 'the body class matches what the sheet actually drew', () => {
       const claimed = doc.body.classList.contains('has-sheet-roller');
-      const actual = !!$('dice-bar-body');
+      const actual = !!sheetBar(doc);
       return claimed === actual ||
         'body says has-sheet-roller=' + claimed + ' but the bar is ' + (actual ? 'present' : 'absent');
     });
@@ -211,12 +217,12 @@ const PACKS = [
 
     // ── a player can complete a roll, starting from a button ─────────────────
     check(P + 'pressing ROLL on the sheet produces a roll', () => {
-      const mobile = $('hero-dice-mobile');
+      const mobile = sheetBar(doc);
       if (!mobile) return 'no sheet roller to press';
       // The player's actual motion: tap the bar open, then press ROLL.
       const toggle = mobile.querySelector('.dice-bar-toggle');
       if (toggle) toggle.click();
-      const bar = $('dice-bar-body');
+      const bar = mobile.querySelector('.dice-bar-body');
       if (!bar || !bar.classList.contains('open')) return 'the bar did not open when tapped';
       const btn = [].slice.call(bar.querySelectorAll('button'))
         .find(x => /ROLL/i.test(x.textContent));
@@ -267,7 +273,7 @@ const PACKS = [
         const host = $('hud-content');
         if (!host || !host.innerHTML.trim()) return 'the HUD rendered nothing';
         const health = host.querySelector('[data-blk="health"]');
-        const slots = host.querySelectorAll('.inv-slotno').length;
+        const slots = host.querySelectorAll('.hot-slot').length;
         if (!health) return 'no health block on the HUD';
         return slots > 0 || 'no quick slots on the HUD';
       });
@@ -304,18 +310,35 @@ const PACKS = [
         return !!d.skill || 'the roll reached the table with no name on it';
       });
 
+      // The HUD wears the Hero page's layout: a sticky roller beside it on
+      // desktop, a collapsible bar inside it on mobile. A card roll answers in
+      // both, because the CSS decides which one the player can actually see.
       check(P + 'the roll answers on the HUD, not on another tab', () => {
-        const el = $('hud-roll');
-        return !!(el && el.innerHTML.trim()) || 'the HUD roll left #hud-roll empty';
+        const side = $('hs-result'), bar = $('hm-result');
+        if (!side || !bar) return 'the HUD is missing a roller instance: ' +
+          (side ? '' : 'no sidebar ') + (bar ? '' : 'no bar');
+        return !!(side.innerHTML.trim() && bar.innerHTML.trim())
+          || 'the HUD roll left a result area empty';
+      });
+
+      check(P + 'the HUD carries a roller on both sides of the breakpoint', () => {
+        ev("showTab('hud')");
+        const rail = $('hud-dice-sidebar');
+        const desktop = rail && rail.innerHTML.trim() && reachableAt(rules, rail, DESKTOP);
+        const barEl = doc.querySelector('#hud-content [data-roller]');
+        const phone = barEl && reachableAt(rules, barEl, PHONE);
+        if (!desktop) return 'no roller beside the HUD at ' + DESKTOP + 'px';
+        return !!phone || 'no roller on the HUD at ' + PHONE + 'px';
       });
     }
 
     if (pack.blocks) {
-      check(P + 'a Skill on the sheet loads itself into the roller', () => {
+      check(P + 'a Skill on the sheet opens the roller', () => {
+        ev("showTab('hero')");
         const blk = doc.getElementById('blk-skills');
         if (!blk) return 'no skills block on the sheet';
         const btn = [].slice.call(blk.querySelectorAll('button'))
-          .find(x => /sysLoadRoll/.test(x.getAttribute('onclick') || ''));
+          .find(x => /sysOpenRoller/.test(x.getAttribute('onclick') || ''));
         if (!btn) return 'no roll control on any Skill row';
         btn.click();
         const sel = doc.getElementById('sm-skill') || doc.getElementById('ss-skill');
@@ -323,20 +346,102 @@ const PACKS = [
       });
 
       check(P + 'the loaded Skill is one the character actually has', () => {
-        const names = ev('sysDiceSkills().map(function(s){return s.name})');
+        const refs = ev('rollEntries().map(function(e){return e.ref})');
         const sel = doc.getElementById('sm-skill') || doc.getElementById('ss-skill');
-        return names.indexOf(sel.value) >= 0 || 'loaded "' + sel.value + '", not in ' + JSON.stringify(names);
+        return refs.indexOf(sel.value) >= 0 ||
+          'loaded "' + sel.value + '", not in ' + JSON.stringify(refs);
       });
 
-      check(P + 'every roll surface offers the same Skills', () => {
+      // A Stat and a Skill of the same name are different rolls, so the option
+      // value is a ref rather than a bare name.
+      check(P + 'a Stat row opens the roller too', () => {
+        ev("showTab('hero')");
+        const blk = doc.getElementById('blk-stats');
+        if (!blk) return 'no stats block on the sheet';
+        const btn = [].slice.call(blk.querySelectorAll('button'))
+          .find(x => /sysOpenRoller/.test(x.getAttribute('onclick') || ''));
+        if (!btn) return 'no roll control on any Stat row';
+        btn.click();
+        const sel = doc.getElementById('sm-skill') || doc.getElementById('ss-skill');
+        return /^stat:/.test(sel.value || '') ||
+          'loaded ' + JSON.stringify(sel.value) + ', expected a stat ref';
+      });
+
+      check(P + 'a Stat adds its Mod and no Ranks, at the pack’s own difficulty', () => {
+        const ref = ev('rollEntries().filter(function(e){return e.kind==="stat"})[0].ref');
+        const d = ev('sysRollSkill(' + JSON.stringify(ref) + ')');
+        const statId = ref.split(':')[2];
+        const mod = ev('rollStatMod(' + JSON.stringify(statId) + ')');
+        const want = ev("SYS.dice.difficulty('stat',S.floor||3)");
+        if (d.total !== d.nat + mod) {
+          return 'total ' + d.total + ' != nat ' + d.nat + ' + Mod ' + mod + ' (Ranks leaked in)';
+        }
+        return d.difficulty === want ||
+          'rolled against ' + d.difficulty + ', a Stat Check is ' + want;
+      });
+
+      check(P + 'every roller instance offers the same list', () => {
         ev("showTab('dice')");
-        const tab = [].slice.call(doc.getElementById('sd-skill').options).map(o => o.value).sort();
-        const bar = [].slice.call(doc.getElementById('sm-skill').options).map(o => o.value).sort();
-        const side = [].slice.call(doc.getElementById('ss-skill').options).map(o => o.value).sort();
-        return (JSON.stringify(tab) === JSON.stringify(bar) &&
-                JSON.stringify(bar) === JSON.stringify(side))
-          || 'tab ' + JSON.stringify(tab) + ' vs bar ' + JSON.stringify(bar) +
-             ' vs sidebar ' + JSON.stringify(side);
+        const seen = [].slice.call(doc.querySelectorAll('[data-roller]')).map(w => {
+          const id = w.getAttribute('data-roller');
+          const sel = doc.getElementById(id + '-skill');
+          return { id: id, opts: sel ? [].slice.call(sel.options).map(o => o.value).sort() : null };
+        });
+        if (seen.length < 3) return 'only ' + seen.length + ' roller instances on screen';
+        const first = JSON.stringify(seen[0].opts);
+        const odd = seen.find(x => JSON.stringify(x.opts) !== first);
+        return !odd || 'instance ' + odd.id + ' offers a different list to ' + seen[0].id;
+      });
+
+      check(P + 'the roller lists Stats as well as Skills', () => {
+        const kinds = ev('rollEntries().map(function(e){return e.kind})');
+        const sel = doc.getElementById('sd-skill');
+        const groups = [].slice.call(sel.querySelectorAll('optgroup')).map(g => g.label);
+        if (kinds.indexOf('stat') < 0) return 'no Stats in the roller list';
+        if (kinds.indexOf('skill') < 0) return 'no Skills in the roller list';
+        return groups.length >= 2 || 'the list is not grouped: ' + JSON.stringify(groups);
+      });
+
+      check(P + 'the rollable Stat blocks are the pack’s to name', () => {
+        const before = ev('sysRollTraitBlocks().join(",")');
+        ev("SYS.dice.statBlocks=['nothing-here'];");
+        const after = ev('sysRollTraitBlocks().join(",")');
+        ev('delete SYS.dice.statBlocks;');
+        return (before === 'stats' && after === 'nothing-here')
+          || 'default "' + before + '", declared "' + after + '"';
+      });
+
+      // JSDOM stubs matchMedia to always report false, so the desktop branch is
+      // unreachable without this seam. That is why sysRollerIsDesktop() is a
+      // function of its own rather than an inline matchMedia call.
+      check(P + 'on desktop a row pops the roller up next to it', () => {
+        ev("showTab('hero')");
+        ev('sysRollerIsDesktop=function(){return true};');
+        const blk = doc.getElementById('blk-stats');
+        const btn = [].slice.call(blk.querySelectorAll('button'))
+          .find(x => /sysOpenRoller/.test(x.getAttribute('onclick') || ''));
+        btn.click();
+        const pop = doc.getElementById('shell-pop');
+        if (!pop || !pop.classList.contains('open')) return 'no popover opened';
+        const sel = doc.getElementById('sp-skill');
+        if (!sel) return 'the popover has no roller in it';
+        return /^stat:/.test(sel.value || '') ||
+          'the popover opened empty rather than holding the Stat clicked';
+      });
+
+      check(P + 'the popover rolls, and closes cleanly', () => {
+        const pop = doc.getElementById('shell-pop');
+        const btn = [].slice.call(pop.querySelectorAll('button'))
+          .find(x => /ROLL/i.test(x.textContent));
+        if (!btn) return 'the popover has no ROLL button';
+        ev('S.dice=null');
+        btn.click();
+        const d = ev('S.dice');
+        if (!d || !Array.isArray(d.dice)) return 'the popover produced no roll';
+        if (!doc.getElementById('sp-result').innerHTML.trim()) return 'the result did not land in the popover';
+        ev('rollPopClose()');
+        ev('sysRollerIsDesktop=function(){return false};');
+        return !pop.classList.contains('open') || 'the popover would not close';
       });
 
       check(P + 'the rollable blocks are the pack’s to name', () => {

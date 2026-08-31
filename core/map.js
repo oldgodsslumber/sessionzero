@@ -1,14 +1,14 @@
 window._mapZoom=null;window._selMapCell=null;
 function heroMarker(){const n=sysCharName(S.char);return n?esc(n.charAt(0)):'H';}
 function isAdj(a,b){const ar=Math.floor(a/5),ac=a%5,br=Math.floor(b/5),bc=b%5;return Math.abs(ar-br)+Math.abs(ac-bc)===1;}
-// A game-icons id ("game-icons:city") or bare slug ("city", "fire-ray"). Emoji/free
-// text won't match, so legacy emoji icons still render as text.
-function isGiSlug(v){return /^(game-icons:)?[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(String(v||''));}
-// Render a cell's stored icon big — a game-icon mask (same technique as power icons)
-// when the value is a slug, the legacy emoji/text otherwise, or the hero/dot fallback.
+// Kept under its old name; the test for it lives in core/icons.js now.
+function isGiSlug(v){return iconIsSlug(v);}
+// Render a cell's stored icon big — a game-icon mask when the value is a slug,
+// the legacy emoji/text otherwise, or the hero/dot fallback.
 function cellIco(c,cur){
   if(c.icon){
-    if(isGiSlug(c.icon)){var u=pdIconUrl(c.icon.indexOf(':')>=0?c.icon:'game-icons:'+c.icon);return '<span class="pw-icon cell-gi" style="color:'+(cur?'var(--accent)':'var(--text)')+';-webkit-mask-image:url(\''+u+'\');mask-image:url(\''+u+'\')"></span>';}
+    // No size: .cell-gi sizes it, and grows at the 481px breakpoint.
+    if(isGiSlug(c.icon))return iconHTML(c.icon,null,cur?'var(--accent)':'var(--text)','cell-gi');
     return c.icon;
   }
   return cur?`<span style="color:var(--accent);font-weight:900;font-family:var(--font-title);font-size:22px">${heroMarker()}</span>`:'<span style="color:var(--muted)">·</span>';
@@ -18,11 +18,18 @@ function cellIco(c,cur){
 // The currently-edited cell's picker state. Only one cell detail panel is open
 // at a time, so a single set of ids/state mirrors the power picker exactly.
 var _miScope=null,_miIdx=null,_miVal='',_miDefault='',_miTimer=null;
-function giId(v){return v.indexOf(':')>=0?v:'game-icons:'+v;}
-function mapIconPreview(){var el=document.getElementById('mi-preview');if(!el)return;el.innerHTML=_miVal?'<span class="pw-icon" style="width:26px;height:26px;color:var(--accent);-webkit-mask-image:url(\''+pdIconUrl(giId(_miVal))+'\');mask-image:url(\''+pdIconUrl(giId(_miVal))+'\')"></span>':'<span style="font-size:9px;color:var(--muted);text-align:center;line-height:1.1">no icon</span>';}
-function mapIconResults(icons){var res=document.getElementById('mi-results');if(!res)return;if(!icons||!icons.length){res.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">No icons found — try another word (building, tower, skull, factory).</div>';return;}res.innerHTML=icons.map(function(id){var u=pdIconUrl(id);return '<button type="button" class="ic-opt'+(id===_miVal?' sel':'')+'" data-icon="'+esc(id)+'" onclick="selectMapIcon(\''+esc(id)+'\')" title="'+esc(id.replace('game-icons:',''))+'"><span class="pw-icon" style="width:24px;height:24px;-webkit-mask-image:url(\''+u+'\');mask-image:url(\''+u+'\')"></span></button>';}).join('');}
-function mapIconSearch(q){var inp=document.getElementById('mi-search');var query=(typeof q==='string'?q:(inp?inp.value:''))||'';var res=document.getElementById('mi-results');var term=query.trim()||_miDefault||'building';clearTimeout(_miTimer);if(res&&!res.innerHTML)res.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Searching game-icons.net…</div>';_miTimer=setTimeout(function(){fetch('https://api.iconify.design/search?query='+encodeURIComponent(term)+'&prefix=game-icons&limit=48').then(function(r){return r.json();}).then(function(d){mapIconResults(d.icons||[]);}).catch(function(){if(res)res.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Couldn\'t reach game-icons.net. Check your connection and try again.</div>';});},250);}
-function selectMapIcon(id){_miVal=(id===_miVal)?'':id;mapIconPreview();document.querySelectorAll('#mi-results .ic-opt').forEach(function(b){b.classList.toggle('sel',b.dataset.icon===_miVal);});mapIconCommit();}
+function giId(v){return iconId(v);}
+// The cell picker, on the shared component. Only one cell detail panel is open
+// at a time, so one instance is right.
+function _miPicker(){
+  return iconInit('mi',{value:_miVal,fallback:_miDefault||'building',
+    els:{preview:'mi-preview',search:'mi-search',results:'mi-results'},
+    onPick:function(v){_miVal=v;mapIconCommit();}});
+}
+function mapIconPreview(){_miPicker();iconPreview('mi');}
+function mapIconResults(icons){_miPicker();iconResults('mi',icons);}
+function mapIconSearch(q){_miPicker();iconSearch('mi',q);}
+function selectMapIcon(id){_miPicker();iconPick('mi',id);}
 function mapIconCommit(){
   if(_miScope==='sz'){if(!window._mapZoom)return;window._mapZoom.subZone.cells[_miIdx].icon=_miVal;var r=S.regions[S.activeRegion];if(r)r.cells[window._mapZoom.cellIdx].subZone=window._mapZoom.subZone;}
   else{var rg=S.regions[S.activeRegion];if(rg)rg.cells[_miIdx].icon=_miVal;}

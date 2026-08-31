@@ -47,8 +47,8 @@ const SHELL_CHROME = `<nav id="nav">
      the salvage you are rolling all follow it. Empty for a pack with no such
      idea, which is every pack but one so far. -->
 <div id="floor-strip"></div>
-<div class="page active" id="page-hero"><div id="hero-main"><div id="hero-creation"></div><div id="hero-sheet" style="display:none"></div></div><div id="hero-dice-sidebar"></div></div>
-<div class="page" id="page-hud"><div id="hud-content"></div></div>
+<div class="page roller-page active" id="page-hero"><div id="hero-main" class="roller-main"><div id="hero-creation"></div><div id="hero-sheet" style="display:none"></div></div><div id="hero-dice-sidebar" class="roller-side"></div></div>
+<div class="page roller-page" id="page-hud"><div id="hud-main" class="roller-main"><div id="hud-content"></div></div><div id="hud-dice-sidebar" class="roller-side"></div></div>
 <div class="page" id="page-npcs"><div id="npcs-content"></div></div>
 <div class="page" id="page-map"><div id="map-content"></div></div>
 <div class="page" id="page-dice"><div id="dice-content"></div></div>
@@ -74,6 +74,17 @@ function buildShellChrome() {
   applySysFonts();
   renderThemeSwatches();
   applyHudTab();
+  applySecondScreenTab();
+}
+
+// The pop-out second screen is Daring Comics' — it reads costumedName, stress
+// and Fate Points, and draws 4dF. It was shown for every pack regardless, so on
+// Dungeon Crawler Carl it opened a window that said "Waiting…" forever and threw
+// on the first state push. A pack declares `secondScreen: true` or has no button.
+function applySecondScreenTab() {
+  const btn = document.getElementById('nb-second');
+  if (!btn) return;
+  if (!(SYS && SYS.secondScreen)) btn.remove();
 }
 
 // The HUD tab is a pack's own play screen — what you need in front of you
@@ -88,6 +99,77 @@ function applyHudTab() {
   if (!(SYS && typeof SYS.renderHUD === 'function')) btn.remove();
 }
 
+// ═══════════════════════════════════════════════════════════
+// THE ANCHORED POPOVER
+// ═══════════════════════════════════════════════════════════
+// A small panel that appears next to the thing you clicked. Two things use it —
+// the roller, summoned from a Stat or Skill row, and the icon picker, summoned
+// from a Skill row — so it holds no opinion about its contents.
+//
+// Mounted on <body> rather than inside a page: a block repaint replaces the row
+// it is anchored to, and a panel living inside that row would be torn out from
+// under the player mid-interaction.
+function popEl() {
+  let el = document.getElementById('shell-pop');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'shell-pop';
+    el.className = 'roll-pop';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function popOpen(html, anchor) {
+  const el = popEl();
+  el.innerHTML = '<button class="roll-pop-x" onclick="popClose()" title="Close">×</button>' + html;
+  el.classList.add('open');
+  popPosition(el, anchor);
+  popBind();
+  return el;
+}
+
+function popClose() {
+  const el = document.getElementById('shell-pop');
+  if (!el) return;
+  el.classList.remove('open');
+  el.innerHTML = '';
+}
+
+function popIsOpen() {
+  const el = document.getElementById('shell-pop');
+  return !!(el && el.classList.contains('open'));
+}
+
+// Beside the anchor if it fits, flipped to its left if it does not, and never
+// off the edge. JSDOM returns zeroed rects, so this is a no-op under test —
+// which is why the suites assert what the popover CONTAINS, not where it is.
+function popPosition(el, anchor) {
+  if (!anchor || typeof anchor.getBoundingClientRect !== 'function') return;
+  let r;
+  try { r = anchor.getBoundingClientRect(); } catch (e) { return; }
+  const w = el.offsetWidth || 300, vw = window.innerWidth || 1024;
+  let left = (window.pageXOffset || 0) + Math.min(r.right + 10, vw - w - 12);
+  if (r.right + 10 > vw - w - 12) left = (window.pageXOffset || 0) + Math.max(12, r.left - w - 10);
+  el.style.left = Math.max(8, left) + 'px';
+  el.style.top = Math.max(8, (window.pageYOffset || 0) + r.top - 4) + 'px';
+}
+
+let _popBound = false;
+function popBind() {
+  if (_popBound) return;
+  _popBound = true;
+  document.addEventListener('mousedown', function (ev) {
+    if (!popIsOpen()) return;
+    const el = document.getElementById('shell-pop');
+    if (el && el.contains(ev.target)) return;
+    popClose();
+  }, true);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') popClose();
+  }, true);
+}
+
 // Filled by the pack. Kept in the shell so showTab() has one thing to call and
 // a pack cannot end up owning a surface the shell cannot see — the mistake that
 // left Dungeon Crawler Carl with no dice roller. See DEBRIEF.md.
@@ -96,6 +178,13 @@ function renderHUD() {
   if (!el) return;
   el.innerHTML = (SYS && typeof SYS.renderHUD === 'function')
     ? (SYS.renderHUD(typeof S !== 'undefined' && S ? S.char : null) || '') : '';
+  // The HUD wears the same layout as the Hero page: a sticky roller beside it on
+  // desktop, and a collapsible bar inside the content on mobile (the pack puts
+  // that one where it wants it). The rail lives outside #hud-content, so it is
+  // filled once the pack's markup is in the DOM.
+  if (typeof renderRollSidebar === 'function' && SYS && typeof SYS.renderHUD === 'function') {
+    renderRollSidebar('hud-dice-sidebar', 'hs');
+  }
   if (typeof markRollSurfaces === 'function') markRollSurfaces();
 }
 

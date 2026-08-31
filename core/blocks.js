@@ -141,11 +141,15 @@ registerBlockType('traitGrid', {
     let h = `<div class="card"><div class="blk-title">${esc(b.label || 'Traits')}</div>`;
     if (b.hint) h += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(b.hint)}</div>`;
     if (dual) {
-      h += `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px 8px;align-items:center">
+      // A fifth column only when there is something to put in it: a pack with no
+      // dice contract must not get an empty gutter down its Stat grid.
+      const roll = typeof rollSurfaces === 'function' && rollSurfaces() === 'sys';
+      h += `<div style="display:grid;grid-template-columns:1fr auto auto auto${roll ? ' auto' : ''};gap:6px 8px;align-items:center">
             <div></div>
             <div class="label" style="margin:0;text-align:center">${esc(b.layers[0] || 'Base')}</div>
             <div class="label" style="margin:0;text-align:center">${esc(b.layers[1] || 'Enhanced')}</div>
-            <div class="label" style="margin:0;text-align:center">Mod</div>`;
+            <div class="label" style="margin:0;text-align:center">Mod</div>
+            ${roll ? '<div></div>' : ''}`;
       traits.forEach(t => {
         const id = t.id || t, cell = d[id] || { base: 0, bonus: 0 };
         // Gear is part of the Enhanced score by definition, but it is not
@@ -159,7 +163,8 @@ registerBlockType('traitGrid', {
                 oninput="traitSet('${esc(b.id)}','${esc(id)}','base',this.value)"
                 onchange="traitCommit('${esc(b.id)}')">
               <div id="tg-${esc(b.id)}-${esc(id)}-tot" style="width:64px;text-align:center;font-weight:700">${enhanced}</div>
-              <div id="tg-${esc(b.id)}-${esc(id)}-mod" style="width:52px;text-align:center;color:var(--accent);font-weight:700">${mod >= 0 ? '+' : ''}${mod}</div>`;
+              <div id="tg-${esc(b.id)}-${esc(id)}-mod" style="width:52px;text-align:center;color:var(--accent);font-weight:700">${mod >= 0 ? '+' : ''}${mod}</div>
+              ${roll ? traitRollBtn(b.id, id, t.name || id) : ''}`;
       });
       h += `</div><div style="font-size:10px;color:var(--muted);margin-top:8px">
             Enhanced = ${esc(b.layers[0] || 'Base')} + gear, Spells and Buffs. The Mod comes off the Enhanced value.</div>`;
@@ -481,11 +486,56 @@ registerBlockType('readout', {
 // how a whole game shipped with nowhere to roll. Nothing is offered to a pack
 // with no dice contract, and a passive Skill is not something you roll.
 // ════════════════════════════════════════════════════════════════════════════
-function skillRollBtn(s) {
+// The die button a rollable row carries. On desktop it pops the roller up next
+// to the row; on a phone there is nowhere to put a popover, so the sticky bar
+// opens instead. `ref` names the thing unambiguously — a Stat called Strength
+// and a Skill called Strength are different rolls.
+function rollRowBtn(ref, title) {
+  if (typeof rollSurfaces !== 'function' || rollSurfaces() !== 'sys') return '';
+  return '<button class="btn btn-secondary btn-xs" style="padding:3px 6px" title="' +
+    esc(title || 'Roll this') + '" onclick="sysOpenRoller(&#39;' +
+    esc(String(ref).replace(/\\/g, '\\\\').replace(/'/g, "\\'")) +
+    '&#39;,this)">\u{1F3B2}</button>';
+}
+
+// Give a Skill an icon. Skills have no detail panel to put a field in, so the
+// popover IS the affordance — the same shell panel the roller is summoned into.
+function skillIconBtn(b, s, i) {
+  if (typeof iconField !== 'function') return '';
+  return '<button class="btn btn-secondary btn-xs ic-btn" title="' +
+    (s.icon ? 'Change the icon' : 'Choose an icon') + '"' +
+    ' onclick="skillIconOpen(' + jsArg(b.id) + ',' + i + ',this)">' +
+    (s.icon ? iconHTML(s.icon, 14) : '<span class="ic-btn-empty">◌</span>') + '</button>';
+}
+
+function skillIconOpen(blockId, i, anchor) {
+  const block = sysBlock(blockId);
+  const char = (typeof S !== 'undefined' && S) ? S.char : null;
+  if (!block || !char) return;
+  const list = blockCtx(block, char).data.skills || [];
+  const s = list[i];
+  if (!s) return;
+  iconInit('skill', {
+    value: s.icon || '', fallback: s.name,
+    onPick: function (v) { s.icon = v; save(); blockRepaint(blockId); },
+  });
+  popOpen('<div class="pg-title" style="font-size:15px;margin-bottom:6px">' + esc(s.name) + '</div>' +
+    iconField('skill', { placeholder: 'Search icons — ' + esc(s.name) + ', flame, shield…' }), anchor);
+  iconPreview('skill');
+  iconSearch('skill');
+}
+
+function skillRollBtn(s, blockId) {
   if (typeof rollSurfaces !== 'function' || rollSurfaces() !== 'sys') return '';
   if (s && s.passive) return '<span style="width:26px"></span>';
-  return '<button class="btn btn-secondary btn-xs" style="padding:3px 6px" title="Load into the roller"' +
-    ' onclick="sysLoadRoll(&#39;' + esc(String(s.name).replace(/'/g, "\\'")) + '&#39;)">\u{1F3B2}</button>';
+  return rollRowBtn(rollRef('skill', blockId, s.name), 'Roll ' + s.name);
+}
+
+// The same control on a Stat row. A Stat Check adds no Skill Ranks, so the
+// roller picks the pack's own check kind when one of these is loaded.
+function traitRollBtn(blockId, traitId, name) {
+  if (typeof rollSurfaces !== 'function' || rollSurfaces() !== 'sys') return '';
+  return rollRowBtn(rollRef('stat', blockId, traitId), 'Roll ' + (name || traitId));
 }
 
 registerBlockType('skillList', {
@@ -537,7 +587,7 @@ registerBlockType('skillList', {
           border-radius:4px;cursor:pointer;background:${s.marked ? 'var(--green)' : 'transparent'};
           display:flex;align-items:center;justify-content:center;font-size:12px;color:#08140b">${s.marked ? '✓' : ''}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
+          <div style="font-size:13px;font-weight:600">${s.icon ? iconHTML(s.icon, 15) + ' ' : ''}${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
           <div style="font-size:10px;color:var(--muted)">${esc(s.stat || '—')}${mod ? ' +' + mod : ''}${s.checkType ? ' · ' + esc(s.checkType) : ''}</div>
           ${(() => {
             // What it actually does. A Spell called "Heal" tells you nothing on
@@ -548,8 +598,9 @@ registerBlockType('skillList', {
         </div>
         <div class="num" style="min-width:34px;text-align:center;font-weight:700"
              title="Rank. Skills advance from use, not by hand.">${s.rank || 0}</div>
-        <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
-        ${skillRollBtn(s)}
+        <div class="sk-total" style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
+        ${skillIconBtn(b, s, i)}
+        ${skillRollBtn(s, b.id)}
         ${skillIsYours(s)
           ? `<button class="btn btn-secondary btn-xs" title="Remove this ${esc(b.label || 'entry')} — you added it yourself" onclick="skillDel('${esc(b.id)}',${i})">✕</button>`
           : `<span style="width:24px" title="This came from character creation, so it is part of who you are rather than something to delete"></span>`}
@@ -577,7 +628,7 @@ registerBlockType('skillList', {
         </div>
         <div class="num" style="min-width:34px;text-align:center;font-weight:700"
              title="Untrained — you have no Ranks of your own">\u2014</div>
-        <div style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
+        <div class="sk-total" style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
         <span style="width:24px"></span>
       </div>`;
     });
@@ -868,7 +919,7 @@ function invItemRow(b, c, item, where, idx, extra) {
   // controls and an item called "Chef's Knife of Unwelcome Surprises" do not
   // share 360px.
   return `<div class="inv-row">
-    <div class="inv-name">${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}
+    <div class="inv-name">${item.icon ? iconHTML(item.icon, 16) + ' ' : ''}${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}
       ${(() => { const r = invReadout(b, item, (typeof S !== 'undefined' && S) ? S.char : null);
                  return r ? `<span class="inv-stat">${esc(r)}</span>` : ''; })()}</div>
     <div class="inv-ctl">${extra || ''}${detail}${slotPick}${moves}
@@ -908,16 +959,30 @@ function invStack(b, c, d) {
       h += `<div class="inv-name" style="color:var(--muted)">empty</div></div>`;
       continue;
     }
-    const line = invReadout(b, it, (typeof S !== 'undefined' && S) ? S.char : null);
-    h += `<div class="inv-name">${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
+    const char = (typeof S !== 'undefined' && S) ? S.char : null;
+    const line = invReadout(b, it, char);
+    // A stack row used to be the ONE container with no detail panel, so an item
+    // added straight to the Hotlist could never be given an icon or told what it
+    // works as — and the Hotlist is exactly the container whose icons are read
+    // at arm's length on the HUD keypad. Two playtesters found it independently.
+    const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
+    const rowKey = c.id + ':' + '' + ':' + i;
+    const openDetail = _invDetailOpen === rowKey;
+    h += `<div class="inv-name">${it.icon ? iconHTML(it.icon, 15) + ' ' : ''}${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
       <div class="inv-ctl">
       <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
       <div class="num" style="min-width:28px;text-align:center;font-weight:700">${it.qty || 1}</div>
       <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},1)">+</button>`;
+    if (fields && fields.length) {
+      h += `<button class="btn btn-secondary btn-xs" title="What this is"
+        onclick="invDetail('${esc(b.id)}','${esc(rowKey)}')">${openDetail ? '−' : '⋯'}</button>`;
+    }
     (b.containers || []).filter(x => x.id !== c.id).forEach(x => {
       h += `<button class="btn btn-secondary btn-xs" onclick="invMove('${esc(b.id)}','${esc(c.id)}','${esc(x.id)}','',${i})">→ ${esc((x.label || x.id).split(' ')[0])}</button>`;
     });
-    h += `<button class="btn btn-secondary btn-xs" title="Remove" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','',${i})">✕</button></div></div>`;
+    h += `<button class="btn btn-secondary btn-xs" title="Remove" onclick="invRemove('${esc(b.id)}','${esc(c.id)}','',${i})">✕</button></div>`;
+    if (openDetail && fields && fields.length) h += invDetailHTML(b, c, it, '', i, fields);
+    h += `</div>`;
   }
   return h + `</div>`;
 }
@@ -984,8 +1049,36 @@ function invRoom(block, data, cid, slotId) {
     if (!s) return 0;
     return Math.max(0, (s.max || 1) - ((data[cid] || {})[slotId] || []).length);
   }
-  if (c.kind === 'stack') return Math.max(0, (c.size || 10) - (data[cid] || []).length);
+  // Holes are not occupancy: a stack with slot 1 emptied still has room in it.
+  if (c.kind === 'stack') {
+    return Math.max(0, (c.size || 10) - (data[cid] || []).filter(Boolean).length);
+  }
   return null;
+}
+
+// ── stack containers keep their slot numbers ────────────────────────────────
+// A stack is a KEYPAD, not a list: slot 3 is slot 3 whatever happens to slot 1.
+// Emptying one leaves a hole rather than closing up, and adding fills the first
+// hole rather than appending.
+//
+// Splicing was the bug two playtesters found independently: drinking the potion
+// in slot 1 shifted every later item down a slot, so the Hotlist rearranged
+// itself at the exact moment a player is relying on muscle memory — which is
+// the whole reason the keypad has fixed positions.
+function invIsStack(block, cid) {
+  const c = _container(block, cid);
+  return !!c && c.kind === 'stack';
+}
+function invVacate(arr, i, isStack) {
+  if (!Array.isArray(arr)) return;
+  if (isStack) arr[i] = null; else arr.splice(i, 1);
+}
+function invPlace(arr, item, size) {
+  for (let k = 0; k < size; k++) {
+    if (!arr[k]) { arr[k] = item; return k; }
+  }
+  arr.push(item);
+  return arr.length - 1;
 }
 function invAdd(id, cid) {
   const t = _inv(id); if (!t) return;
@@ -1041,6 +1134,7 @@ function invAdd(id, cid) {
   }
   const item = works ? { name, qty: 1, skill: works } : { name, qty: 1 };
   if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
+  else if (c.kind === 'stack') invPlace(t.ctx.data[cid], item, c.size || 10);
   else t.ctx.data[cid].push(item);
   if (inp) inp.value = '';
   save(); blockSyncAll(id);
@@ -1050,7 +1144,7 @@ function invRemove(id, cid, slotId, i) {
   const c = _container(t.block, cid);
   const arr = c.kind === 'slots' ? (t.ctx.data[cid] || {})[slotId] : t.ctx.data[cid];
   if (!arr) return;
-  arr.splice(i, 1);
+  invVacate(arr, i, c.kind === 'stack');
   save(); blockSyncAll(id);
 }
 function invQty(id, cid, i, delta) {
@@ -1063,6 +1157,41 @@ function invQty(id, cid, i, delta) {
   it.qty = Math.max(1, Math.min(max, (it.qty || 1) + delta));
   save(); blockSyncAll(id);
 }
+
+// Spend one. Unlike invQty this can reach empty: quantity clamps at 1 there
+// because the ± controls should never silently bin an item, but drinking your
+// last potion has to be possible, and going to the sheet to delete the empty
+// slot mid-fight is not a thing anyone will do.
+//
+// Returns what it did, so the caller can offer an undo — a tap that spends
+// something with no ± to correct it needs a way back.
+function invSpend(id, cid, i) {
+  const t = _inv(id); if (!t) return null;
+  const arr = t.ctx.data[cid];
+  const it = Array.isArray(arr) ? arr[i] : null;
+  if (!it) return null;
+  const qty = it.qty || 1;
+  const stack = invIsStack(t.block, cid);
+  const undo = { blockId: id, cid: cid, index: i, stack: stack,
+                 item: JSON.parse(JSON.stringify(it)), emptied: qty <= 1 };
+  if (qty <= 1) invVacate(arr, i, stack);
+  else it.qty = qty - 1;
+  save(); blockSyncAll(id);
+  return undo;
+}
+
+// Put back exactly what invSpend() took, in the slot it came from — which for a
+// stack means THAT slot number, not "wherever it lands".
+function invUnspend(u) {
+  if (!u) return;
+  const t = _inv(u.blockId); if (!t) return;
+  const arr = t.ctx.data[u.cid];
+  if (!Array.isArray(arr)) return;
+  if (!u.emptied && arr[u.index]) arr[u.index].qty = (arr[u.index].qty || 0) + 1;
+  else if (u.stack) arr[u.index] = u.item;
+  else arr.splice(u.index, 0, u.item);
+  save(); blockSyncAll(u.blockId);
+}
 // Move an item between containers, refusing when the destination is full.
 // Which gear slot an item belongs in. The shell cannot know a Club is held
 // rather than worn, so the pack decides; without an answer we fall back to the
@@ -1071,12 +1200,33 @@ let _invDetailOpen = '';
 function invDetail(id, rowKey) {
   _invDetailOpen = _invDetailOpen === rowKey ? '' : rowKey;
   blockRepaint(id);
+  // The picker's preview and results can only be filled once its markup is in
+  // the DOM, which is after the repaint above.
+  if (_invDetailOpen && typeof iconPreview === 'function' &&
+      document.getElementById('inv-icon-results')) {
+    iconPreview('inv');
+    iconSearch('inv');
+  }
 }
 
 function invDetailHTML(b, c, item, where, idx, fields) {
   let h = '<div class="inv-detail">';
   fields.forEach(function (f) {
     const val = item[f.key] === undefined || item[f.key] === null ? '' : item[f.key];
+    // An icon field is the shared picker rather than a text box. Only one item
+    // detail panel is open at a time, so one instance is right; it commits
+    // through invSetField like every other field, so nothing else changes.
+    if (f.type === 'icon') {
+      iconInit('inv', {
+        value: String(val), fallback: item.name || '',
+        onPick: function (v) { invSetField(b.id, c.id, where, idx, f.key, v); },
+      });
+      h += '<div class="inv-f inv-f-wide">' + iconField('inv', {
+        label: f.label,
+        placeholder: 'Search icons — ' + (item.name ? esc(item.name) + ', ' : '') + 'potion, sword…',
+      }) + '</div>';
+      return;
+    }
     h += '<label class="inv-f"><span>' + esc(f.label) + '</span>';
     if (f.options) {
       const opts = typeof f.options === 'function' ? f.options() : f.options;
@@ -1194,8 +1344,9 @@ function invMove(id, fromId, toId, slotId, i, wantSlot) {
     if (typeof flashSaveError === 'function') flashSaveError((to.label || to.id) + ' is full');
     return;
   }
-  src.splice(i, 1);
+  invVacate(src, i, from.kind === 'stack');
   if (to.kind === 'slots') (t.ctx.data[toId][destSlot] = t.ctx.data[toId][destSlot] || []).push(item);
+  else if (to.kind === 'stack') invPlace(t.ctx.data[toId], item, to.size || 10);
   else t.ctx.data[toId].push(item);
   save(); blockSyncAll(id);
 }

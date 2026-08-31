@@ -25,6 +25,22 @@ function dccStatOf(char, id) {
 }
 function dccModOf(char, id) { return dccStatMod(dccStatOf(char, id)); }
 
+// A Hotlist entry is often just a name — creation writes {name:'Heal'} for a
+// Spell parked there. If the crawler actually knows a Skill or Spell by that
+// name, tapping the slot should roll it.
+function dccHotlistKnown(char, name) {
+  const n = String(name || '').toLowerCase();
+  if (!n || !char || !char.blocks) return '';
+  let hit = '';
+  ['skills', 'spells'].forEach(function (id) {
+    const b = char.blocks[id];
+    ((b && b.skills) || []).forEach(function (s) {
+      if (!hit && s && String(s.name).toLowerCase() === n) hit = s.name;
+    });
+  });
+  return hit;
+}
+
 // One d20, with Advantage (+1) / Disadvantage (-1) / neither (0).
 function dccRollD20(adv) {
   const d = () => 1 + Math.floor(Math.random() * 20);
@@ -401,6 +417,9 @@ registerSystem({
     // casts a Spell you have no Ranks in (p. 58); a tome "can later be read to
     // learn the Spell" (p. 116).
     gearItemFields: () => [
+      // Drawn as the shared game-icons picker, not a text box. The icon is what
+      // you actually read on the Hotlist keypad mid-fight.
+      { key: 'icon',    label: 'Icon',      type: 'icon' },
       { key: 'skill',   label: 'Works as',  options: () => DCC_SKILLS.filter(x => x.kind === 'attack').map(x => x.name) },
       { key: 'dr',      label: 'Armour DR', type: 'number', hint: '0' },
       { key: 'resist',  label: 'Resists',   hint: 'e.g. Fire' },
@@ -421,6 +440,29 @@ registerSystem({
     gearItemActions: (item) => (item && item.teaches)
       ? [{ id: 'learn', label: 'Read it — learn ' + item.teaches }]
       : [],
+
+    // What ONE TAP on a Hotlist slot does. Three different things, and only the
+    // pack knows which is which: a potion is drunk, a scroll is cast and then
+    // spent, a weapon left in the Hotlist is simply rolled. Returning null means
+    // the slot is not tappable and the keypad says so rather than guessing.
+    //   roll  — a Skill or Spell name to roll
+    //   spend — take one off the stack (and empty the slot at the last one)
+    gearItemTap: (item, char) => {
+      if (!item) return null;
+      // A scroll casts the Spell written on it and is consumed doing so.
+      if (item.casts) return { roll: item.casts, spend: true, label: 'Cast ' + item.casts };
+      // A weapon or tool works as a Skill. Rolling it costs you nothing.
+      if (item.skill) return { roll: item.skill, spend: false, label: 'Roll ' + item.skill };
+      // A Spell or Skill you know, parked in the Hotlist so it is reachable
+      // under pressure. Rolling it does not consume the slot.
+      const known = dccHotlistKnown(char, item.name);
+      if (known) return { roll: known, spend: false, label: 'Roll ' + known };
+      // A tome is read, which is an action rather than a tap — leave it to the
+      // detail panel, where it says what it will teach you first.
+      if (item.teaches) return null;
+      // Everything else that stacks is a consumable: potions, rations, ammo.
+      return { roll: '', spend: true, label: 'Use ' + item.name };
+    },
 
     gearItemAct: (action, item, char) => {
       if (action !== 'learn' || !item || !item.teaches) return { ok: false };
@@ -584,6 +626,11 @@ registerSystem({
   dice: {
     formula: '1d20',
     checkKinds: DCC_CHECK_KINDS,
+    // Rolling a raw Stat is a Stat Check — 10 + Floor, and no Skill Ranks added
+    // (p. 123). Naming it here is what lets the roller switch the difficulty by
+    // itself when you pick a Stat instead of a Skill; without it a Stat rolled
+    // against the Unopposed number, which is six higher on Floor 3.
+    statKind: 'stat',
     roll: dccRollD20,
     resolve: dccResolveCheck,
     difficulty: dccDifficulty,

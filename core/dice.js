@@ -1,21 +1,37 @@
 // ═══════════════════════════════════════════════════════════
 // SHELL ROLL SURFACES
 // ═══════════════════════════════════════════════════════════
-// Rolling is the thing a player does most, so it is offered in three places,
-// not one: the Dice tab, a sticky roller beside the sheet on desktop, and a
-// tap-to-expand bar on the sheet on mobile.
+// Rolling is the thing a player does most, so it is offered wherever they are:
+// the Dice tab, a sticky roller beside the sheet on desktop, a tap-to-expand bar
+// on the sheet on mobile, the same pair on the HUD, and a popover that appears
+// where you click a Stat or a Skill.
 //
-// All three used to be Daring Comics'. The sidebar and the mobile bar were
-// built inside renderSheet() in core/sheet.js, which only Daring Comics calls —
-// a block pack forks away at core/creation.js and never reaches it. That was
-// survivable until you notice core/shell.css hides #nb-dice below 700px,
-// because the sheet was supposed to be carrying a roller instead. For Dungeon
-// Crawler Carl it was not, so at phone width there was no way to roll a die at
-// all. See DEBRIEF.md.
+// That is six copies of one form, so it is ONE component instantiated six times
+// rather than six hand-placed copies. Every instance carries an id; its fields,
+// its ROLL button and its result element are all derived from that id, and the
+// helpers below find live instances by querying [data-roller] rather than
+// holding a list. A list would go stale the moment a tab repainted, and the
+// hardcoded ids it replaced (#dice-bar-body, #quick-roll-toast) were already
+// being read by three functions that had no business knowing them.
 //
-// So the surfaces live here now, behind three functions both sheet renderers
-// call. A change to the roller can no longer reach one surface and miss the
-// other two.
+// The history: all of this used to be Daring Comics', built inside renderSheet()
+// in core/sheet.js, which only Daring Comics calls. core/shell.css hid the Dice
+// tab below 700px because the sheet was supposed to be carrying a roller
+// instead — true for Daring Comics, false for a block pack, so Dungeon Crawler
+// Carl had no way to roll a die at phone width at all. See DEBRIEF.md.
+
+// The breakpoint the layout switches at. This MUST track the @media rule in
+// core/shell.css: the whole dice bug was one rule assuming what another file
+// drew, and a popover that opens at a width where the sidebar is hidden would
+// be the same mistake wearing a different hat.
+const ROLL_DESKTOP_MQ = '(min-width:700px)';
+
+// Split out so a test can stub it: JSDOM implements matchMedia as a stub that
+// always reports false, so the desktop path is unreachable otherwise.
+function sysRollerIsDesktop(){
+  try{ return !!(window.matchMedia && window.matchMedia(ROLL_DESKTOP_MQ).matches); }
+  catch(e){ return false; }
+}
 
 // Which roller a pack gets. 'sys' — it declared SYS.dice. 'fate' — it is
 // Daring Comics (or another hand-written pack still on the old renderer).
@@ -27,184 +43,332 @@ function rollSurfaces(){
   return 'fate';
 }
 
-// Where a mobile roll result appears. Sticky, so it stays on screen while you
-// scroll the sheet under it.
+// Where a mobile roll result appears on the hero sheet. Sticky, so it stays on
+// screen while you scroll the sheet under it.
 function rollToastHTML(){
   return '<div id="quick-roll-toast" style="position:sticky;top:0;z-index:50"></div>';
 }
 
-// The mobile bar, drawn into the sheet by whichever renderer owns the pack.
-function rollBarHTML(){
+// The collapsible bar. Defaults to the hero sheet's instance, because that is
+// the one core/shell.css hides the Dice tab in favour of.
+function rollBarHTML(id,opts){
   const m=rollSurfaces();
-  if(m==='sys')return sysRollBarHTML();
+  const o=Object.assign({sheet:true,resultIn:'quick-roll-toast',toast:true},opts||{});
+  if(m==='sys')return rollerBarHTML(id||'sm',o);
   if(m==='fate')return fateRollBarHTML();
   return '';
 }
 
-// The desktop sidebar. Called after the sheet HTML is in the DOM, because it
-// fills a container that lives outside it (#page-hero is a flex row).
-function renderRollSidebar(){
-  const el=document.getElementById('hero-dice-sidebar');if(!el)return;
+// The desktop sidebar. Called after its page's HTML is in the DOM, because it
+// fills a container that lives outside it — a .roller-page is a flex row with
+// the sheet on the left and this on the right.
+function renderRollSidebar(hostId,instId){
+  const el=document.getElementById(hostId||'hero-dice-sidebar');if(!el)return;
   const m=rollSurfaces();
-  el.innerHTML=m==='sys'?sysRollPanelHTML():m==='fate'?buildDicePanel():'';
+  el.innerHTML=m==='sys'?rollerHTML(instId||'ss',{compact:true})
+             :m==='fate'?buildDicePanel():'';
   markRollSurfaces();
 }
 
-// core/shell.css hides the Dice tab below 700px *on the grounds that the sheet
-// carries a roller instead*. That was an invariant living in one person's head;
-// it is a class on <body> now, so the rule can only fire when it is true.
+// core/shell.css hides the Dice tab below 700px *on the grounds that the hero
+// sheet carries a roller instead*. That was an invariant living in one person's
+// head; it is a class on <body> now, set from the sheet's own bar, so the rule
+// can only fire when it is true. Deliberately still the SHEET's bar and not the
+// HUD's: the hero page is where a player lands.
 function markRollSurfaces(){
   if(!document.body)return;
-  document.body.classList.toggle('has-sheet-roller',!!document.getElementById('dice-bar-body'));
+  document.body.classList.toggle('has-sheet-roller',!!document.querySelector('[data-roller-sheet]'));
 }
 
 // ═══════════════════════════════════════════════════════════
 // PACK ROLLER  (any pack that declares SYS.dice)
 // ═══════════════════════════════════════════════════════════
-// The Skill loaded from a sheet row, shared by all three surfaces so tapping a
-// Skill on the sheet arrives in whichever roller you then open.
-let _sysLoaded='';
+// What is loaded into every roller at once, as a ref (see rollEntries). Shared
+// on purpose: pick a Stat on the sheet, open the HUD, and it is still there.
+let _rollLoaded='';
 
-// Which blocks hold rollable Skills. Hardcoded to Dungeon Crawler Carl's two
-// until a pack needed a third; a pack says so itself now.
+// Which blocks hold rollable Skills, and which hold rollable Stats. Both were
+// going to end up hardcoded to Dungeon Crawler Carl's; a pack names its own,
+// and the Stat default reads the schema rather than a list, so any pack with a
+// traitGrid can roll its traits without declaring anything.
 function sysRollBlocks(){
   return (SYS&&SYS.dice&&SYS.dice.skillBlocks)||['skills','spells'];
 }
+function sysRollTraitBlocks(){
+  if(SYS&&SYS.dice&&SYS.dice.statBlocks)return SYS.dice.statBlocks;
+  return ((SYS&&SYS.schema&&SYS.schema.blocks)||[])
+    .filter(function(b){return b.type==='traitGrid';})
+    .map(function(b){return b.id;});
+}
 
-// The Skills a pack roller can offer: whatever the character actually has.
-function sysDiceSkills(){
+// A ref names one rollable thing unambiguously: 'stat:stats:STR',
+// 'skill:spells:Heal'. The block id is in there because a Stat called Strength
+// and a Skill called Strength are different rolls, and a bare name cannot say
+// which — the roller's <option value> used to be a bare name and would have
+// picked whichever came first.
+function rollRef(kind,blockId,name){return kind+':'+blockId+':'+name;}
+
+// Everything the character can roll, grouped for the dropdown.
+function rollEntries(){
   const ch=S.char;
   if(!ch||!ch.blocks)return [];
   const out=[];
+  // Stats first: a Stat Check adds no Ranks, so rank is 0 and the maths below
+  // is the same as any other roll.
+  sysRollTraitBlocks().forEach(function(id){
+    const b=sysBlock?sysBlock(id):null;
+    const data=ch.blocks[id];
+    if(!b||!data)return;
+    (b.traits||[]).forEach(function(t){
+      const tid=t.id||t;
+      out.push({ref:rollRef('stat',id,tid),kind:'stat',name:t.name||tid,
+                statId:tid,rank:0,group:b.label||'Stats'});
+    });
+  });
   sysRollBlocks().forEach(function(id){
     const b=ch.blocks[id];
     if(!b||!Array.isArray(b.skills))return;
-    b.skills.forEach(function(sk){
-      if(sk&&sk.name)out.push({name:String(sk.name),rank:sk.rank||0,stat:sk.stat||''});
+    const def=sysBlock?sysBlock(id):null;
+    const group=(def&&def.label)||id;
+    b.skills.slice().sort(function(a,z){
+      return String(a.name).localeCompare(String(z.name));
+    }).forEach(function(sk){
+      if(!sk||!sk.name)return;
+      out.push({ref:rollRef('skill',id,sk.name),kind:'skill',name:String(sk.name),
+                statId:sk.stat||'',rank:sk.rank||0,group:group});
     });
   });
-  return out.sort(function(a,b){return a.name.localeCompare(b.name);});
+  return out;
 }
 
-// The roll form, drawn three times over under three id prefixes: 'sd' for the
-// Dice tab, 'ss' for the sheet sidebar, 'sm' for the mobile bar.
-function sysRollFormHTML(p,compact){
-  const d=SYS.dice,kinds=d.checkKinds||[],list=sysDiceSkills();
+// Kept as it was — a flat list of Skills only, by name. The HUD's attack cards
+// and the existing suites read it, and adding Stats to it would have quietly
+// changed what "the Skills you have" means.
+function sysDiceSkills(){
+  return rollEntries().filter(function(e){return e.kind==='skill';})
+    .map(function(e){return {name:e.name,rank:e.rank,stat:e.statId};})
+    .sort(function(a,b){return a.name.localeCompare(b.name);});
+}
+
+// Resolve a ref, or a bare name for the callers that only have one — the HUD's
+// attack cards say dccHudRoll('Unarmed Combat'), and should not have to know
+// which block it lives in.
+function rollFind(refOrName){
+  if(!refOrName)return null;
+  const list=rollEntries();
+  return list.find(function(x){return x.ref===refOrName;})
+      || list.find(function(x){return x.kind==='skill'&&x.name===refOrName;})
+      || list.find(function(x){return x.name===refOrName;})
+      || null;
+}
+
+// The Stat Mod for a trait, from the pack's own table. A pack's statMod either
+// takes the Enhanced score (Dungeon Crawler Carl) or the character and the trait
+// id; both shapes were already in use here, so both are still handled.
+function rollStatMod(statId){
+  if(!statId)return 0;
+  const modFn=sysDerive('statMod');
+  if(!modFn)return 0;
+  const statFn=sysDerive('stat')||(typeof dccStatOf==='function'?dccStatOf:null);
+  try{
+    if(statFn)return Number(modFn(statFn(S.char,statId)))||0;
+    return Number(modFn(S.char,statId))||0;
+  }catch(e){return 0;}
+}
+
+// ── the component ───────────────────────────────────────────────────────────
+// One form, six instances. Every id below is derived from `id`, so two
+// instances on screen at once cannot collide.
+function rollerFormHTML(id,compact){
+  const d=SYS.dice,kinds=d.checkKinds||[],list=rollEntries();
   const sz=compact?' style="font-size:12px;padding:7px"':'';
   const row=compact?' style="display:flex;gap:6px;margin-bottom:6px"':' class="grid-2 mb-2"';
-  const opts='<option value="">— Flat roll —</option>'+list.map(function(sk){
-    return '<option value="'+esc(sk.name)+'"'+(sk.name===_sysLoaded?' selected':'')+'>'+
-      esc(sk.name)+' (Rank '+sk.rank+(sk.stat?', '+esc(sk.stat):'')+')</option>';}).join('');
+  let opts='<option value="">— Flat roll —</option>',group='';
+  list.forEach(function(e){
+    if(e.group!==group){
+      if(group)opts+='</optgroup>';
+      group=e.group;
+      opts+='<optgroup label="'+esc(group)+'">';
+    }
+    opts+='<option value="'+esc(e.ref)+'"'+(e.ref===_rollLoaded?' selected':'')+'>'+
+      esc(e.name)+(e.kind==='stat'?'':' (Rank '+e.rank+')')+
+      (e.statId&&e.kind!=='stat'?' · '+esc(e.statId):'')+'</option>';
+  });
+  if(group)opts+='</optgroup>';
   let h='<div'+row+'>'+
-    '<div class="form-group" style="flex:1;min-width:0;margin:0"><label>'+esc(lexU('skill'))+'</label>'+
-    '<select id="'+p+'-skill"'+sz+' onchange="_sysLoaded=this.value">'+opts+'</select></div>'+
+    '<div class="form-group" style="flex:1;min-width:0;margin:0"><label>Roll what</label>'+
+    '<select id="'+id+'-skill"'+sz+' onchange="rollerPick(&#39;'+id+'&#39;)">'+opts+'</select></div>'+
     '<div class="form-group" style="'+(compact?'width:54px;':'')+'margin:0"><label>Mod</label>'+
-    '<input type="number" id="'+p+'-mod" value="0"'+sz+'></div></div>';
+    '<input type="number" id="'+id+'-mod" value="0"'+sz+'></div></div>';
   h+='<div'+row+'>';
   if(kinds.length){
     h+='<div class="form-group" style="flex:1;min-width:0;margin:0"><label>Check</label>'+
-      '<select id="'+p+'-kind"'+sz+'>'+kinds.map(function(k){
+      '<select id="'+id+'-kind"'+sz+'>'+kinds.map(function(k){
         return '<option value="'+esc(k.id)+'">'+esc(k.name||k.id)+'</option>';}).join('')+'</select></div>';
   }
   h+='<div class="form-group" style="flex:1;min-width:0;margin:0"><label>Roll</label>'+
-    '<select id="'+p+'-adv"'+sz+'><option value="0">Straight</option>'+
+    '<select id="'+id+'-adv"'+sz+'><option value="0">Straight</option>'+
     '<option value="1">Advantage</option><option value="-1">Disadvantage</option></select></div></div>';
   return h;
 }
 
-// Surface 1 — the Dice tab.
-function sysDiceHTML(){
-  return '<div class="pg-title">'+esc(lexU('roll'))+'</div><div class="pg-sub">'+
-    esc(SYS.dice.formula||'')+' + Rank + Stat Mod</div><div class="card">'+
-    sysRollFormHTML('sd',false)+
-    '<div class="tac"><button class="roll-btn" onclick="sysDoRollFrom(&#39;sd&#39;)">ROLL</button></div>'+
-    '</div><div id="sd-result"></div>';
+// The wrapper carries the instance id and where its answer goes, so
+// sysDoRollFrom() reads those off the DOM instead of special-casing by name.
+function rollerAttrs(id,o){
+  return ' data-roller="'+esc(id)+'"'+
+    ' data-result="'+esc(o.resultIn||(id+'-result'))+'"'+
+    (o.toast?' data-toast="1"':'')+
+    (o.sheet?' data-roller-sheet="1"':'');
 }
 
-// Surface 2 — the sticky sidebar beside the sheet on desktop.
-function sysRollPanelHTML(){
-  return '<div class="card"><div class="pg-title" style="font-size:18px;margin-bottom:2px">'+
-    esc(lexU('roll'))+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+
-    esc(SYS.dice.formula||'')+' + Rank + Stat Mod</div>'+
-    sysRollFormHTML('ss',true)+
-    '<div class="tac"><button class="roll-btn" style="width:60px;height:60px;font-size:18px" '+
-    'onclick="sysDoRollFrom(&#39;ss&#39;)">ROLL</button></div>'+
-    '<div id="ss-result" style="margin-top:8px"></div></div>';
+// A panel instance: the Dice tab, either sidebar, or the popover.
+function rollerHTML(id,opts){
+  const o=opts||{};
+  const big=!o.compact;
+  return '<div class="card"'+rollerAttrs(id,o)+'>'+
+    (o.bare?'':'<div class="pg-title" style="font-size:'+(big?'26px':'18px')+';margin-bottom:2px">'+
+      esc(o.title||lexU('roll'))+'</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+
+      esc(SYS.dice.formula||'')+' + Rank + Stat Mod</div>')+
+    rollerFormHTML(id,!!o.compact)+
+    '<div class="tac"><button class="roll-btn"'+(o.compact?' style="width:60px;height:60px;font-size:18px"':'')+
+    ' onclick="sysDoRollFrom(&#39;'+id+'&#39;)">ROLL</button></div>'+
+    '<div id="'+esc(o.resultIn||(id+'-result'))+'" style="margin-top:8px"></div></div>';
 }
 
-// Surface 3 — the tap-to-expand bar on the sheet on mobile. #dice-bar-body is
-// also what markRollSurfaces() looks for, so this element IS the claim that the
-// Dice tab may be hidden.
-function sysRollBarHTML(){
-  return '<div id="hero-dice-mobile"><div class="dice-bar-toggle" '+
-    'onclick="document.getElementById(&#39;dice-bar-body&#39;).classList.toggle(&#39;open&#39;)">'+
+// A collapsed bar instance: tap the strip to open the form. The strip is the
+// control, not the body — the body is display:none until it is opened, so
+// anything testing the body for reachability would call a working roller hidden.
+function rollerBarHTML(id,opts){
+  const o=opts||{};
+  const resultIn=o.resultIn||(id+'-result');
+  return '<div class="roller-bar" id="'+id+'-bar"'+rollerAttrs(id,o)+'>'+
+    '<div class="dice-bar-toggle" onclick="rollerToggle(&#39;'+id+'&#39;)">'+
     '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:16px">&#127922;</span>'+
     '<span class="fw-700" style="font-size:13px;font-family:var(--font-label)">'+esc(lexU('roll'))+'</span>'+
-    '<span id="sm-loaded" style="font-size:10px;color:var(--accent)"></span></div>'+
+    '<span id="'+id+'-loaded" style="font-size:10px;color:var(--accent)"></span></div>'+
     '<span class="text-muted" style="font-size:11px">tap to expand</span></div>'+
-    '<div class="dice-bar-body" id="dice-bar-body">'+sysRollFormHTML('sm',true)+
+    '<div class="dice-bar-body" id="'+id+'-body">'+rollerFormHTML(id,true)+
     '<div class="tac"><button class="roll-btn" style="width:44px;height:44px;font-size:14px" '+
-    'onclick="sysDoRollFrom(&#39;sm&#39;)">ROLL</button></div></div></div>';
+    'onclick="sysDoRollFrom(&#39;'+id+'&#39;)">ROLL</button></div>'+
+    (resultIn===id+'-result'?'<div id="'+id+'-result" style="margin-top:8px"></div>':'')+
+    '</div></div>';
 }
 
-// Roll a named Skill with no form to read. A fight screen rolls straight off an
-// attack card, with nothing on screen to take a modifier from, so the roll
-// itself cannot depend on the DOM. This is the single choke point every pack
-// roll goes through — the multiplayer feed wraps THIS, not its callers.
-function sysRollSkill(name,opts){
+function rollerToggle(id){
+  const b=document.getElementById(id+'-body');
+  if(b)b.classList.toggle('open');
+}
+
+// Every instance currently in the DOM. Queried, never remembered: a tab repaint
+// throws instances away without telling anyone.
+function rollerLive(){
+  return [].slice.call(document.querySelectorAll('[data-roller]'));
+}
+
+// Picking a Stat should also pick the pack's Stat Check, because a Stat Check
+// adds no Skill Ranks and rolling one as "Unopposed" is a different difficulty.
+function rollerPick(id){
+  const sel=document.getElementById(id+'-skill');
+  if(!sel)return;
+  _rollLoaded=sel.value||'';
+  const e=rollFind(_rollLoaded);
+  const kindSel=document.getElementById(id+'-kind');
+  const statKind=SYS&&SYS.dice&&SYS.dice.statKind;
+  if(kindSel&&e&&e.kind==='stat'&&statKind)kindSel.value=statKind;
+  rollerLabel(id);
+}
+
+function rollerLabel(id){
+  const lab=document.getElementById(id+'-loaded');
+  if(!lab)return;
+  const e=rollFind(_rollLoaded);
+  lab.textContent=e?' · '+e.name:'';
+}
+
+// ── rolling ─────────────────────────────────────────────────────────────────
+// Roll a named thing with no form to read. A fight screen rolls straight off an
+// attack card and a popover rolls straight off a Stat row, so the roll itself
+// cannot depend on the DOM. This is the single choke point every pack roll goes
+// through — the multiplayer feed wraps THIS, not its callers.
+function sysRollSkill(refOrName,opts){
   const o=opts||{};
-  const sk=sysDiceSkills().find(function(x){return x.name===name;});
+  const e=rollFind(refOrName);
   const mod=Number(o.bonus)||0;
-  // The Stat Mod comes from the pack's own table, applied to the character's
-  // Enhanced score for that Stat.
-  let statMod=0;
-  if(sk&&sk.stat){
-    const f=sysDerive('statMod');
-    if(f&&typeof dccStatOf==='function')statMod=f(dccStatOf(S.char,sk.stat))||0;
-    else if(f)statMod=f(S.char,sk.stat)||0;
-  }
-  const r=SYS.dice.resolve({rank:sk?sk.rank:0,statMod:statMod,bonus:mod,
-                            adv:Number(o.adv)||0,kind:o.kind,floor:S.floor||3});
+  const statMod=e?rollStatMod(e.statId):0;
+  // A Stat Check adds no Ranks and has its own difficulty. When the caller did
+  // not name a kind — an attack card, a popover — the pack's own says so.
+  const kind=o.kind||((e&&e.kind==='stat'&&SYS.dice.statKind)?SYS.dice.statKind:undefined);
+  const r=SYS.dice.resolve({rank:e?e.rank:0,statMod:statMod,bonus:mod,
+                            adv:Number(o.adv)||0,kind:kind,floor:S.floor||3});
   // `skill` as well as `label`: the multiplayer roll feed reads S.dice.skill, so
   // without it a pack roll reached the table as a bare number with no name on it.
-  S.dice=Object.assign({},r,{label:sk?sk.name:'Flat roll',skill:sk?sk.name:'',
-                             mod:mod,systemId:SYS.id});
-  _sysLoaded=name||'';
+  S.dice=Object.assign({},r,{label:e?e.name:'Flat roll',skill:e?e.name:'',
+                             ref:e?e.ref:'',mod:mod,systemId:SYS.id});
+  _rollLoaded=e?e.ref:'';
   save();
   return S.dice;
 }
 
-// One roll, from whichever surface asked. The result goes back to that surface:
-// the mobile bar answers in the sticky toast, everything else answers in place.
-function sysDoRollFrom(p){
-  const g=function(f){return document.getElementById(p+'-'+f);};
+// One roll, from whichever instance asked. Where the answer goes is written on
+// the instance, so nothing here has to know that the sheet's bar answers in a
+// sticky toast while everything else answers in place.
+function sysDoRollFrom(id){
+  const g=function(f){return document.getElementById(id+'-'+f);};
+  const wrap=document.querySelector('[data-roller="'+id+'"]');
   sysRollSkill((g('skill')||{}).value||'',{
     bonus:parseInt((g('mod')||{}).value,10)||0,
     kind:(g('kind')||{}).value||undefined,
     adv:parseInt((g('adv')||{}).value,10)||0,
   });
-  if(p==='sm')sysRenderRollInto('quick-roll-toast',true);
-  else sysRenderRollInto(p+'-result',false);
+  const target=(wrap&&wrap.getAttribute('data-result'))||(id+'-result');
+  sysRenderRollInto(target,!!(wrap&&wrap.getAttribute('data-toast')));
   return S.dice;
 }
 
-// Tap a Skill on the sheet and it lands in every roller at once — the
-// affordance Daring Comics has had all along and a block pack never got.
-function sysLoadRoll(name){
-  _sysLoaded=name||'';
-  ['sd','ss','sm'].forEach(function(p){
-    const s=document.getElementById(p+'-skill');if(s)s.value=_sysLoaded;
+// Tap a Stat or a Skill and it lands in every roller at once, so whichever one
+// you open next is already holding it.
+function sysRollLoad(refOrName){
+  const e=rollFind(refOrName);
+  _rollLoaded=e?e.ref:'';
+  rollerLive().forEach(function(w){
+    const id=w.getAttribute('data-roller');
+    const sel=document.getElementById(id+'-skill');
+    if(sel)sel.value=_rollLoaded;
+    const kindSel=document.getElementById(id+'-kind');
+    const statKind=SYS&&SYS.dice&&SYS.dice.statKind;
+    if(kindSel&&e&&e.kind==='stat'&&statKind)kindSel.value=statKind;
+    rollerLabel(id);
+    const body=document.getElementById(id+'-body');
+    if(body)body.classList.add('open');
   });
-  const lab=document.getElementById('sm-loaded');
-  if(lab)lab.textContent=_sysLoaded?' · '+_sysLoaded:'';
-  const bar=document.getElementById('dice-bar-body');
-  if(bar)bar.classList.add('open');
-  const side=document.getElementById('hero-dice-sidebar');
-  if(side&&side.firstChild&&typeof side.scrollIntoView==='function'){
-    try{side.scrollIntoView({block:'nearest'});}catch(e){}
-  }
 }
+// The name it shipped under. Callers pass a bare Skill name; rollFind resolves it.
+function sysLoadRoll(name){return sysRollLoad(name);}
+
+// The entry point a sheet row uses. On desktop the roller comes to the row; on
+// a phone there is nowhere to put a popover, so the sticky bar opens instead.
+function sysOpenRoller(refOrName,anchor){
+  if(!sysRollerIsDesktop()){sysRollLoad(refOrName);return;}
+  rollPopOpen(refOrName,anchor);
+}
+
+// ── the popover ─────────────────────────────────────────────────────────────
+// Mounted on <body>, not inside a page: a block repaint replaces the row you
+// clicked, and a popover living inside it would be torn out mid-roll.
+// The roller's use of the shell popover in core/chrome.js. The panel itself is
+// generic now that the icon picker summons one too.
+function rollPopOpen(refOrName,anchor){
+  if(rollSurfaces()!=='sys')return;
+  const e=rollFind(refOrName);
+  _rollLoaded=e?e.ref:'';
+  popOpen(rollerHTML('sp',{compact:true,title:e?e.name:lexU('roll')}),anchor);
+  rollerLabel('sp');
+  const kindSel=document.getElementById('sp-kind');
+  const statKind=SYS&&SYS.dice&&SYS.dice.statKind;
+  if(kindSel&&e&&e.kind==='stat'&&statKind)kindSel.value=statKind;
+}
+function rollPopClose(){popClose();}
 
 function sysRollResultHTML(d){
   const dice=d.dice.map(function(v){
@@ -240,6 +404,23 @@ function sysRenderRollInto(elId,toast){
 
 // Kept for the Dice tab's own repaint path.
 function sysRenderRoll(){sysRenderRollInto('sd-result',false);}
+
+// Show the last roll in every instance on screen. A card that rolls on its own —
+// a HUD attack, a Hotlist item — has no originating form to answer into, and the
+// screen it is on has two instances (a sidebar and a bar) with the CSS deciding
+// which one the player can actually see.
+function sysRenderRollAll(){
+  rollerLive().forEach(function(w){
+    const id=w.getAttribute('data-roller');
+    sysRenderRollInto(w.getAttribute('data-result')||(id+'-result'),
+                      !!w.getAttribute('data-toast'));
+  });
+}
+
+// Surface 1 — the Dice tab.
+function sysDiceHTML(){
+  return rollerHTML('sd',{compact:false});
+}
 
 // ═══════════════════════════════════════════════════════════
 // DICE TAB
@@ -361,7 +542,7 @@ function compelAsp(){if(!S.char)return;S.char.fatePoints++;save();renderDice();}
 // owns a surface the other cannot see.
 function fateRollBarHTML(){
   const ch=S.char;
-  return `<div id="hero-dice-mobile"><div class="dice-bar-toggle" onclick="document.getElementById('dice-bar-body').classList.toggle('open')"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:16px">&#127922;</span><span class="fw-700" style="font-size:13px;font-family:var(--font-label)">Dice Roller</span><span id="dm-loaded" style="font-size:10px;color:var(--accent)"></span></div><span class="text-muted" style="font-size:11px">tap to expand</span></div><div class="dice-bar-body" id="dice-bar-body"><div id="dm-loaded-info" style="margin-bottom:6px"></div><div style="display:flex;gap:6px;align-items:end"><div style="flex:1"><div class="label" style="margin-bottom:2px">Skill</div><select id="dm-sk" style="font-size:12px;padding:7px" onchange="_loadedPower='';updateLoadedInfo('m')"><option value="">— None —</option>${sysList('SKILLS','skills').map(sk=>`<option value="${sk}">${sk} (+${ch?.skills?.[sk]||0})</option>`).join('')}</select></div><div style="width:50px"><div class="label" style="margin-bottom:2px">Mod</div><input type="number" id="dm-mod" value="0" style="font-size:12px;padding:7px"></div><div style="width:50px"><div class="label" style="margin-bottom:2px">TN</div><input type="number" id="dm-tn" value="0" style="font-size:12px;padding:7px"></div><button class="roll-btn" style="width:44px;height:44px;font-size:14px;flex-shrink:0" onclick="doMobileRoll()">ROLL</button></div></div></div>`;
+  return `<div id="hero-dice-mobile" class="roller-bar" data-roller-sheet="1"><div class="dice-bar-toggle" onclick="document.getElementById('dice-bar-body').classList.toggle('open')"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:16px">&#127922;</span><span class="fw-700" style="font-size:13px;font-family:var(--font-label)">Dice Roller</span><span id="dm-loaded" style="font-size:10px;color:var(--accent)"></span></div><span class="text-muted" style="font-size:11px">tap to expand</span></div><div class="dice-bar-body" id="dice-bar-body"><div id="dm-loaded-info" style="margin-bottom:6px"></div><div style="display:flex;gap:6px;align-items:end"><div style="flex:1"><div class="label" style="margin-bottom:2px">Skill</div><select id="dm-sk" style="font-size:12px;padding:7px" onchange="_loadedPower='';updateLoadedInfo('m')"><option value="">— None —</option>${sysList('SKILLS','skills').map(sk=>`<option value="${sk}">${sk} (+${ch?.skills?.[sk]||0})</option>`).join('')}</select></div><div style="width:50px"><div class="label" style="margin-bottom:2px">Mod</div><input type="number" id="dm-mod" value="0" style="font-size:12px;padding:7px"></div><div style="width:50px"><div class="label" style="margin-bottom:2px">TN</div><input type="number" id="dm-tn" value="0" style="font-size:12px;padding:7px"></div><button class="roll-btn" style="width:44px;height:44px;font-size:14px;flex-shrink:0" onclick="doMobileRoll()">ROLL</button></div></div></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════

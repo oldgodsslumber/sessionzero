@@ -14,6 +14,13 @@ registerSystem({
   name: 'Daring Comics',
   theme: '',                 // '' is this pack's default data-theme
 
+  // The pop-out second screen in core/log.js is this pack's: it reads
+  // costumedName, stress.physical and Fate Points off the character, and draws
+  // 4dF. Declaring it is what puts the nav button there — without this the
+  // button showed for every pack, and on Dungeon Crawler Carl it opened a window
+  // that said "Waiting…" forever and threw as soon as any state reached it.
+  secondScreen: true,
+
   // The comic look is the PACK's, not the shell's. These were hardcoded in
   // index.html's markup and <head>; moving them here is decision 4 landing:
   // a pack that declares neither renders neutral, in the system font stack.
