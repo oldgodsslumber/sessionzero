@@ -4047,6 +4047,58 @@ function boot(entry) {
     }
   })();
 
+  // ── a Hotlist entry that is only a name ───────────────────────────────────
+  // Reported from the app: "the Heal automatically in the Hotlist — it's not
+  // connected to anything, is it?" It is: creation grants the Heal Spell and
+  // gearItemTap resolves the slot by name, so tapping it casts your Heal. But
+  // gearItemReadout only explained items with casts/skill/teaches/grants, so a
+  // bare name produced an empty line and read as a label attached to nothing.
+  function hotRow(name) {
+    ev("S.char.blocks.gear.hotlist=[{name:" + JSON.stringify(name) + ",qty:1}];" +
+       "save();blockRepaint('gear');");
+    return ev("(function(){var rows=[].slice.call(" +
+      "document.querySelectorAll('#blk-gear .inv-row'));" +
+      "for(var i=0;i<rows.length;i++){var n=rows[i].querySelector('.inv-name');" +
+      "if(!n||!n.firstChild)continue;" +
+      "if(n.firstChild.textContent.trim()!==" + JSON.stringify(name) + ")continue;" +
+      "var s=rows[i].querySelector('.inv-stat');return s?s.textContent.trim():''}" +
+      "return null})()");
+  }
+
+  check('[hotlist] creation really does grant the Heal it parks in your Hotlist', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};" +
+       "dccFinishCreation(S.char);renderHero();");
+    const spells = ev("(S.char.blocks.spells.skills||[]).map(function(s){return s.name})");
+    const hot = ev("(S.char.blocks.gear.hotlist||[]).filter(Boolean).map(function(i){return i.name})");
+    if (spells.indexOf('Heal') < 0) return 'creation granted no Heal Spell: ' + JSON.stringify(spells);
+    if (hot.indexOf('Heal') < 0) return 'Heal is not in the starting Hotlist: ' + JSON.stringify(hot);
+    // The link is by name, which is what makes the slot tappable.
+    return ev("!!SYS.derive.gearItemTap({name:'Heal',qty:1},S.char)")
+      || 'tapping the Heal slot would do nothing';
+  });
+
+  check('[hotlist] a bare name that is a Spell you know says so', () => {
+    ev("S.char.blocks.spells={skills:[{name:'Heal',rank:1,stat:'INT'}]};");
+    const line = hotRow('Heal');
+    if (line === null) return 'no Heal row rendered';
+    if (!/Your Spell/.test(line)) return 'the row reads ' + JSON.stringify(line);
+    return /Rank 1/.test(line) || 'it does not say which Rank: ' + JSON.stringify(line);
+  });
+
+  check('[hotlist] a Spell you have no Ranks in says why you cannot cast it', () => {
+    ev("S.char.blocks.spells={skills:[]};");
+    const line = hotRow('Fireball');
+    // "A crawler can't attempt a Spell without Ranks in the Spell (unless it's
+    // a scroll)" (p. 58).
+    return /no Ranks/.test(line || '') && /scroll/.test(line || '')
+      || 'the row reads ' + JSON.stringify(line);
+  });
+
+  check('[hotlist] a plain carried object gets no explanation invented for it', () => {
+    const line = hotRow('Rope');
+    return line === '' || 'a bare Rope was given a readout: ' + JSON.stringify(line);
+  });
+
   // ── the Hotlist keypad ────────────────────────────────────────────────────
   // Ten fixed slots, because what makes it fast at the table is knowing Slot 4
   // is your Heal without reading it. Empty slots stay rendered for that reason.

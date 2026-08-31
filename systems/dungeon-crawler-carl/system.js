@@ -405,6 +405,39 @@ registerSystem({
           out.push(bits.join(' · '));
         }
       }
+      // A Hotlist entry is often just a NAME. Creation writes {name:'Heal'} for
+      // the Spell every crawler starts with, and the keypad resolves it by name
+      // when you tap it — so it is connected, and nothing on screen said so. It
+      // read as a stray label attached to nothing.
+      if (!item.skill && !item.casts && !item.teaches) {
+        const n = String(item.name || '').toLowerCase();
+        const own = function (blockId) {
+          const b = char && char.blocks && char.blocks[blockId];
+          return ((b && b.skills) || []).find(function (x) {
+            return String(x.name).toLowerCase() === n;
+          });
+        };
+        const mySpell = own('spells'), mySkill = own('skills');
+        const catSpell = dccSpellByName(item.name), catSkill = dccSkillByName(item.name);
+        if (mySpell) {
+          const bits = ['Your Spell · Rank ' + (mySpell.rank || 0)];
+          const mana = (catSpell && catSpell.mana !== undefined) ? catSpell.mana : mySpell.mana;
+          if (mana !== undefined) bits.push(mana + ' Mana');
+          if (catSpell && catSpell.range) bits.push(catSpell.range);
+          out.push(bits.join(' · ') + ' — tap to cast');
+        } else if (mySkill) {
+          const mod = mySkill.stat ? dccStatMod(dccStatOf(char, mySkill.stat)) : 0;
+          const tot = (mySkill.rank || 0) + mod + SYS.derive.wornBonus(char, 'skill', mySkill.name);
+          out.push('Your Skill · Rank ' + (mySkill.rank || 0) + ', ' +
+                   (tot >= 0 ? '+' : '') + tot + ' — tap to roll');
+        } else if (catSpell) {
+          // "A crawler can't attempt a Spell without Ranks in the Spell (unless
+          // it's a scroll)" (p. 58).
+          out.push('Spell — you have no Ranks in it, so only a scroll casts it');
+        } else if (catSkill) {
+          out.push('Skill — untrained');
+        }
+      }
       if (item.notes) out.push(item.notes);
       // Only what this crawler's Rank has actually unlocked.
       SYS.derive.activeUpgrades(char, item.skill || item.casts || '')
