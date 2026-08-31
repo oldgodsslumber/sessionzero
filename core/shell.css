@@ -156,6 +156,9 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
   font-family:var(--font-label);padding:1px 5px;border-radius:7px;vertical-align:1px;white-space:nowrap}
 .hud-held{background:var(--accent);color:#fff}
 .hud-untrained{border:1px solid var(--border);color:var(--muted)}
+.hud-stowed{margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);
+  font-size:10.5px;color:var(--muted);overflow-wrap:anywhere}
+.hud-stowed-n{display:block;font-size:9px;opacity:.75;margin-top:1px}
 @media(min-width:700px){
   .hud-act-ico{width:56px;height:56px}
   .hud-act-ico .pw-icon{width:40px;height:40px}

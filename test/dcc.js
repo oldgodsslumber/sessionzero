@@ -3743,6 +3743,8 @@ function boot(entry) {
   check('[hud] an attack card carries base damage AND the Rank dice', () => {
     // Bow is 1d6 + STR Piercing (catalogue); Rank 7 adds +1d6 (Table 37, p. 176).
     hudSheet([{ name: 'Bow', rank: 7, stat: 'DEX', checkType: 'evade' }]);
+    // In hand: a weapon Skill only gets a card when you are holding the weapon.
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Bow',skill:'Bow'}]};save();renderHUD();");
     const dmg = hudCard('Bow', '.hud-dmg');
     return dmg === '1d6 + STR Piercing ' + ev('dccRankDamage(7)')
       || 'the Bow damage line reads ' + JSON.stringify(dmg);
@@ -3750,6 +3752,7 @@ function boot(entry) {
 
   check('[hud] to-hit is Rank plus the Stat Mod', () => {
     hudSheet([{ name: 'Warhammer', rank: 7, stat: 'STR', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Warhammer',skill:'Warhammer'}]};save();renderHUD();");
     const mod = ev("SYS.derive.skillStatMod(S.char,'STR')");
     const hit = hudCard('Warhammer', '.hud-hit');
     return hit === '+' + (7 + mod)
@@ -3762,8 +3765,11 @@ function boot(entry) {
     // "Perception" finds it there and the check passes with the bug in.
     hudSheet([{ name: 'Perception', rank: 5, stat: 'INT', checkType: 'unopposed' },
               { name: 'Warhammer', rank: 2, stat: 'STR', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Warhammer',skill:'Warhammer'}]};save();renderHUD();");
+    // Leading text node: a held weapon's card appends "in hand" and friends.
     const names = ev("[].slice.call(document.querySelectorAll(" +
-      "'#hud-content .hud-act-name')).map(function(n){return n.textContent.trim()})");
+      "'#hud-content .hud-act-name')).map(function(n){" +
+      "return n.firstChild?n.firstChild.textContent.trim():''})");
     return (names.indexOf('Warhammer') >= 0 && names.indexOf('Perception') < 0)
       || 'the cards read: ' + JSON.stringify(names);
   });
@@ -3794,10 +3800,15 @@ function boot(entry) {
   // The first version searched only the Gear Slots and matched only the "Works
   // as" field, so four of the five ways a player actually carries a weapon
   // showed nothing at all. Each case below failed before this was widened.
+  // Asserted against dccAttackIcon directly rather than through a rendered card:
+  // a weapon Skill only gets a card while you are HOLDING the weapon, so the
+  // stowed cases below have no card to read. The lookup still has to find them,
+  // because it is also the fallback for a held weapon carrying no icon of its
+  // own, and for a Hand-To-Hand Skill, which is always on the list.
   function gunIcon(setup) {
     ev("S.char.blocks.gear.hotlist=[];S.char.blocks.gear.inventory=[];" +
-       "S.char.blocks.gear.equipped={};" + setup + ";save();renderHUD();");
-    return hudCardIcon('Handgun');
+       "S.char.blocks.gear.equipped={};" + setup + ";save();");
+    return ev("dccAttackIcon(S.char,{name:'Handgun'})");
   }
   [['equipped with no "Works as" set — just a named item with an icon',
     "S.char.blocks.gear.equipped={hands:[{name:'Handgun',icon:'game-icons:pistol-gun'}]}"],
@@ -3811,7 +3822,7 @@ function boot(entry) {
     check('[hud] the weapon icon connects when ' + c[0], () => {
       hudSheet([{ name: 'Handgun', rank: 5, stat: 'DEX', checkType: 'evade' }]);
       const got = gunIcon(c[1]);
-      return got === 'game-icons:pistol-gun' || 'the card shows ' + JSON.stringify(got);
+      return got === 'game-icons:pistol-gun' || 'the lookup found ' + JSON.stringify(got);
     });
   });
 
@@ -3861,12 +3872,28 @@ function boot(entry) {
   // The player's own words: "I don't think it understands that the Hotlist is
   // inventory and not the thing that is actually equipped." Only a Gear Slot
   // counts — "only what is in a Gear Slot gives you anything" (p. 112).
-  check('[hud] a weapon in the Hotlist is not treated as in hand', () => {
+  check('[hud] a weapon in the Hotlist gets no attack card', () => {
+    // "It's not equipped, so it shouldn't [be in the attack area]." Knowing
+    // Handgun does not let you shoot one out of your backpack — drawing it is an
+    // Action — so it is named as stowed rather than offered as an attack.
     const names = heldScene();
-    const gun = names.find(function (n) { return /^Handgun\b/.test(n); });
-    if (!gun) return 'the Handgun card vanished: ' + JSON.stringify(names);
-    return gun.indexOf('in hand') < 0 ||
-      'the Hotlist Handgun is marked in hand: ' + JSON.stringify(gun);
+    if (names.some(function (n) { return /^Handgun\b/.test(n); })) {
+      return 'the stowed Handgun still has a card: ' + JSON.stringify(names);
+    }
+    const note = ev("(document.querySelector('#hud-content .hud-stowed')||" +
+      "{textContent:''}).textContent");
+    return note.indexOf('Handgun') >= 0 ||
+      'and it is not named as stowed either — it just vanished';
+  });
+
+  check('[hud] a Hand-To-Hand Skill needs no weapon and always shows', () => {
+    hudSheet([{ name: 'Unarmed Combat', rank: 2, stat: 'STR', checkType: 'evade' },
+              { name: 'Handgun', rank: 5, stat: 'DEX', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.equipped={};save();renderHUD();");
+    const names = ev("[].slice.call(document.querySelectorAll('#hud-content .hud-act-name'))" +
+      ".map(function(n){return n.firstChild?n.firstChild.textContent.trim():''})");
+    if (names.indexOf('Unarmed Combat') < 0) return 'Unarmed Combat was dropped: ' + JSON.stringify(names);
+    return names.indexOf('Handgun') < 0 || 'the stowed Handgun was kept: ' + JSON.stringify(names);
   });
 
   check('[hud] holding a weapon you DO have Ranks in marks it, not duplicates it', () => {
@@ -3886,13 +3913,14 @@ function boot(entry) {
     const got = gunIcon("S.char.blocks.gear.equipped={hands:[{name:'Handgun'," +
       "icon:'game-icons:worn-gun'}]};S.char.blocks.gear.inventory=[{name:'Handgun'," +
       "icon:'game-icons:stowed-gun'}]");
-    return got === 'game-icons:worn-gun' || 'the card shows ' + JSON.stringify(got);
+    return got === 'game-icons:worn-gun' || 'the lookup found ' + JSON.stringify(got);
   });
 
   check('[hud] with nothing equipped it falls back to the Skill’s own icon', () => {
     hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade',
                 icon: 'game-icons:swap-bag' }]);
-    ev("S.char.blocks.gear.equipped={};save();renderHUD();");
+    // Holding a weapon that carries no icon of its own: the Skill's supplies it.
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Club',skill:'Club'}]};save();renderHUD();");
     return hudCardIcon('Club') === 'game-icons:swap-bag'
       || 'the card shows ' + JSON.stringify(hudCardIcon('Club'));
   });
@@ -3908,6 +3936,7 @@ function boot(entry) {
     // It grows at the 700px breakpoint; an inline width would beat the rule.
     hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade',
                 icon: 'game-icons:swap-bag' }]);
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Club',skill:'Club'}]};save();renderHUD();");
     const style = ev("(document.querySelector('#hud-content .hud-act-ico .pw-icon')||" +
       "{getAttribute:function(){return ''}}).getAttribute('style')||''");
     return !/width\s*:/.test(style) || 'the icon carries an inline size: ' + JSON.stringify(style);

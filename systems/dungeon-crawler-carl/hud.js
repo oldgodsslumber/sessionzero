@@ -243,6 +243,22 @@ function dccHudActions(char, blockId) {
     });
   }
 
+  // A weapon Skill is only an attack you can actually make if the weapon is in
+  // your hand. Knowing Handgun does not let you shoot one out of your backpack —
+  // drawing it is an Action — so a stowed weapon's card does not belong in a
+  // list of what you can do this round. Hand-To-Hand Skills need nothing and are
+  // always here; so is a custom Skill, because a Skill the book does not have
+  // (p. 174) carries no category and we cannot prove it needs a weapon.
+  let stowed = [];
+  if (!spells) {
+    const keep = [];
+    rows.forEach(function (r) {
+      if (r.held || !dccNeedsWeapon(r.cat)) keep.push(r);
+      else stowed.push(r.s.name);
+    });
+    rows = keep;
+  }
+
   rows.sort(function (a, z) {
     // In hand first, then attack Spells before the healing ones.
     if (!!a.held !== !!z.held) return a.held ? -1 : 1;
@@ -254,12 +270,29 @@ function dccHudActions(char, blockId) {
   let h = '<div class="card"><div class="blk-title" style="margin-bottom:6px">' + esc(label) + '</div>';
   if (!rows.length) {
     h += '<div class="tac text-muted" style="padding:14px;font-size:12px">' +
-      (spells ? 'No Spells known.' : 'Nothing to attack with yet — a weapon Skill or Unarmed Combat goes here.') +
+      (spells ? 'No Spells known.'
+              : stowed.length ? 'Nothing in your hands. Equip a weapon in a Gear Slot to attack with it.'
+              : 'Nothing to attack with yet — a weapon Skill or Unarmed Combat goes here.') +
       '</div>';
-    return h + '</div>';
+    return h + dccHudStowed(stowed) + '</div>';
   }
   rows.forEach(function (r) { h += dccHudCard(char, r.s, r.cat, spells, r.held); });
-  return h + '</div>';
+  return h + dccHudStowed(stowed) + '</div>';
+}
+
+// Does this Skill need a weapon in hand to use? The catalogue says so by
+// category: the four Weapon categories do, Hand-To-Hand does not.
+function dccNeedsWeapon(cat) {
+  return !!(cat && /Weapon/i.test(cat.category || ''));
+}
+
+// Weapon Skills you know but are not holding. Named rather than silently
+// dropped, so "where did my Handgun go?" answers itself.
+function dccHudStowed(names) {
+  if (!names || !names.length) return '';
+  return '<div class="hud-stowed">Not in hand: ' +
+    names.sort().map(function (n) { return esc(n); }).join(' · ') +
+    '<span class="hud-stowed-n">equip one to attack with it</span></div>';
 }
 
 function dccHudCard(char, s, cat, spells, held) {
