@@ -140,9 +140,19 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
   .hot-slot{min-height:88px}
 }
 
-/* HUD action cards — one attack or Spell, with the two numbers a round needs. */
-.hud-act{padding:8px 0;border-bottom:1px solid var(--border)}
+/* HUD action cards — one attack or Spell, with the two numbers a round needs
+   and, when there is one, the weapon itself shown big enough to read at a
+   glance. No icon means no gutter: the card falls back to its old full width. */
+.hud-act{padding:8px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
 .hud-act:last-child{border-bottom:none}
+.hud-act-ico{flex:0 0 auto;width:46px;height:46px;display:flex;align-items:center;justify-content:center;
+  border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--accent)}
+.hud-act-ico .pw-icon{width:32px;height:32px}
+.hud-act-body{flex:1;min-width:0}
+@media(min-width:700px){
+  .hud-act-ico{width:56px;height:56px}
+  .hud-act-ico .pw-icon{width:40px;height:40px}
+}
 .hud-act-top{display:flex;align-items:center;gap:8px}
 .hud-act-name{flex:1;min-width:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}
 .hud-act-nums{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:2px}

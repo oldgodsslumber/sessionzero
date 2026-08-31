@@ -230,7 +230,11 @@ function dccHudCard(char, s, cat, spells) {
   const ups = dccHudUpgrades(char, s.name);
   const gate = spells ? dccHudHotlistGate(char, s.name) : '';
 
+  const ico = dccAttackIcon(char, s);
+
   let h = '<div class="hud-act">' +
+    (ico ? '<div class="hud-act-ico">' + iconHTML(ico) + '</div>' : '') +
+    '<div class="hud-act-body">' +
     '<div class="hud-act-top">' +
     '<div class="hud-act-name">' + esc(s.name) + '</div>' +
     '<button class="btn btn-primary btn-xs" onclick="dccHudRoll(' + dccHudArg(s.name) + ')">\u{1F3B2} Roll</button>' +
@@ -266,7 +270,28 @@ function dccHudCard(char, s, cat, spells) {
     h += '<div class="sk-effect"><strong>Earned:</strong> ' +
       ups.map(function (u) { return esc(u); }).join(' ') + '</div>';
   }
-  return h + '</div>';
+  return h + '</div></div>';
+}
+
+// The picture on an attack card. The WEAPON's icon wins: an attack is the thing
+// in your hand, and a crawler who has given their Club an icon should see the
+// Club, not a generic Bashing Weapon glyph. Falls back to the Skill's own icon —
+// which is all a Spell or an unarmed attack has — and to nothing at all, in
+// which case the card renders exactly as it did before icons existed.
+function dccAttackIcon(char, s) {
+  const eq = (char.blocks && char.blocks.gear && char.blocks.gear.equipped) || {};
+  const want = String(s.name || '').toLowerCase();
+  let hit = '';
+  Object.keys(eq).forEach(function (slot) {
+    (eq[slot] || []).forEach(function (it) {
+      if (!it || !it.icon || hit) return;
+      // Either the item works as this Skill, or it lends it to you.
+      const asSkill = String(it.skill || '').toLowerCase();
+      const lends = String(it.grantsSkill || '').toLowerCase();
+      if (asSkill === want || lends === want) hit = it.icon;
+    });
+  });
+  return hit || s.icon || '';
 }
 
 // "A Spell has to be in your Hotlist to cast it under pressure." That rule has

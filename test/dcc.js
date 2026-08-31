@@ -3765,6 +3765,52 @@ function boot(entry) {
       || 'the cards read: ' + JSON.stringify(names);
   });
 
+  // The picture on an attack card is the thing in your hand.
+  function hudCardIcon(name) {
+    return ev("(function(){var c=[].slice.call(" +
+      "document.querySelectorAll('#hud-content .hud-act')).find(function(x){" +
+      "var n=x.querySelector('.hud-act-name');" +
+      "return n&&n.textContent.trim()===" + JSON.stringify(name) + "});" +
+      "if(!c)return null;var i=c.querySelector('.hud-act-ico .pw-icon');" +
+      // iconUrl() encodes the id but not the path separator, so the mask reads
+      // .../game-icons%3Awood-club.svg — decode it back to the stored value.
+      "if(!i)return '';var m=(i.getAttribute('style')||'').match(/design\\/([^.']+)\\.svg/);" +
+      "return m?decodeURIComponent(m[1]):'(unreadable)'})()");
+  }
+
+  check('[hud] an attack card shows the equipped weapon large', () => {
+    hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.equipped={hands:[{name:'Old Club',skill:'Club'," +
+       "icon:'game-icons:wood-club'}]};save();renderHUD();");
+    const got = hudCardIcon('Club');
+    if (got === null) return 'no Club card on the HUD';
+    return got === 'game-icons:wood-club' || 'the card shows ' + JSON.stringify(got);
+  });
+
+  check('[hud] with nothing equipped it falls back to the Skill’s own icon', () => {
+    hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade',
+                icon: 'game-icons:swap-bag' }]);
+    ev("S.char.blocks.gear.equipped={};save();renderHUD();");
+    return hudCardIcon('Club') === 'game-icons:swap-bag'
+      || 'the card shows ' + JSON.stringify(hudCardIcon('Club'));
+  });
+
+  check('[hud] an attack with no icon reserves no gutter', () => {
+    hudSheet([{ name: 'Unarmed Combat', rank: 2, stat: 'STR', checkType: 'evade' }]);
+    ev("S.char.blocks.gear.equipped={};save();renderHUD();");
+    return hudCardIcon('Unarmed Combat') === ''
+      || 'an icon block was drawn anyway: ' + JSON.stringify(hudCardIcon('Unarmed Combat'));
+  });
+
+  check('[hud] the icon block is sized by CSS, not inline', () => {
+    // It grows at the 700px breakpoint; an inline width would beat the rule.
+    hudSheet([{ name: 'Club', rank: 4, stat: 'STR', checkType: 'evade',
+                icon: 'game-icons:swap-bag' }]);
+    const style = ev("(document.querySelector('#hud-content .hud-act-ico .pw-icon')||" +
+      "{getAttribute:function(){return ''}}).getAttribute('style')||''");
+    return !/width\s*:/.test(style) || 'the icon carries an inline size: ' + JSON.stringify(style);
+  });
+
   check('[hud] a healing Spell is not given damage dice', () => {
     // Heal has a Rank like anything else, and dccRankDamage(1) is "+1" — printed
     // under a healing Spell it read as though it hurt someone.
