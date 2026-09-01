@@ -3392,10 +3392,15 @@ function boot(entry) {
     return bad === '[]' || 'dangling references: ' + bad;
   });
 
-  check('[gear-cat] every number on a row is a real, non-negative number', () => {
+  // A bonus may be negative — the Ring of Water Breathing is -1 Charisma, and a
+  // cursed item is a thing the book prints. Armour, a Rank and a quantity may
+  // not be: negative DR takes a crawler below their own skin.
+  check('[gear-cat] every number on a row is a real number, and the right sign', () => {
     const bad = ev("JSON.stringify(DCC_GEAR.filter(function(g){" +
       "return ['dr','grantsStatN','grantsSkillN','rank','qty'].some(function(k){" +
-      "return g[k]!==undefined&&(!isFinite(g[k])||g[k]<0)})}).map(function(g){return g.id}))");
+      "return g[k]!==undefined&&!isFinite(g[k])})||" +
+      "['dr','rank','qty'].some(function(k){return g[k]!==undefined&&g[k]<0})" +
+      "}).map(function(g){return g.id}))");
     return bad === '[]' || 'bad numbers: ' + bad;
   });
 
@@ -3464,6 +3469,49 @@ function boot(entry) {
     if (scroll.casts || tome.teaches) return 'the catalogue invented a Spell the book did not print';
     return /one shot/i.test(scroll.effect) && /learn/i.test(tome.effect)
       || 'they do not say what they are for';
+  });
+
+  // ── the named gear (pp. 216-218, 326, 633-638) ──────────────────────────
+  check('[gear-cat] the named gear is in the same catalogue as the ordinary kind', () => {
+    const n = ev("DCC_GEAR.filter(function(g){return g.kind==='magic'}).length");
+    return n >= 40 || 'only ' + n + ' named items';
+  });
+
+  check('[gear-cat] a named item brings its numbers to the sheet', () => {
+    itemSheet();
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Bitchass Buckler';invAdd('gear','inventory')");
+    ev("invMove('gear','inventory','equipped','',S.char.blocks.gear.inventory.findIndex(function(x){return /Buckler/.test(x.name)}))");
+    if (!ev("(S.char.blocks.gear.equipped.hands||[]).some(function(x){return /Buckler/.test(x.name)})")) {
+      return 'the buckler is not in your hands';
+    }
+    if (ev("SYS.derive.dr(S.char)") < 3) return 'its +3 DR did not reach the sheet';
+    return ev("SYS.derive.wornBonus(S.char,'skill','Shield Block')") === 1
+      || 'its +1 Shield Block did not reach the sheet';
+  });
+
+  check('[gear-cat] a named item that raises a Stat raises the Enhanced score', () => {
+    itemSheet();
+    ev("S.char.blocks.stats={STR:{base:10},INT:{base:10},CON:{base:10},DEX:{base:10},CHA:{base:10}};" +
+       "var i=document.getElementById('inv-add-gear-inventory');i.value='Enchanted Tiara of Mana Genita';invAdd('gear','inventory')");
+    ev("invMove('gear','inventory','equipped','',S.char.blocks.gear.inventory.findIndex(function(x){return /Tiara/.test(x.name)}))");
+    return ev("dccStatOf(S.char,'INT')") === 13
+      || 'Enhanced INT reads ' + ev("dccStatOf(S.char,'INT')") + ' rather than 13';
+  });
+
+  // The book prints a cursed item: the Ring of Water Breathing is -1 Charisma.
+  check('[gear-cat] a penalty survives being carried as a penalty', () => {
+    const ring = JSON.parse(ev("JSON.stringify(dccGearTemplate('Ring of Water Breathing'))"));
+    return ring.grantsStatN === -1 || 'it came out as ' + JSON.stringify(ring);
+  });
+
+  // Some items grant a Skill the book never lists — Rooted in Place, Marked for
+  // Death. The catalogue links only what resolves and leaves the rest as text,
+  // rather than inventing a Skill row to point at.
+  check('[gear-cat] an unlisted Skill stays in the prose, not in a broken link', () => {
+    const bad = ev("JSON.stringify(DCC_GEAR.filter(function(g){return g.grantsSkill&&!dccSkillByName(g.grantsSkill)}).map(function(g){return g.id}))");
+    if (bad !== '[]') return 'dangling grantsSkill: ' + bad;
+    return ev("/Rooted in Place/.test((dccGearByName('Enchanted Shade Gnoll Riot Forces Crowd Control Shield')||{}).effect||'')")
+      || 'the shield stopped saying what it grants';
   });
 
   // ── Spells (D7) ──────────────────────────────────────────────────────────

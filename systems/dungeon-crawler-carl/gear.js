@@ -13,9 +13,9 @@
 //   - randomly generated magic items. Tables 38–42 GENERATE those from a d6 and
 //     the loot tier; they are not a list of things, and creation.js already
 //     carries the generator.
-//   - the named sample and iconic gear (the Bitchass Buckler, Carl's Xistera,
-//     the Night Wyrm set). Those are a catalogue of their own and want their
-//     own pass, with their effects read one at a time.
+// The named gear — the samples printed with each loot tier, the Night Wyrm
+// artifacts and Appendix 1's iconic gear from the novels — follows the regular
+// items below, under its own heading.
 //
 // A row is an ITEM TEMPLATE: every key below the bookkeeping ones is a field
 // the gear block already understands, so adding one from the catalogue is a
@@ -165,6 +165,198 @@ const DCC_GEAR = [
     effect: 'The paddle works as a Staff.', skill: 'Quarterstaff', page: 216 },
   { id: 'hang-glider', name: 'Hang Glider', kind: 'vehicle', tier: 'bronze',
     effect: 'Bronze-box flight, such as it is.', page: 216 },
+  // ═══════════════════════════════════════════════════════════════════════
+  // NAMED GEAR
+  //
+  // The sample magical gear printed with each loot tier (pp. 216-218), the
+  // Night Wyrm artifacts (p. 326) and Appendix 1: Iconic Gear (pp. 633-638) —
+  // the gear from the novels, which the book offers "to use as-is, or modify".
+  //
+  // These are one-off items rather than stock, so most of what they do is
+  // prose. What the sheet can actually COMPUTE is lifted into fields — DR, a
+  // flat Stat bonus, a Skill bonus, a resistance, the Skill a weapon swings
+  // with — and the rest stays in `effect`, printed verbatim under the item.
+  // Percentage bonuses (+5% Strength), Buffs, cooldowns and once-per-floor
+  // powers have no home in the sheet's numbers and are deliberately left as
+  // text rather than approximated into a number that would then be wrong.
+  //
+  // Two Skills these items grant — Rooted in Place and Marked for Death — are
+  // not in the Skill catalogue, because the book grants them THROUGH the item
+  // rather than listing them. They stay in the text: the catalogue only links
+  // what resolves, and a test enforces that.
+
+  // ─── sample magical gear, silver boxes (p. 216) ──────────────────────────
+  { id: 'bitchass-buckler', name: 'Bitchass Buckler', kind: 'magic', tier: 'silver',
+    slot: 'hands', dr: 3, grantsSkill: 'Shield Block', grantsSkillN: 1,
+    page: 216 },
+  { id: 'bernie-boots', name: 'Bernie Boots', kind: 'magic', tier: 'silver', slot: 'feet',
+    effect: 'When you gain the Dying Debuff you can still take Move Actions and read HUD messages about moving in a direction.',
+    page: 216 },
+  { id: 'big-purple-plume', name: 'Big Purple Plume', kind: 'magic', tier: 'silver',
+    slot: 'accessories', grantsStat: 'CHA', grantsStatN: 2, effect: '', page: 216 },
+  { id: 'friendship-bracelet', name: 'Friendship Bracelet of [Race]kind', kind: 'magic', tier: 'silver',
+    slot: 'accessories',
+    effect: 'Roll 1d10 for the Race: 1-2 dwarven, 3-4 elven, 5-6 fairy, 7-8 orc, 9-10 skyfowl. Mobs and NPCs of that Race are no longer automatically hostile and can be bargained with. Take it off or break it and they are automatically hostile for the rest of the Floor.',
+    page: 216 },
+
+  // ─── gold boxes (p. 216) ─────────────────────────────────────────────────
+  { id: 'elbow-pads-turkeys', name: 'Enchanted Elbow Pads of the Elbow Walking Turkeys', kind: 'magic', tier: 'gold',
+    slot: 'arms', dr: 2, grantsStat: 'DEX', grantsStatN: 2,
+    page: 216 },
+  { id: 'skullcap-of-sucking', name: 'Skullcap of Sucking', kind: 'magic', tier: 'gold',
+    slot: 'head', dr: 1,
+    effect: 'Each time you roll a Critical Fail, gain 1 AI Favor.', page: 216 },
+  { id: 'tough-guy-tattoo', name: 'Tough Guy Tattoo', kind: 'magic', tier: 'gold',
+    slot: 'accessories', grantsStat: 'CON', grantsStatN: 3,
+    effect: 'Add 10 to your 100% Health Bar slot.', page: 216 },
+
+  // ─── platinum boxes (pp. 217-218) ────────────────────────────────────────
+  { id: 'selfie-stick', name: 'Selfie Stick of the Self-Mutilator', kind: 'magic', tier: 'platinum',
+    slot: 'hands',
+    effect: 'You have one fewer Health Bar slot while holding it. Enter combat with a Minor Injury and gain 1 Popularity, or 2 for a Major Injury — and an equal number of Actions each round of that combat.',
+    page: 218 },
+  { id: 'chesty-cheese-grater', name: 'Chesty Cheese Grater', kind: 'magic', tier: 'platinum',
+    slot: 'torso', dr: 2,
+    effect: '+5% Constitution. Damage Reflection 3:1 against melee attacks — for every 3 Health Bar slots you lose, the attacker loses 1.',
+    page: 218 },
+  { id: 'leggings-of-insanity', name: 'Enchanted Leggings of Insanity', kind: 'magic', tier: 'platinum',
+    slot: 'legs', dr: 1, grantsSkill: 'Escape Artist', grantsSkillN: 3,
+    effect: 'You may fit your body south of your wedding tackle into any sized opening.',
+    page: 218 },
+
+  // ─── legendary boxes (p. 218) ────────────────────────────────────────────
+  { id: 'cloak-slippery-perv', name: 'Enchanted Cloak of the Slippery Perv', kind: 'magic', tier: 'legendary',
+    slot: 'accessories', grantsStat: 'CHA', grantsStatN: 6,
+    effect: '+3 Evade Buff when you accuse your attacker of wanting to penetrate you in a way you have not used before.',
+    page: 218 },
+  { id: 'wand-of-incontinence', name: 'Enchanted Wand of Incontinence', kind: 'magic', tier: 'legendary',
+    slot: 'hands',
+    effect: '+10% Constitution. Once per session, as an Action, a creature within 30 feet voids their bowels and gains the Fatigued Debuff.',
+    page: 218 },
+  { id: 'hand-grips-hella-holding', name: 'Hand Grips of Hella Holding', kind: 'magic', tier: 'legendary',
+    slot: 'hands', dr: 3,
+    effect: '+10% Strength. When you grab hold of something you do not let go until you wish to, short of divine intervention.',
+    page: 218 },
+
+  // ─── celestial boxes (p. 218) ────────────────────────────────────────────
+  { id: 'borant-reset-button', name: 'Borant Corporation Reset Button', kind: 'magic', tier: 'celestial',
+    slot: 'accessories',
+    effect: 'Must be attached to clothing. Once per floor, restart the current scene up to 10 minutes into it. In combat it must be used in the first round.',
+    page: 218 },
+  { id: 'beret-divine-intervention', name: 'Beret of Divine Intervention', kind: 'magic', tier: 'celestial',
+    slot: 'head',
+    effect: 'Choose a Skill and max it out at Rank 15. In the presence of a deity, double your personal rewards; in the presence of your own deity, triple them.',
+    page: 218 },
+  { id: 'sassy-stiletto', name: 'The Sassy Stiletto', kind: 'magic', tier: 'celestial',
+    slot: 'hands', skill: 'Dagger', grantsSkill: 'Dagger', grantsSkillN: 15,
+    effect: '+5 to all Stats. Critical Hits on a Natural 16-20. The dagger is intelligent and makes Look for Clues Checks for you at no Action cost with 10 Ranks of Perception.',
+    page: 218 },
+
+  // ─── the Night Wyrm artifacts (p. 326) ───────────────────────────────────
+  // A plot set. What they do unfolds over pp. 325-327, so the row says what it
+  // is and where to read the rest rather than trying to hold a subplot.
+  { id: 'night-wyrm-links', name: "Enchanted Night Wyrm's Links of Implacable Sorrow", kind: 'magic',
+    slot: 'accessories',
+    effect: 'A seamless onyx bracelet of the Night Wyrm devouring its own tail. Marks a hunting party; the Wyrm devours a segment for each marked target that dies, and a completion bonus follows the whole party dying. See pp. 325-327.',
+    page: 326 },
+  { id: 'night-wyrm-necklace', name: "Enchanted Night Wyrm's Necklace of Indelible Woe", kind: 'magic',
+    slot: 'head',
+    effect: 'Its Debuff makes you take damage equal to a Spell\'s Mana cost whenever you cast. Marking a target costs you one of your lowest-Rank Spells at random; if that target dies you gain one of their five highest instead. See pp. 325-327.',
+    page: 326 },
+  { id: 'night-wyrm-ring', name: "Enchanted Night Wyrm's Ring of Divine Suffering", kind: 'magic',
+    slot: 'accessories',
+    effect: '+1 to all Skill or Stat Checks. Grants the Marked for Death Skill (p. 325); marked targets gain the Marked for Death Debuff, and the ring prevents you from healing. See pp. 325-327.',
+    page: 326 },
+
+  // ─── Appendix 1: Iconic Gear (pp. 633-638) ───────────────────────────────
+  { id: 'anklet-fallen-oak', name: 'Anklet of the Fallen Oak', kind: 'magic',
+    slot: 'accessories', grantsSkill: 'Double Tap', grantsSkillN: 3,
+    effect: '+1 Dexterity. +1 Constitution.', page: 633 },
+  { id: 'carls-xistera', name: "Carl's Xistera", kind: 'magic', slot: 'hands',
+    effect: 'A non-magical wicker scoop for Cesta Punta. Multiplies your Throwing Skill range by 4 for anything thrown with it, retracts on a pull-ring, and Inventory items may be summoned into the basket as an Action.',
+    page: 633 },
+  { id: 'kerchief-of-disorder', name: "Drakea's Enchanted Kerchief of Disorder", kind: 'magic',
+    slot: 'accessories', grantsSkill: 'Detect Trap', grantsSkillN: 5,
+    effect: 'Cast a Rank 15 Tripper Spell once every 5 hours. Worn at the neck, in the hair or over the face.',
+    page: 633 },
+  { id: 'earth-upgrade-patch', name: 'Earth Upgrade Patch', kind: 'magic', slot: 'accessories',
+    effect: '+5% Strength. Immunity to Cone Area of Effect Attacks. Affix to an eligible garment; removing it destroys it.',
+    page: 633 },
+  { id: 'anarchists-battle-rattle', name: "Enchanted Anarchist's Battle Rattle", kind: 'magic', slot: 'torso',
+    effect: '+1 to all five Stats, and another +1 for each compatible patch added — doubled if an eligible Back Patch is added. Access to the Desperado Club and the Naughty Boys Employment Agency. +50% Throwing range and DEX Mod a second time to hit with thrown explosives. +5 Accessory Gear Slots.',
+    page: 633 },
+  { id: 'bigboi-boxers', name: 'Enchanted BigBoi Boxers', kind: 'magic', slot: 'legs',
+    grantsStat: 'CON', grantsStatN: 2,
+    effect: 'Cast a Rank 15 Protective Shell Spell once every 30 hours. Always fits.',
+    page: 634 },
+  { id: 'crown-sepsis-whore', name: 'Enchanted Crown of the Sepsis Whore', kind: 'magic', slot: 'head',
+    effect: 'Wearing it permanently places you in the line of succession for the Blood Sultanate. For its benefits in play see p. 238.',
+    page: 634 },
+  { id: 'fur-brush-ecclesiastic', name: 'Enchanted Fur Brush of the Ecclesiastic', kind: 'magic',
+    grantsStat: 'CON', grantsStatN: 2,
+    effect: 'Must be used by someone other than the target; 10 minutes of brushing imparts the Buff for 30 hours.',
+    page: 634 },
+  { id: 'pedicure-kit-sylph', name: 'Enchanted Pedicure Kit of the Sylph', kind: 'magic',
+    grantsSkill: 'Smush', grantsSkillN: 3,
+    effect: '15 minutes of use, then 30 hours barefoot: add your STR Mod a second time to Foot Soldier Attack damage, feet and toes cannot be broken or severed, and traps set off by your footfalls raise an alarm and delay 5 seconds.',
+    page: 634 },
+  { id: 'nightgaunt-cloak', name: 'Enchanted Nightgaunt Cloak of Stoutness', kind: 'magic',
+    slot: 'accessories', grantsStat: 'CON', grantsStatN: 4, resist: 'Poison and Ice',
+    effect: 'Adds Anti-Piercing to all worn armour. Nightgaunts will not be pleased.',
+    page: 634 },
+  { id: 'repeating-crossbow-scavenger', name: 'Enchanted Repeating Crossbow of the Scavenger Mother of Mothers',
+    kind: 'magic', slot: 'hands', skill: 'Crossbow', grantsStat: 'DEX', grantsStatN: 15,
+    effect: 'Two hands, and only a female may wield it. Never runs out of basic ammunition. +10 Strength. Spend 1 AI Favor for an extra Attack each round. Add your STR to damage, plus 1 for every female in your party to a maximum of +30. On Success the target gains the Birth Defect Debuff.',
+    page: 635 },
+  { id: 'never-ending-duct-tape', name: 'Enchanted Roll of Never-Ending Duct Tape', kind: 'magic',
+    effect: '50 metres of ordinary-looking grey duct tape that regenerates a metre an hour until it is whole again.',
+    page: 636 },
+  { id: 'riot-shield', name: 'Enchanted Shade Gnoll Riot Forces Crowd Control Shield', kind: 'magic',
+    slot: 'hands',
+    effect: 'Only for those with a physical Line Attack — with no DR it is useless to anyone else. +5% Constitution. +5 Rooted in Place Skill (Passive): reduce feet pushed, pulled, slid or thrown by your Rank. Crowd Blast adds +5ft Splash to each side of your Line Attack, though each victim in the Splash has Advantage to Evade.',
+    page: 636 },
+  { id: 'riot-baton', name: 'Enchanted Shade Gnoll Riot Forces Telescoping Crowd Control Baton', kind: 'magic',
+    slot: 'hands', skill: 'Club',
+    effect: 'A single-handed Club that adjusts from 10 inches to 3½ feet. On a Club Attack with 10+ Mobs around you, make a free Rank 5 Cone of Knockback Spell Attack in a 20ft Cone; on Success the group is pushed or slid 10 feet. Cooldown 5 minutes.',
+    page: 636 },
+  { id: 'spiked-kneepads', name: 'Enchanted Spiked Kneepads of the Shade Gnoll Riot Forces', kind: 'magic',
+    slot: 'legs',
+    effect: 'Damage Reflection 8:1 — lose 8 or more Health Bar slots in one blow and the attacker loses 1. Immunity to momentum-based Attacks (Rush, Trample, Ramming).',
+    page: 636 },
+  { id: 'tiara-mana-genita', name: 'Enchanted Tiara of Mana Genita', kind: 'magic', slot: 'head',
+    grantsStat: 'INT', grantsStatN: 3, grantsSkill: 'Acute Ears', grantsSkillN: 2,
+    effect: 'Removes automatic hostility from worshipers of Mana Genita.',
+    page: 636 },
+  { id: 'trollskin-shirt', name: 'Enchanted Trollskin Shirt of Pummeling', kind: 'magic', slot: 'torso',
+    grantsSkill: 'Regeneration', grantsSkillN: 7,
+    effect: 'Immunity to melee damage Debuffs. Cool to the touch.', page: 636 },
+  { id: 'war-gauntlet-grull', name: 'Enchanted War Gauntlet of the Exalted Grull', kind: 'magic',
+    slot: 'hands', grantsStat: 'STR', grantsStatN: 3, grantsSkill: 'Iron Punch', grantsSkillN: 2,
+    effect: '+1 Dexterity. +1 Powerful Strike Skill. On an Amazing Success with any Hand-to-Hand Attack the target gains the Stunned Debuff; on a Critical Hit against a worshiper of Grull, the target transforms into the deity.',
+    page: 636 },
+  { id: 'wrestling-belt-gorgo', name: 'Enchanted Wrestling Belt of the Great Gorgo', kind: 'magic',
+    slot: 'accessories',
+    effect: '+5% Strength. +5% Constitution. The Avalanche Benefit: a Move Action followed immediately by an Unarmed Combat Attack deals double total damage on Success — a Monster Truck Driver applies it to their Area Line Attack instead.',
+    page: 637 },
+  { id: 'prism-goggles-donut', name: 'Prism Industries Capacitating and Focusing Goggles, "The Princess Donut"',
+    kind: 'magic', slot: 'head',
+    effect: 'Immunity to the Blindness Debuff. Enhances vision and calibrates to visible-light spectra including heat. Cast Magic Missile twice with one Action, paying Mana as usual and rolling to hit twice; or with two Actions and double the Mana for double damage.',
+    page: 636 },
+  { id: 'seize-the-day-toothpaste', name: 'Seize the Day Toothpaste', kind: 'consumable',
+    effect: 'Cherry-flavoured, comes with a toothbrush, 5 applications. The Buff lasts 30 hours: triple damage to all Bosses, or quadruple against Province or higher.',
+    page: 637 },
+  { id: 'stuffed-kimaris-figure', name: 'Stuffed Kimaris Figure', kind: 'consumable',
+    effect: 'Pull the tag and it summons the creature it depicts as a minion at your own level, fighting for you unbidden. Use the Mob vs. Mob rules (p. 83). Duration follows rarity: a common one lasts 1d2+1 rounds. Once it times out it returns to its collectible form and cannot be used again.',
+    page: 636 },
+  { id: 'ring-water-breathing', name: 'Ring of Water Breathing', kind: 'magic', slot: 'accessories',
+    grantsStat: 'CHA', grantsStatN: -1,
+    effect: 'You can breathe underwater, and on land.', page: 637 },
+  { id: 'scratcher-fireball-or-custard', name: 'Fireball or Custard? Scratcher', kind: 'consumable',
+    effect: 'Five scratch-off spots, each a 50/50 chance of a level 15 Fireball or a beach-ball of healing custard onto the target. 30-minute cooldown.',
+    page: 637 },
+  { id: 'scratcher-dungeon-gold-rush', name: 'Dungeon Gold Rush Scratcher', kind: 'consumable',
+    effect: 'Six prize slots and two dozen outcomes, among them a 5,000-coin Mob drop, doubled damage against the Mob, the Mob splitting in two, and the Mob becoming invulnerable for 30 seconds. One-hour cooldown.',
+    page: 637 },
 ];
 
 // The keys above that are BOOKKEEPING rather than item data. Everything else on
