@@ -166,6 +166,12 @@ registerSystem({
   // Tutorial Guilds.
   map: {
     firstRegion: 'The First Floor',
+    // A map belongs to a floor. The party goes down, and the map of the third
+    // floor is not the map of the first — the floor strip and the map should
+    // never disagree about where everyone is standing.
+    perFloor: true,
+    // A square of a dungeon is a Room, and what is not map is rock.
+    words: { cell: 'Room', zone: 'Area', blocked: 'Solid rock' },
     zoneTypes: [
       { name: 'Room',      icon: '\u{1F6AA}' },
       { name: 'Hallway',   icon: '\u{1F6E4}' },

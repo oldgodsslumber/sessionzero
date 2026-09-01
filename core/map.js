@@ -1,11 +1,67 @@
 window._mapZoom=null;window._selMapCell=null;
+
+// The map's nouns. A square of a superhero city is a Location; a square of a
+// dungeon floor is a Room, and the parts of it that are not map at all are
+// solid rock rather than "Void". A pack that says nothing keeps the comic's
+// words, which is what every game used to get.
+function mapWord(key,plain){
+  const w=(typeof SYS!=='undefined'&&SYS&&SYS.map&&SYS.map.words)||{};
+  return w[key]||plain;
+}
+function mapCellWord(){return mapWord('cell','Location');}
+function mapZoneWord(){return mapWord('zone','Zone');}
+function mapBlockedWord(){return mapWord('blocked','Void');}
+
+// Which squares belong to the floor the table is on. A map belongs to a FLOOR:
+// the party goes down, and the map of the third floor is not the map of the
+// first. A game with no floor at all — a comic city — has one list and this is
+// the identity function.
+function mapFloor(){
+  const f=(typeof S!=='undefined'&&S)?S.floor:null;
+  return (f===undefined||f===null)?null:f;
+}
+function mapUsesFloors(){
+  return mapFloor()!==null&&!!(typeof SYS!=='undefined'&&SYS&&SYS.map&&SYS.map.perFloor);
+}
+// Regions on this floor, as [{r, i}] so the switcher keeps the real indices.
+function mapRegionsHere(){
+  const all=(S.regions||[]).map(function(r,i){return {r:r,i:i};});
+  if(!mapUsesFloors())return all;
+  const f=mapFloor();
+  return all.filter(function(x){return Number(x.r.floor)===Number(f);});
+}
+// A region drawn before maps belonged to floors has no floor on it. It is the
+// map the party has been using, so it belongs to the floor they are on.
+function mapAdoptFloor(){
+  if(!mapUsesFloors())return false;
+  const f=mapFloor();
+  let moved=false;
+  (S.regions||[]).forEach(function(r){
+    if(r.floor===undefined||r.floor===null){r.floor=f;moved=true;}
+  });
+  return moved;
+}
+
 function heroMarker(){const n=sysCharName(S.char);return n?esc(n.charAt(0)):'H';}
 function isAdj(a,b){const ar=Math.floor(a/5),ac=a%5,br=Math.floor(b/5),bc=b%5;return Math.abs(ar-br)+Math.abs(ac-bc)===1;}
 // Kept under its old name; the test for it lives in core/icons.js now.
 function isGiSlug(v){return iconIsSlug(v);}
 // Render a cell's stored icon big — a game-icon mask when the value is a slug,
 // the legacy emoji/text otherwise, or the hero/dot fallback.
+// The icon a zone type carries, so a saferoom reads as a saferoom on the grid
+// rather than only inside its own detail panel.
+function zoneIcon(name){
+  if(!name)return '';
+  const t=mapZoneTypes(),icons=mapZoneIcons();
+  const hit=t.filter(function(z){return String(z)===String(name);})[0];
+  return hit?(icons[hit]||''):'';
+}
+
 function cellIco(c,cur){
+  if(!c.icon&&c.zone){
+    const zi=zoneIcon(c.zone);
+    if(zi)return isGiSlug(zi)?iconHTML(zi,null,cur?'var(--accent)':'var(--text)','cell-gi'):zi;
+  }
   if(c.icon){
     // No size: .cell-gi sizes it, and grows at the 481px breakpoint.
     if(isGiSlug(c.icon))return iconHTML(c.icon,null,cur?'var(--accent)':'var(--text)','cell-gi');
@@ -75,14 +131,42 @@ function renderMapContent(){
     let det='';
     if(sc&&!sc.isVoid){const cur=si===sz.currentCell,adj=isAdj(sz.currentCell,si);
       _miScope='sz';_miIdx=si;_miVal=isGiSlug(sc.icon)?sc.icon:'';_miDefault=sc.name||sz.name||'';
-      det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">Area ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelSZ(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleSZVoid(${si})">${sc.isVoid?'Clear Void':'Mark Void'}</button></div><div class="form-group"><label>Name</label><input value="${esc(sc.name)}" onchange="setSZProp(${si},'name',this.value)" placeholder="${esc(mapHint('areaName','e.g. Rooftop, Lab, Alley...'))}"></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setSZProp(${si},'feature',this.value)" placeholder="${esc(mapHint('areaFeature','e.g. Sniper Nest, Evidence Room...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setSZProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
-    return`<div class="map-split"><div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><button class="btn btn-secondary btn-xs" onclick="exitSZ()">\u2190 Back to ${esc(region.name)}</button><span class="pg-title" style="font-size:18px;margin:0">${esc(sz.name)}</span>${sz.type?`<span class="tag" style="background:var(--surface3);color:var(--text);border:1px solid var(--border)">${sz.type}</span>`:''}</div><div class="form-group"><label>Zone Name</label><input value="${esc(sz.name)}" onchange="setSZName(this.value)" style="font-weight:700;color:var(--accent)"></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px">Click adjacent area to travel. Click any cell to view/edit.</div>${g}<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)"><span style="color:var(--accent)">\u25a3 You</span><span style="color:var(--blue)">\u25a3 Adjacent</span><span>\u25a0 Explored</span><span style="opacity:.5">\u25a0 Unexplored</span><span style="opacity:.3">\u25a0 Void</span></div></div>${det}</div>`;
+      det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">${esc(mapCellWord())} ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelSZ(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleSZVoid(${si})">${sc.isVoid?('Not '+esc(mapBlockedWord().toLowerCase())):('Mark '+esc(mapBlockedWord().toLowerCase()))}</button></div><div class="form-group"><label>Name</label><input value="${esc(sc.name)}" onchange="setSZProp(${si},'name',this.value)" placeholder="${esc(mapHint('areaName','e.g. Rooftop, Lab, Alley...'))}"></div><div class="form-group"><label>What it is</label><select onchange="setSZProp(${si},'zone',this.value);renderMap()"><option value="">\u2014 ${esc(mapZoneWord().toLowerCase())} \u2014</option>${mapZoneTypes().map(function(z){return `<option value="${esc(z)}"${z===sc.zone?' selected':''}>${esc(z)}</option>`;}).join('')}</select></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setSZProp(${si},'feature',this.value)" placeholder="${esc(mapHint('areaFeature','e.g. Sniper Nest, Evidence Room...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setSZProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
+    return`<div class="map-split"><div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><button class="btn btn-secondary btn-xs" onclick="exitSZ()">\u2190 Back to ${esc(region.name)}</button><span class="pg-title" style="font-size:18px;margin:0">${esc(sz.name)}</span>${sz.type?`<span class="tag" style="background:var(--surface3);color:var(--text);border:1px solid var(--border)">${sz.type}</span>`:''}</div><div class="form-group"><label>${esc(mapZoneWord())} Name</label><input value="${esc(sz.name)}" onchange="setSZName(this.value)" style="font-weight:700;color:var(--accent)"></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px">Click adjacent area to travel. Click any cell to view/edit.</div>${g}<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)"><span style="color:var(--accent)">\u25a3 You</span><span style="color:var(--blue)">\u25a3 Adjacent</span><span>\u25a0 Explored</span><span style="opacity:.5">\u25a0 Unexplored</span><span style="opacity:.3">\u25a0 ${esc(mapBlockedWord())}</span></div></div>${det}</div>`;
   }
 
   // NORMAL REGION VIEW
+  // A map belongs to a floor: only the ones for the floor the table is on are
+  // offered, so going down does not leave you picking your way past every map
+  // you have ever drawn to find the one you are standing in.
+  if(mapAdoptFloor())save();
+  const here=mapRegionsHere();
+  // Standing on a floor whose map is not the one loaded. Either point at one
+  // that IS here, or say there is no map of this floor yet — drawing another
+  // floor's grid while the strip says you are on this one is the disagreement
+  // this whole change is about.
+  if(mapUsesFloors()&&!here.some(function(x){return x.i===S.activeRegion;})){
+    if(here.length){S.activeRegion=here[0].i;window._selMapCell=null;window._mapZoom=null;save();}
+    else{
+      return `<div class="pg-title">${esc(sysCopy('map','title','Region Map'))}</div>`+
+        `<div class="pg-sub">${esc(sysCopy('map','hint','Explore the city'))}</div>`+
+        `<div class="card tac" style="padding:26px">`+
+        `<div class="fw-700" style="margin-bottom:4px">No map of ${esc(lexU('logBreak'))} ${esc(String(mapFloor()))} yet</div>`+
+        `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">`+
+        `A ${esc(lexL('logBreak').toLowerCase())} you have not drawn is not a map. Start one when you get there.</div>`+
+        `<button class="btn btn-primary" onclick="newRegion()">Start the map of ${esc(lexU('logBreak'))} ${esc(String(mapFloor()))}</button>`+
+        ((S.regions||[]).length?`<div style="font-size:10px;color:var(--muted);margin-top:10px">${(S.regions||[]).length} map${(S.regions||[]).length===1?'':'s'} on other ${esc(lexL('logBreak'))}s</div>`:'')+
+        `</div>`;
+    }
+  }
   let sw='<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
-  S.regions.forEach((r,i)=>{sw+=`<button class="btn btn-xs ${i===S.activeRegion?'btn-primary':'btn-secondary'}" onclick="switchRegion(${i})">${esc(r.name)}</button>`;});
-  sw+=`<button class="btn btn-xs btn-gold" onclick="newRegion()">+ New</button></div>`;
+  here.forEach(x=>{sw+=`<button class="btn btn-xs ${x.i===S.activeRegion?'btn-primary':'btn-secondary'}" onclick="switchRegion(${x.i})">${esc(x.r.name)}</button>`;});
+  sw+=`<button class="btn btn-xs btn-gold" onclick="newRegion()">+ New</button>`;
+  if(mapUsesFloors()){
+    const elsewhere=(S.regions||[]).length-here.length;
+    if(elsewhere>0)sw+=`<span style="font-size:10px;color:var(--muted);margin-left:6px">${elsewhere} more on other ${esc(lexL('logBreak'))}s</span>`;
+  }
+  sw+='</div>';
 
   let g='<div id="map-grid">';
   for(let i=0;i<25;i++){const c=region.cells[i],cur=region.currentCell===i,adj=isAdj(region.currentCell,i)&&!c.isVoid;
@@ -95,24 +179,40 @@ function renderMapContent(){
   let det='';
   if(sc&&!sc.isVoid){const cur=si===region.currentCell,adj=isAdj(region.currentCell,si);
     _miScope='region';_miIdx=si;_miVal=isGiSlug(sc.icon)?sc.icon:'';_miDefault=sc.name||region.name||'';
-    det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">Location ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelTo(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleMapVoid(${si})">${sc.isVoid?'Clear Void':'Mark Void'}</button><button class="btn btn-gold btn-xs" onclick="enterSZ(${si})">Zoom In${sc.subZone?' ('+sc.subZone.type+')':''}</button></div><div class="form-group"><label>Location Name</label><input value="${esc(sc.name)}" onchange="setMapProp(${si},'name',this.value)" placeholder="${esc(mapHint('cellName','e.g. Wayne Tower, City Hall, Docks...'))}"></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setMapProp(${si},'feature',this.value)" placeholder="${esc(mapHint('cellFeature','e.g. Villain HQ, Hospital, Park...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setMapProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
+    det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">${esc(mapCellWord())} ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelTo(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleMapVoid(${si})">${sc.isVoid?('Not '+esc(mapBlockedWord().toLowerCase())):('Mark '+esc(mapBlockedWord().toLowerCase()))}</button><button class="btn btn-gold btn-xs" onclick="enterSZ(${si})">${sc.subZone?('Inside \u2014 '+esc(sc.subZone.type)):'Map the inside'}</button></div><div class="form-group"><label>${esc(mapCellWord())} Name</label><input value="${esc(sc.name)}" onchange="setMapProp(${si},'name',this.value)" placeholder="${esc(mapHint('cellName','e.g. Wayne Tower, City Hall, Docks...'))}"></div><div class="form-group"><label>What it is</label><select onchange="setMapZone(${si},this.value)"><option value="">\u2014 ${esc(mapZoneWord().toLowerCase())} \u2014</option>${mapZoneTypes().map(function(z){return `<option value="${esc(z)}"${z===sc.zone?' selected':''}>${esc(z)}</option>`;}).join('')}</select></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setMapProp(${si},'feature',this.value)" placeholder="${esc(mapHint('cellFeature','e.g. Villain HQ, Hospital, Park...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setMapProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
 
   const heroInfo=S.char?`<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:22px;font-weight:900;font-family:var(--font-title);color:var(--accent)">${heroMarker()}</span><div><div style="font-weight:700;color:var(--accent)">${esc(S.char.costumedName)}</div><div style="font-size:10px;color:var(--muted)">${esc(S.char.civilianName)}</div></div></div>`:'';
 
   // The map and the cell you clicked, side by side where there is room. On a
   // phone .map-split is a plain block, so the detail still falls under the grid.
-  return`<div class="pg-title">${esc(sysCopy('map','title','Region Map'))}</div><div class="pg-sub">${esc(sysCopy('map','hint','Explore the city'))}</div>${sw}<div class="map-split"><div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:16px;font-weight:700;font-family:var(--font-title);color:var(--accent)">${esc(region.name)}</span><div style="display:flex;gap:4px"><button class="btn btn-secondary btn-xs" onclick="renameRegion()">Rename</button>${S.regions.length>1?`<button class="btn btn-danger btn-xs" onclick="deleteRegion()">Delete</button>`:''}</div></div>${heroInfo}<div style="font-size:10px;color:var(--muted);margin-bottom:8px">5\u00d75 grid. Click adjacent location to travel. Click any cell to view/edit.</div>${g}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:var(--muted)"><span style="color:var(--accent)">\u25a3 You</span><span style="color:var(--blue)">\u25a3 Adjacent</span><span>\u25a0 Explored</span><span style="opacity:.5">\u25a0 Unexplored</span><span style="opacity:.3">\u25a0 Void</span></div></div>${det}</div>`;
+  return`<div class="pg-title">${esc(sysCopy('map','title','Region Map'))}</div><div class="pg-sub">${esc(sysCopy('map','hint','Explore the city'))}</div>${sw}<div class="map-split"><div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:16px;font-weight:700;font-family:var(--font-title);color:var(--accent)">${esc(region.name)}</span><div style="display:flex;gap:4px"><button class="btn btn-secondary btn-xs" onclick="renameRegion()">Rename</button>${S.regions.length>1?`<button class="btn btn-danger btn-xs" onclick="deleteRegion()">Delete</button>`:''}</div></div>${heroInfo}<div style="font-size:10px;color:var(--muted);margin-bottom:8px">5\u00d75 grid. Click an adjacent ${esc(mapCellWord().toLowerCase())} to travel. Click any one to view or edit it.</div>${g}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:var(--muted)"><span style="color:var(--accent)">\u25a3 You</span><span style="color:var(--blue)">\u25a3 Adjacent</span><span>\u25a0 Explored</span><span style="opacity:.5">\u25a0 Unexplored</span><span style="opacity:.3">\u25a0 ${esc(mapBlockedWord())}</span></div></div>${det}</div>`;
 }
 
 // Region operations
 function clickMapCell(i){window._selMapCell=i;const r=S.regions[S.activeRegion];if(r)r.cells[i].type='explored';save();renderMap();}
 function travelTo(i){const r=S.regions[S.activeRegion];if(!r)return;r.cells[r.currentCell].isCurrent=false;r.currentCell=i;r.cells[i].isCurrent=true;r.cells[i].type='explored';window._selMapCell=i;save();renderMap();}
 function setMapProp(i,p,v){const r=S.regions[S.activeRegion];if(r)r.cells[i][p]=v;save();}
+// What this square IS, from the list the pack declared. It shows on the grid,
+// so a saferoom reads as one without anything being opened. Marking one also
+// marks it explored: you cannot say what a square is without having seen it.
+function setMapZone(i,v){
+  const r=S.regions[S.activeRegion];if(!r)return;
+  if(v)r.cells[i].zone=v;else delete r.cells[i].zone;
+  if(v&&r.cells[i].type==='unknown')r.cells[i].type='explored';
+  save();renderMap();
+}
 function toggleMapVoid(i){const r=S.regions[S.activeRegion];if(r)r.cells[i].isVoid=!r.cells[i].isVoid;save();renderMap();}
 function switchRegion(i){S.activeRegion=i;window._selMapCell=null;window._mapZoom=null;save();renderMap();}
-function newRegion(){const n=prompt('Region name:','Neighborhood '+(S.regions.length+1));if(!n)return;S.regions.push(defaultRegion(n));S.activeRegion=S.regions.length-1;window._selMapCell=null;save();renderMap();}
-function renameRegion(){const r=S.regions[S.activeRegion];if(!r)return;const n=prompt('Rename region:',r.name);if(n)r.name=n;save();renderMap();}
-function deleteRegion(){if(S.regions.length<=1)return alert('Cannot delete the only region.');if(!confirm('Delete this region?'))return;S.regions.splice(S.activeRegion,1);S.activeRegion=Math.max(0,S.activeRegion-1);save();renderMap();}
+function newRegion(){
+  const word=lexU('region');
+  const n=prompt(word+' name:',word+' '+(mapRegionsHere().length+1));if(!n)return;
+  const r=defaultRegion(n);
+  // Stamped with the floor it is drawn on, so it is still the right map when
+  // the party comes back up.
+  if(mapUsesFloors())r.floor=mapFloor();
+  S.regions.push(r);S.activeRegion=S.regions.length-1;window._selMapCell=null;save();renderMap();}
+function renameRegion(){const r=S.regions[S.activeRegion];if(!r)return;const n=prompt('Rename this '+lexL('region')+':',r.name);if(n)r.name=n;save();renderMap();}
+function deleteRegion(){if(S.regions.length<=1)return alert('Cannot delete the only '+lexL('region')+'.');if(!confirm('Delete this '+lexL('region')+'?'))return;S.regions.splice(S.activeRegion,1);S.activeRegion=Math.max(0,S.activeRegion-1);save();renderMap();}
 
 // The map's vocabulary belongs to the game, not the shell: a superhero city
 // has streets and rooftops, a dungeon has hallways and stairwells. A pack

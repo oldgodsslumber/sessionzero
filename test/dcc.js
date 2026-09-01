@@ -1657,6 +1657,51 @@ function boot(entry) {
     return (t && t.floor === 3) || 'the world has floor ' + JSON.stringify(t && t.floor);
   });
 
+  // ── the map is of a floor, and its squares are rooms ────────────────────
+  const mapTab = () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');S.universeId=u.id;bindUniverse();");
+    ev("showTab('map');renderMap()");
+  };
+
+  check('[map] the squares are rooms, and what is not map is rock', () => {
+    mapTab();
+    ev("window._selMapCell=7;renderMap()");
+    const txt = ev("document.getElementById('map-content').textContent");
+    if (/Location/.test(txt)) return 'a dungeon square is still called a Location';
+    if (!/Room 8/.test(txt)) return 'the square is not called a room: ' + txt.slice(0, 120);
+    return /Solid rock/.test(txt) || 'the legend still says Void';
+  });
+
+  // The pack has declared Room, Hallway, Stairwell, Saferoom, Guild and Boss
+  // Room all along, and they were only reachable one level down, inside a
+  // sub-zone. A saferoom you cannot mark as one is a saferoom you cannot find.
+  check('[map] a square can be told what it is, and shows it', () => {
+    mapTab();
+    ev("setMapZone(7,'Saferoom')");
+    const cell = JSON.parse(ev("JSON.stringify(S.regions[S.activeRegion].cells[7])"));
+    if (cell.zone !== 'Saferoom') return 'it was not marked: ' + JSON.stringify(cell.zone);
+    if (cell.type !== 'explored') return 'marking one did not count as seeing it';
+    return ev("document.querySelectorAll('#map-grid .map-cell')[7].innerHTML.length > 30")
+      || 'the grid draws nothing for it';
+  });
+
+  check('[map] a map belongs to a floor', () => {
+    mapTab();
+    const mine = ev("JSON.stringify(S.regions.map(function(r){return r.floor}))");
+    if (!/3/.test(mine)) return 'the map did not adopt the floor it was drawn on: ' + mine;
+    ev("S.floor=4;save();renderMap()");
+    const txt = ev("document.getElementById('map-content').textContent");
+    if (ev("!!document.getElementById('map-grid')")) return 'it drew the map of another floor on Floor 4';
+    if (!/No map of Floor 4/.test(txt)) return 'it does not say there is no map here: ' + txt.slice(0, 120);
+    // newRegion asks for a name; the suite's window has no prompt of its own.
+    ev("window.prompt=function(q,d){return d||'New map'};newRegion();renderMap()");
+    const drawn = ev("JSON.stringify(mapRegionsHere().map(function(x){return x.r.floor}))");
+    if (drawn !== '[4]') return 'the new map was not stamped with this floor: ' + drawn;
+    ev("S.floor=3;renderMap()");
+    return ev("JSON.stringify(mapRegionsHere().map(function(x){return x.r.name}))").indexOf('First Floor') >= 0
+      || 'coming back up did not find the map that was there';
+  });
+
   // ── nothing in this game may be shaped like the other one ───────────────
   // A different rule set is not a preference: Fate's aspects, stress boxes and
   // stunts are not "wording" in a d20 dungeon game, they are the wrong rules on
