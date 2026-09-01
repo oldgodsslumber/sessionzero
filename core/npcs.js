@@ -1,14 +1,82 @@
-let _npcTab='supporting',_npcEdit=null,_npcFullMode=false;
-const NPC_TABS=[{id:'supporting',label:'Cast'},{id:'rogue',label:'Rogues'},{id:'nameless',label:'Nameless'},{id:'main',label:'Main'},{id:'team',label:'Team'}];
-const NPC_TYPE_LABELS={supporting:'Cast Member',rogue:'Rogue',nameless:'Nameless',main:'Main NPC'};
+let _npcTab='',_npcEdit=null,_npcFullMode=false;
+
+// The kinds of thing on the roster. Cast, Rogues, Nameless, Main and Team are
+// FATE's categories and Daring Comics' cast list — in a dungeon there are Mobs,
+// Bosses and the people you meet, and there is no super-team at all. A pack
+// declares its own; one that says nothing gets the comic's, which is what every
+// game used to get.
+const NPC_TABS_DEFAULT=[{id:'supporting',label:'Cast'},{id:'rogue',label:'Rogues'},{id:'nameless',label:'Nameless'},{id:'main',label:'Main'},{id:'team',label:'Team'}];
+const NPC_TYPE_LABELS_DEFAULT={supporting:'Cast Member',rogue:'Rogue',nameless:'Nameless',main:'Main NPC'};
+
+function npcKinds(){
+  const k=(SYS&&SYS.npc&&SYS.npc.kinds);
+  const list=(typeof k==='function')?k():k;
+  return (Array.isArray(list)&&list.length)?list:NPC_TABS_DEFAULT;
+}
+function npcKindLabel(id){
+  const k=npcKinds().filter(function(x){return x.id===id;})[0];
+  return (k&&(k.one||k.label))||NPC_TYPE_LABELS_DEFAULT[id]||id;
+}
+function npcFirstKind(){return (npcKinds()[0]||{}).id||'supporting';}
+
+// Which tab is open. It cannot be a constant any more: 'supporting' is not a
+// kind of thing in every game.
+function npcTab(){
+  const ids=npcKinds().map(function(k){return k.id;});
+  if(ids.indexOf(_npcTab)<0)_npcTab=npcFirstKind();
+  return _npcTab;
+}
+
+// An entry filed under a kind this game does not have — one made before the
+// pack described its own roster, or imported from elsewhere — belongs in the
+// first one rather than nowhere. It is shown, not silently dropped.
+function npcKindOf(n){
+  const ids=npcKinds().map(function(k){return k.id;});
+  const t=(n&&n.type)||'';
+  return ids.indexOf(t)>=0?t:npcFirstKind();
+}
 const NPC_SKILL_HINTS={supporting:'Supporting cast usually need 1-3 skills at Average(+1) to Good(+3) — enough to be useful in a scene.',rogue:'Rogues need 3-6 skills at Good(+3) to Fantastic(+6).',nameless:'Nameless goons rarely need more than 1-2 skills. The Obstacle rating usually does the work.',main:'Main NPCs are built like heroes — 5-8 skills spanning the ladder.'};
 // Expandable roster cards. Tap a card header to reveal the full stat block.
 let _npcOpen={};
 function npcKey(npc,ri){return npc.id||('idx'+ri);}
 function toggleNPCCard(k){_npcOpen[k]=!_npcOpen[k];renderNPCs();}
 function npcPowerSets(npc){return npc.forms?npc.forms.flatMap(f=>f.powerSets||[]):(npc.powerSets||[]);}
+// What a card says about one of these, in chips. The shell's own chips are
+// Fate's — skills, powers, forms, stunts, stress boxes — so a Mob built with
+// this pack's own builder showed a name and nothing else: Level, Health Bar
+// slots, DR, Evade and its attacks were all stored and none of them drawn.
+function npcChips(npc){
+  const fn=(SYS&&SYS.npc&&SYS.npc.readout);
+  if(!fn)return null;
+  try{
+    const out=fn(npc);
+    return Array.isArray(out)?out.filter(Boolean):null;
+  }catch(e){return null;}
+}
+
+// The stat block behind the caret, for a pack that describes its own entries.
+// Built from the same field list the builder uses, so what you typed is what
+// you read back — in the groups the pack put them in.
+function npcPackBody(npc){
+  const fields=(typeof sysNpcFields==='function')?sysNpcFields():null;
+  if(!fields||!fields.length)return '';
+  let h='',group=null;
+  fields.forEach(function(f){
+    let v=npc[f.key];
+    if(f.derive){try{v=f.derive(npc);}catch(e){v=undefined;}}
+    if(v===undefined||v===null||String(v).trim()==='')return;
+    if(f.group!==group){
+      group=f.group;
+      h+=`<div class="label mb-1" style="margin-top:6px">${esc(group||'')}</div>`;
+    }
+    h+=`<div class="npc-derived"><span>${esc(f.label)}</span><strong>${esc(String(v))}</strong></div>`;
+  });
+  return h;
+}
+
 function npcCardHTML(npc,ri){
   const k=npcKey(npc,ri),open=!!_npcOpen[k];
+  const packChips=npcChips(npc);
   const ps=npcPowerSets(npc),pwCount=ps.reduce((n,p)=>n+(p.powers?.length||0),0),fc=npc.forms?.length||0;
   const skills=Object.entries(npc.skills||{}).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   const stressUsed=(npc.stress||[]).filter(Boolean).length;
@@ -19,7 +87,18 @@ function npcCardHTML(npc,ri){
   h+=`<div class="npc-card-main"><div class="npc-card-name">${esc(npc.name)}</div>`;
   if(npc.desc)h+=`<div class="npc-card-desc">${esc(npc.desc)}</div>`;
   h+=`<div class="npc-card-chips">`;
-  if(npc.fromHero)h+=`<span class="npc-chip hero">◆ Player Hero</span>`;
+  if(npc.fromHero)h+=`<span class="npc-chip hero">◆ ${esc(lexU('hero'))}</span>`;
+  if(packChips){
+    // The pack said what matters about this one; nothing below applies to it.
+    packChips.forEach(function(c){h+=`<span class="npc-chip">${esc(c)}</span>`;});
+    h+=`</div></div><div class="npc-caret">▶</div></div>`;
+    if(!open)return h+`</div>`;
+    h+=`<div class="npc-card-body">${npcPackBody(npc)}`;
+    h+=`<div class="npc-card-acts edit-only">`;
+    h+=`<button class="btn btn-gold btn-xs" onclick="openFullNPCBuilder(${ri})">Builder</button>`;
+    h+=`<button class="btn btn-danger btn-xs" onclick="if(confirm('Delete?')){S.npcs.splice(${ri},1);save();renderNPCs();}">✕</button>`;
+    return h+`</div></div></div>`;
+  }
   if(npc.type==='nameless')h+=`<span class="npc-chip ob">Obstacle ${esc(npc.obstacle||'+0')}</span>`;
   if(skills.length)h+=`<span class="npc-chip">${skills.length} skill${skills.length>1?'s':''}</span>`;
   if(ps.length)h+=`<span class="npc-chip pw">⚡ ${pwCount} power${pwCount!==1?'s':''}</span>`;
@@ -93,20 +172,36 @@ function renderNPCs(){
   const el=document.getElementById('npcs-content');
   if(_npcFullMode){renderFullNPCEditor();return;}
   let h=universeBarHTML()+`<div class="${_npcEditMode?'':'no-edit'}">`;
-  h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">NPCs</div><div class="pg-sub">Characters, Villains & Team</div></div>${editToggleBtn(_npcEditMode,'toggleNPCEdit')}</div>`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">${esc(npcPanelTitle())}</div><div class="pg-sub">${esc(npcPanelHint())}</div></div>${editToggleBtn(_npcEditMode,'toggleNPCEdit')}</div>`;
   if(!_npcEditMode)h+=noEditBanner();
-  h+=`<div class="npc-tabs">${NPC_TABS.map(t=>`<div class="npc-tab ${_npcTab===t.id?'active':''}" onclick="_npcTab='${t.id}';renderNPCs()">${t.label}</div>`).join('')}</div>`;
-  if(_npcTab==='team'){let teamH='';renderTeamInner({set innerHTML(v){teamH=v;}});h+=teamH+'</div>';el.innerHTML=h;return;}
-  const _list=S.npcs.filter(n=>n.type===_npcTab && !(n.fromHero&&S.char&&n.heroId===S.char.heroId));
+  const _tab=npcTab();
+  h+=`<div class="npc-tabs">${npcKinds().map(t=>`<div class="npc-tab ${_tab===t.id?'active':''}" onclick="_npcTab='${esc(t.id)}';renderNPCs()">${esc(t.label)}</div>`).join('')}</div>`;
+  if(_tab==='team'){let teamH='';renderTeamInner({set innerHTML(v){teamH=v;}});h+=teamH+'</div>';el.innerHTML=h;return;}
+  const _kindHint=(npcKinds().filter(function(t){return t.id===_tab;})[0]||{}).hint||'';
+  if(_kindHint)h+=`<div style="font-size:11px;color:var(--muted);margin:-6px 0 8px">${esc(_kindHint)}</div>`;
+  const _list=S.npcs.filter(n=>npcKindOf(n)===_tab && !(n.fromHero&&S.char&&n.heroId===S.char.heroId));
   h+=`<div class="npc-grid">`;
   _list.forEach(npc=>{h+=npcCardHTML(npc,S.npcs.indexOf(npc));});
-  if(!_list.length)h+=`<div class="tac text-muted" style="grid-column:1/-1;padding:20px 10px;font-size:12px">No ${esc((NPC_TABS.find(t=>t.id===_npcTab)||{}).label||'entries')} yet.</div>`;
+  if(!_list.length)h+=`<div class="tac text-muted" style="grid-column:1/-1;padding:20px 10px;font-size:12px">No ${esc((npcKinds().find(t=>t.id===_tab)||{}).label||'entries')} yet.</div>`;
   h+=`</div>`;
   h+=`<div class="edit-only" style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-primary" style="flex:1" onclick="openAddNPC()">+ Quick Add</button>`;
   h+=`<button class="btn btn-gold" style="flex:1" onclick="openFullNPCBuilder(null)">+ Full Builder</button>`;
   h+=`</div><div class="edit-only" style="font-size:10px;color:var(--muted);margin-top:4px;text-align:center">Quick Add = name, blurb & stress. Full Builder = aspects, skills, powers, stunts & consequences.</div></div>`;
   el.innerHTML=h;
 }
+// What this panel is called and what it says it is for. A bestiary is not a
+// cast list, and a pack that has said `roster: 'Bestiary'` should not be handed
+// a heading about villains and a super-team.
+function npcPanelTitle(){
+  // Only what the pack SAYS. Reaching for lex('roster') renamed Daring Comics'
+  // panel to "Rogues Gallery", which is one of the five things on it rather
+  // than the name of the lot.
+  return (SYS&&SYS.npc&&SYS.npc.title)||'NPCs';
+}
+function npcPanelHint(){
+  return (SYS&&SYS.npc&&SYS.npc.panelHint)||'Characters, Villains & Team';
+}
+
 function openAddNPC(){_npcEdit=null;renderNM();document.getElementById('npc-modal').classList.add('open');}
 function editNPC(i){_npcEdit=i;renderNM();document.getElementById('npc-modal').classList.add('open');}
 function closeNM(){document.getElementById('npc-modal').classList.remove('open');}
@@ -151,7 +246,7 @@ function sysNpcFields() {
 
 function sysNpcDefaults(existing) {
   const fields = sysNpcFields() || [];
-  const d = { type: (existing && existing.type) || _npcTab || 'main' };
+  const d = { type: (existing && existing.type) || npcTab() };
   fields.forEach(function (f) {
     const had = existing ? existing[f.key] : undefined;
     d[f.key] = (had === undefined || had === null)
@@ -196,6 +291,17 @@ function renderSysNPCEditor() {
     <button class="btn btn-secondary btn-xs" onclick="closeFullNPCBuilder()">Cancel</button></div>`;
   if (SYS.npc && SYS.npc.hint) {
     h += `<div class="card-sm" style="font-size:11px;color:var(--muted)">${esc(SYS.npc.hint)}</div>`;
+  }
+  // Which kind of thing this is. Without it a Boss built here was filed under
+  // whichever tab happened to be open, and there was no way to say otherwise.
+  const kinds = npcKinds().filter(function (k) { return k.id !== 'team'; });
+  if (kinds.length > 1) {
+    h += `<div class="form-group"><label>Type</label>` +
+      `<select onchange="sysNpcSet('type',this.value)">` +
+      kinds.map(function (k) {
+        return `<option value="${esc(k.id)}"${k.id === (d.type || npcTab()) ? ' selected' : ''}>` +
+          esc(k.one || k.label) + `</option>`;
+      }).join('') + `</select></div>`;
   }
   let group = null;
   fields.forEach(function (f) {
@@ -266,7 +372,7 @@ function openFullNPCBuilder(idx){
     : [{name:'Main Form', powerSets: existing?.powerSets ? JSON.parse(JSON.stringify(existing.powerSets)) : []}];
   const draftSkills = existing?.skills ? JSON.parse(JSON.stringify(existing.skills)) : {};
   migrateControllingSkill(draftSkills);
-  const _dtype=existing?.type||(_npcTab==='team'?'supporting':_npcTab);
+  const _dtype=existing?.type||(npcTab()==='team'?npcFirstKind():npcTab());
   const _defStress=_dtype==='nameless'?2:(_dtype==='supporting'?3:4);
   S._npcDraft={
     type:_dtype,
@@ -300,12 +406,12 @@ function renderFullNPCEditor(){
   if(sysNpcFields())return renderSysNPCEditor();
   const el=document.getElementById('npcs-content');
   let h=`<div class="${_npcEditMode?'':'no-edit'}">`;
-  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap"><div class="pg-title" style="font-size:22px">${NPC_TYPE_LABELS[d.type]||'NPC'} Builder</div><div style="display:flex;gap:4px;flex-wrap:wrap">${editToggleBtn(_npcEditMode,'toggleNPCEdit')}${_npcEdit!==null?`<button class="btn btn-secondary btn-xs" onclick="exportNPCToSlot(${_npcEdit})" title="Save as playable character in a save slot">→ Slot</button>`:''}<button class="btn btn-secondary btn-xs" onclick="closeFullNPCBuilder()">Close</button><button class="btn btn-primary btn-xs edit-only" onclick="saveFullNPC()">Save</button></div></div>`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap"><div class="pg-title" style="font-size:22px">${npcKindLabel(d.type)||'NPC'} Builder</div><div style="display:flex;gap:4px;flex-wrap:wrap">${editToggleBtn(_npcEditMode,'toggleNPCEdit')}${_npcEdit!==null?`<button class="btn btn-secondary btn-xs" onclick="exportNPCToSlot(${_npcEdit})" title="Save as playable character in a save slot">→ Slot</button>`:''}<button class="btn btn-secondary btn-xs" onclick="closeFullNPCBuilder()">Close</button><button class="btn btn-primary btn-xs edit-only" onclick="saveFullNPC()">Save</button></div></div>`;
   if(!_npcEditMode)h+=noEditBanner();
 
   // Identity
   h+=`<div class="card"><div class="label mb-1">Identity</div><div class="form-group"><label>Name</label><input class="editable-input" value="${esc(d.name)}" oninput="S._npcDraft.name=this.value;save()" placeholder="e.g. The Joker"></div><div class="form-group"><label>Description</label><textarea class="editable-textarea" oninput="S._npcDraft.desc=this.value;save()" placeholder="Concept, backstory, appearance...">${esc(d.desc)}</textarea></div>`;
-  h+=`<div class="edit-only form-group"><label>Type</label><select onchange="changeNPCDraftType(this.value)" style="font-size:13px">${Object.entries(NPC_TYPE_LABELS).map(([k,v])=>`<option value="${k}" ${d.type===k?'selected':''}>${v}</option>`).join('')}</select></div>`;
+  h+=`<div class="edit-only form-group"><label>Type</label><select onchange="changeNPCDraftType(this.value)" style="font-size:13px">${npcKinds().filter(k=>k.id!=='team').map(k=>[k.id,k.one||k.label]).map(([k,v])=>`<option value="${k}" ${d.type===k?'selected':''}>${v}</option>`).join('')}</select></div>`;
   if(d.type==='nameless')h+=`<div class="form-group"><label>Obstacle Rating</label><input class="editable-input" value="${esc(d.obstacle||'+2')}" oninput="S._npcDraft.obstacle=this.value;save()" placeholder="+2"></div>`;
   h+=`</div>`;
 
@@ -367,7 +473,7 @@ function renderFullNPCEditor(){
   h+=`</div>`;
   el.innerHTML=h;
 }
-function changeNPCDraftType(t){if(!S._npcDraft||!NPC_TYPE_LABELS[t])return;S._npcDraft.type=t;if(t==='nameless'&&!S._npcDraft.obstacle)S._npcDraft.obstacle='+2';_npcTab=t;save();renderFullNPCEditor();}
+function changeNPCDraftType(t){if(!S._npcDraft||!npcKinds().some(function(k){return k.id===t;}))return;S._npcDraft.type=t;if(t==='nameless'&&!S._npcDraft.obstacle)S._npcDraft.obstacle='+2';_npcTab=t;save();renderFullNPCEditor();}
 function adjNPCSkill(sk,d){const n=S._npcDraft;const cur=n.skills[sk]||0,nv=cur+d;if(nv<0||nv>6)return;n.skills[sk]=nv;if(!nv)delete n.skills[sk];save();renderFullNPCEditor();}
 let _npcStuntBrowseOpen=false,_npcStuntSearch='',_npcStuntSkillFilter='';
 function openNPCStuntBrowser(){_npcStuntBrowseOpen=true;_npcStuntSearch='';_npcStuntSkillFilter='';renderFullNPCEditor();}

@@ -718,7 +718,7 @@ function prCharCard(ch,role){
 // A raw roster NPC as a quarter-page index card (cast and goons never get built
 // out in the full builder, so this reads the stored fields directly).
 function prNpcCard(n){
-  const role=NPC_TYPE_LABELS[n.type]||'NPC';
+  const role=(typeof npcKindLabel==='function'?npcKindLabel(n.type):'NPC');
   const sk=Object.entries(n.skills||{}).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,5);
   let h=`<div class="card4"><div class="c4-n">${prE(n.name)}</div><div class="c4-r">${prE(role)}${n.obstacle?' · Obstacle '+prE(n.obstacle):''}</div>`;
   if(n.desc)h+=`<div class="c4-d">${prE(n.desc)}</div>`;
@@ -841,7 +841,7 @@ function prResolveChar(s){
       level:SERIES_LEVELS.find(l=>l.id===_ids.level),exp:EXP_LEVELS.find(e=>e.id===_ids.experience)}};}
   const n=(S.npcs||[]).find(x=>x.id===s.id);if(!n)return null;
   if(s.k==='player')return{ch:npcToCharacter(n),role:'Player hero',series:null};
-  return{ch:npcToCharacter(n),role:NPC_TYPE_LABELS[n.type]||'NPC',series:null,npc:n};
+  return{ch:npcToCharacter(n),role:(typeof npcKindLabel==='function'?npcKindLabel(n.type):'NPC'),series:null,npc:n};
 }
 function prRawNpc(s){return (S.npcs||[]).find(x=>x.id===s.id)||null;}
 

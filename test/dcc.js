@@ -1657,6 +1657,68 @@ function boot(entry) {
     return (t && t.floor === 3) || 'the world has floor ' + JSON.stringify(t && t.floor);
   });
 
+  // ── the roster is this game's, not the comic's ──────────────────────────
+  // The tabs inside NPCs were Fate's categories and Daring Comics' cast list —
+  // Cast, Rogues, Nameless, Main, Team — so a Mob was filed under "Cast" and
+  // there was a tab for a super-team in a game that has none.
+  check('[bestiary] the panel is called what this game calls it', () => {
+    ev("showTab('npcs')");
+    const title = ev("(document.querySelector('#npcs-content .pg-title')||{}).textContent");
+    return title === 'Bestiary' || 'the panel is titled ' + JSON.stringify(title);
+  });
+
+  check('[bestiary] the tabs are Mobs, Bosses, NPCs and Crawlers', () => {
+    ev("showTab('npcs')");
+    const tabs = JSON.parse(ev("JSON.stringify([].slice.call(document.querySelectorAll('#npcs-content .npc-tab')).map(function(t){return t.textContent}))"));
+    if (tabs.indexOf('Team') >= 0) return 'there is still a tab for a super-team: ' + JSON.stringify(tabs);
+    return (tabs.join(',') === 'Mobs,Bosses,NPCs,Crawlers') || 'the tabs read ' + JSON.stringify(tabs);
+  });
+
+  check('[bestiary] a Mob is filed as a Mob, and is where you left it', () => {
+    ev("showTab('npcs');_npcTab='';renderNPCs()");
+    ev("openFullNPCBuilder(null);S._npcDraft=Object.assign(S._npcDraft||{}," +
+       "{name:'The Tongue Lasher',level:7,floor:3,evade:12,move:30});saveSysNPC();renderNPCs()");
+    const filed = ev("JSON.stringify((S.npcs||[]).filter(function(n){return /Tongue/.test(n.name)})[0].type)");
+    if (filed !== '"mob"') return 'it was filed as ' + filed;
+    return ev("/Tongue/.test(document.getElementById('npcs-content').innerHTML)")
+      || 'it is not on the tab it was filed under';
+  });
+
+  check('[bestiary] the builder can say which kind it is making', () => {
+    ev("showTab('npcs');openFullNPCBuilder(null)");
+    const opts = ev("JSON.stringify([].slice.call(document.querySelectorAll('#npcs-content select')).map(function(sel){" +
+      "return (sel.getAttribute('onchange')||'')}).filter(function(x){return /'type'/.test(x)}))");
+    ev("closeFullNPCBuilder()");
+    return opts !== '[]' || 'there is no way to make a Boss rather than a Mob';
+  });
+
+  // Nothing on the roster may vanish because a game renamed its categories.
+  check('[bestiary] an entry filed under an old category is still reachable', () => {
+    ev("S.npcs.push({id:'legacy1',type:'rogue',name:'Legacy Villain'});_npcTab='';renderNPCs()");
+    const shown = ev("/Legacy Villain/.test(document.getElementById('npcs-content').innerHTML)");
+    ev("S.npcs=S.npcs.filter(function(n){return n.id!=='legacy1'})");
+    return shown || 'an entry from before the rename disappeared';
+  });
+
+  check('[bestiary] a Mob card says what the Mob is', () => {
+    ev("S.npcs=S.npcs.filter(function(n){return !/Tongue/.test(n.name)});" +
+       "S.npcs.push({id:'m9',type:'mob',name:'The Tongue Lasher',level:7,floor:3,hbSlots:7,dr:3,evade:12,move:30,attacks:'Lash 1d8+3'});" +
+       "_npcTab='mob';renderNPCs()");
+    const card = ev("(function(){var c=[].slice.call(document.querySelectorAll('#npcs-content .npc-card'))" +
+      ".filter(function(x){return /Tongue/.test(x.textContent)})[0];" +
+      "return c?c.textContent.trim():'(no card)'})()");
+    if (!/Level 7/.test(card)) return 'no Level on the card: ' + JSON.stringify(card);
+    if (!/DR 3/.test(card)) return 'no DR on the card: ' + JSON.stringify(card);
+    return /Evade 12/.test(card) || 'no Evade on the card: ' + JSON.stringify(card);
+  });
+
+  check('[bestiary] opening one shows the stat block it was built with', () => {
+    ev("_npcOpen={};toggleNPCCard('m9')");
+    const body = ev("(function(){var c=document.querySelector('#npcs-content .npc-card.open');" +
+      "return c?c.textContent.trim():'(closed)'})()");
+    return /Lash 1d8\+3/.test(body) || 'the attacks are not in the body: ' + JSON.stringify(body).slice(0, 120);
+  });
+
   // ── building a Mob ────────────────────────────
   // The full NPC builder was Daring Comics' Fate NPC throughout — Aspects, a
   // skill ladder, stress boxes, consequences, powerSets, stunts. Opening it in

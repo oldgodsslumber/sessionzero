@@ -1,6 +1,6 @@
 function renderTeam(targetEl){
   const el=targetEl||document.getElementById('npcs-content');
-  let h=`<div class="pg-title">NPCs</div><div class="pg-sub">Characters, Villains & Team</div><div class="npc-tabs">${NPC_TABS.map(t=>`<div class="npc-tab ${_npcTab===t.id?'active':''}" onclick="_npcTab='${t.id}';renderNPCs()">${t.label}</div>`).join('')}</div>`;
+  let h=`<div class="pg-title">${esc(npcPanelTitle())}</div><div class="pg-sub">${esc(npcPanelHint())}</div><div class="npc-tabs">${NPC_TABS.map(t=>`<div class="npc-tab ${_npcTab===t.id?'active':''}" onclick="_npcTab='${t.id}';renderNPCs()">${t.label}</div>`).join('')}</div>`;
   let teamH='';renderTeamInner({set innerHTML(v){teamH=v;}});h+=teamH;
   el.innerHTML=h;
 }

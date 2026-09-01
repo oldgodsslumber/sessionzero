@@ -177,8 +177,43 @@ registerSystem({
   // on Floor 7 are not the same creature.
   npc: {
     label: 'Mob',
+    // The panel is a bestiary, not a cast list.
+    title: 'Bestiary',
+    panelHint: 'What lives down here, and who is running it.',
+    // What is ON the roster in a dungeon. The shell's own list — Cast, Rogues,
+    // Nameless, Main, Team — is Fate's and Daring Comics'; a crawl has none of
+    // those, and a Mob filed under "Cast" is a Mob nobody can find.
+    kinds: () => [
+      { id: 'mob', label: 'Mobs', one: 'Mob',
+        hint: 'Level and Floor do most of the work: Health Bar slots follow the Level, DR follows the Floor.' },
+      { id: 'boss', label: 'Bosses', one: 'Boss',
+        hint: 'A Boss has a severity tier and a name the whole floor knows.' },
+      { id: 'npc', label: 'NPCs', one: 'NPC',
+        hint: 'Bopcas, quest-givers, shopkeepers, and whatever the Borant Corporation sends.' },
+      { id: 'crawler', label: 'Crawlers', one: 'Crawler',
+        hint: 'Other crawlers — allies, rivals, and the ones on the leaderboard.' },
+    ],
     hint: 'A stat block is the way to track a Mob. Level and Floor do most of the work: '
         + 'Health Bar slots follow the Level, and DR follows the Floor.',
+    // What a card says about one of these at a glance. The shell's own chips
+    // count skills, powers, forms and stunts, which a Mob has none of — so its
+    // card showed a name and nothing else, with every number it was built with
+    // sitting one tap away and invisible.
+    readout: (n) => {
+      if (!n) return [];
+      const lv = Number(n.level) || 0;
+      const hb = Number(n.hbSlots) || Math.max(1, Math.min(10, lv || 1));
+      const dr = (n.dr !== undefined && n.dr !== '') ? Number(n.dr) : Number(n.floor) || 0;
+      return [
+        lv ? 'Level ' + lv : '',
+        hb ? hb + ' HB slot' + (hb === 1 ? '' : 's') : '',
+        dr ? 'DR ' + dr : '',
+        n.evade ? 'Evade ' + n.evade : '',
+        n.move ? 'Move ' + n.move : '',
+        n.kind ? String(n.kind) : '',
+        n.floor ? lexU('logBreak') + ' ' + n.floor : '',
+      ].filter(Boolean);
+    },
     fields: () => [
       { key: 'name',  label: 'Name', group: 'Identity',
         hint: 'The Tongue Lasher, The Regret Collector...' },
