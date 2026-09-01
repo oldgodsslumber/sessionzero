@@ -259,7 +259,18 @@ function catalogRowHTML(b, e) {
       (line ? '<div class="inv-stat">' + esc(line) + '</div>' : '') +
     '</div>' +
     '<div class="inv-ctl">' +
-      '<button class="btn btn-primary btn-xs" onclick="catalogAdd(' + jsArg(String(r.id)) + ')">Add</button>' +
+      '<button class="btn btn-primary btn-xs" onclick="catalogAdd(' + jsArg(String(r.id)) + ')">' +
+        (catalogIsEntries(b) ? 'Grant' : 'Add') + '</button>' +
+      // A Spell is also two items. Making one here is AUTHORING — the thing now
+      // exists in the world and goes into the catalogue for anyone to be given.
+      // Crafting one is the other thing, it belongs to a character, and it stays
+      // on the sheet where the Skill that gates it lives (Calligraphy, Table 45).
+      (catalogIsEntries(b) && catalogGearSource()
+        ? '<button class="btn btn-secondary btn-xs" title="Put a scroll of this in the catalogue"' +
+            ' onclick="catalogMakeScroll(' + jsArg(String(r.id)) + ')">Scroll</button>' +
+          '<button class="btn btn-secondary btn-xs" title="Put a tome of this in the catalogue"' +
+            ' onclick="catalogMakeTome(' + jsArg(String(r.id)) + ')">Tome</button>'
+        : '') +
       '<button class="btn btn-secondary btn-xs" title="Make a copy you can edit"' +
         ' onclick="catalogDuplicate(' + jsArg(String(r.id)) + ')">Duplicate</button>' +
       (mine ? '<button class="btn btn-secondary btn-xs" onclick="catalogEdit(' + jsArg(String(r.id)) + ')">Edit</button>' +
@@ -273,6 +284,46 @@ function catalogQty(d) {
   _catQty = Math.max(1, Math.min(99, _catQty + d));
   renderCatalog();
 }
+
+// The catalogue an item would be filed in, for a pack that has one. A Spell
+// becoming a scroll has to know where scrolls live.
+function catalogGearSource() {
+  return catalogSources().filter(function (b) { return b.type === 'inventory'; })[0] || null;
+}
+
+// A Spell written onto something. The scroll casts it once at the Rank the
+// picker is set to; the tome teaches it. Both are ordinary items the moment
+// they exist — they stack, they sit in a Hotlist slot, and one tap uses them.
+function catalogMakeItem(id, how) {
+  const e = catalogRowById(_catBlock, id);
+  const gear = catalogGearSource();
+  if (!e || !gear) return;
+  const name = e.row.name;
+  const made = how === 'tome'
+    ? { name: 'Tome of ' + name, kind: 'tome', teaches: name,
+        effect: 'Read it to learn ' + name + '.' }
+    : { name: 'Scroll of ' + name, kind: 'scroll', casts: name, rank: _catRank,
+        effect: 'Casts ' + name + ' at Rank ' + _catRank + ', with no Mana and no Ranks needed.' };
+  made.block = gear.id;
+  const already = listCatalogItems(gear.id).filter(function (x) {
+    return String(x.name).toLowerCase() === made.name.toLowerCase();
+  })[0];
+  if (already) {
+    if (typeof flashSaveError === 'function') flashSaveError(made.name + ' is already in the catalogue');
+    return;
+  }
+  saveCatalogItem(made);
+  // Stay where you are. Jumping to the Gear list to show off what was just made
+  // took the Spell you were working from off the screen, so making a scroll AND
+  // a tome of the same Spell meant navigating back between them. The flash says
+  // where it went.
+  renderCatalog();
+  if (typeof flashNote === 'function') {
+    flashNote(made.name + ' — in the ' + String(gear.label || 'item').toLowerCase() + ' catalogue');
+  }
+}
+function catalogMakeScroll(id) { catalogMakeItem(id, 'scroll'); }
+function catalogMakeTome(id) { catalogMakeItem(id, 'tome'); }
 
 function catalogRank(d) {
   _catRank = Math.max(1, Math.min(20, _catRank + d));
@@ -395,6 +446,22 @@ function catalogDelete(id) {
   if (typeof confirm === 'function' && !confirm('Remove "' + e.row.name + '" from the catalogue?')) return;
   deleteCatalogItem(id);
   renderCatalog();
+}
+
+// Keep a Spell (or Skill) you have written on your own sheet, so the table has
+// it too. The mirror of ☆ To catalogue on an item, offered from the entry's own
+// ⋯ panel — and the reason a Spell invented mid-session does not stay stuck on
+// one crawler.
+function catalogSaveEntry(blockId, i) {
+  const t = _skillData(blockId); if (!t) return;
+  const entry = (t.ctx.data.skills || [])[i]; if (!entry) return;
+  const copy = JSON.parse(JSON.stringify(entry));
+  // What this crawler happens to have done with it is not part of the Spell.
+  delete copy.rank; delete copy.marked; delete copy.source; delete copy.custom; delete copy.id;
+  copy.block = blockId;
+  const saved = saveCatalogItem(copy);
+  if (!saved) return;
+  if (typeof flashNote === 'function') flashNote(saved.name + ' is in the catalogue');
 }
 
 // Save an item you are already carrying into the catalogue, so the next one is

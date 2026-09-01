@@ -3700,6 +3700,69 @@ function boot(entry) {
       || 'it was granted as ' + JSON.stringify(mine);
   });
 
+  // ── a Spell is also two items ───────────────────────────────────────────
+  // The catalogue AUTHORS: the thing now exists in the world and anyone can be
+  // given one. The sheet CRAFTS: that belongs to a character and is gated on
+  // the Skill the book names (Calligraphy, Table 45). The book names no craft
+  // for a tome at all, which is the other reason authoring one is not gated.
+  check('[cat] a Spell can be written onto a scroll from the catalogue', () => {
+    catTab();
+    ev("_catBlock='spells';_catRank=5;renderCatalog();catalogMakeScroll('hole')");
+    const made = JSON.parse(ev("JSON.stringify((currentUniverse().items||[]).filter(function(x){return /Scroll of Hole/.test(x.name)})[0]||null)"));
+    ev("_catRank=1;_catBlock='gear';renderCatalog()");
+    if (!made) return 'no scroll was made';
+    return (made.casts === 'Hole' && made.rank === 5 && made.kind === 'scroll' && made.block === 'gear')
+      || 'it was made as ' + JSON.stringify(made);
+  });
+
+  // Both, without leaving the Spell you are working from: making one used to
+  // jump the browser to the Gear list, which took the row off the screen.
+  check('[cat] ...and onto a tome, in the same visit', () => {
+    catTab();
+    ev("_catBlock='spells';renderCatalog();catalogMakeTome('hole')");
+    if (ev("_catBlock") !== 'spells') return 'it navigated away to ' + ev("_catBlock");
+    const made = JSON.parse(ev("JSON.stringify((currentUniverse().items||[]).filter(function(x){return /Tome of Hole/.test(x.name)})[0]||null)"));
+    ev("_catBlock='gear';renderCatalog()");
+    return (made && made.teaches === 'Hole' && made.kind === 'tome')
+      || 'it was made as ' + JSON.stringify(made);
+  });
+
+  check('[cat] what it makes is an ordinary item, and lands under Gear', () => {
+    catTab();
+    ev("_catBlock='gear';_catSource='yours';renderCatalog()");
+    const listed = ev("/Scroll of Hole/.test(document.getElementById('items-content').innerHTML)");
+    ev("_catSource='';renderCatalog()");
+    if (!listed) return 'the scroll is not in the Gear catalogue';
+    ev("_catQty=1;renderCatalog();document.getElementById('cat-target').value='hotlist';" +
+       "catalogAdd((currentUniverse().items.filter(function(x){return /Scroll of Hole/.test(x.name)})[0]||{}).id)");
+    const tap = ev("JSON.stringify(dccHudTapFor(S.char.blocks.gear.hotlist.filter(Boolean).filter(function(x){return /Scroll of Hole/.test(x.name)})[0],S.char))");
+    return (/"roll":"Hole"/.test(tap) && /"spend":true/.test(tap))
+      || 'one tap does not cast it: ' + tap;
+  });
+
+  check('[cat] making the same one twice says so rather than doubling it', () => {
+    catTab();
+    ev("_catBlock='spells';renderCatalog();catalogMakeTome('hole')");
+    const n = ev("(currentUniverse().items||[]).filter(function(x){return /Tome of Hole/.test(x.name)}).length");
+    ev("_catBlock='gear';renderCatalog()");
+    return n === 1 || 'there are now ' + n + ' of them';
+  });
+
+  // The mirror of ☆ To catalogue on an item: a Spell invented mid-session must
+  // not stay stuck on the crawler who invented it.
+  check('[cat] a Spell on your sheet can be kept for the table', () => {
+    catTab();
+    ev("S.char.blocks.spells.skills.push({name:'Wormfinger',rank:3,stat:'INT',mana:7,source:'custom',custom:true,marked:true});save();renderHero()");
+    const i = ev("S.char.blocks.spells.skills.findIndex(function(x){return x.name==='Wormfinger'})");
+    ev("catalogSaveEntry('spells'," + "" + i + ")");
+    const kept = JSON.parse(ev("JSON.stringify((currentUniverse().items||[]).filter(function(x){return x.name==='Wormfinger'})[0]||null)"));
+    if (!kept) return 'it did not reach the catalogue';
+    if (kept.block !== 'spells') return 'it was filed under ' + JSON.stringify(kept.block);
+    // what THIS crawler did with it is not part of the Spell
+    return (kept.rank === undefined && kept.marked === undefined && kept.mana === 7)
+      || 'it was kept as ' + JSON.stringify(kept);
+  });
+
   // ── the named gear (pp. 216-218, 326, 633-638) ──────────────────────────
   check('[gear-cat] the named gear is in the same catalogue as the ordinary kind', () => {
     const n = ev("DCC_GEAR.filter(function(g){return g.kind==='magic'}).length");
@@ -4310,8 +4373,10 @@ function boot(entry) {
   check('[spell] writing a scroll needs Calligraphy', () => {
     spellSheet();
     ev("renderHero()"); openDetail('spells', 0);
-    const none = ev("document.querySelectorAll('#blk-spells .inv-detail button').length");
-    if (none !== 0) return 'it offered to write a scroll without the Skill';
+    // The panel always offers ☆ To catalogue; what needs the Skill is the
+    // scribing, so ask about that rather than counting buttons.
+    const offered = ev("/Write a scroll/.test((document.querySelector('#blk-spells .inv-detail')||{textContent:''}).textContent)");
+    if (offered) return 'it offered to write a scroll without the Skill';
     ev("S.char.blocks.skills.skills.push({name:'Calligraphy',rank:3,stat:'DEX',source:'test'});" +
        "save();blockRepaint('spells')");
     return ev("/Write a scroll/.test((document.querySelector('#blk-spells .inv-detail')||{textContent:''}).textContent)")

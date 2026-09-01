@@ -565,6 +565,11 @@ function skillDetailPanel(b, entry, i) {
     h += '<button class="btn btn-primary btn-xs" onclick="skillAct(' + jsArg(b.id) + ',' + i +
          ',' + jsArg(a.id) + ')">' + esc(a.label) + '</button>';
   });
+  // The same offer an item gets: keep this one where the table can find it.
+  if (b.catalog && typeof catalogSaveEntry === 'function') {
+    h += '<button class="btn btn-secondary btn-xs" title="Keep this in the catalogue"' +
+      ' onclick="catalogSaveEntry(' + jsArg(b.id) + ',' + i + ')">\u2606 To catalogue</button>';
+  }
   if (cat) {
     const from = fields.filter(function (f) {
       return (entry[f.key] === undefined || entry[f.key] === '') &&
