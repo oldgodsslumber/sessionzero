@@ -77,10 +77,21 @@ function blockRepaint(id) {
 
 // Render every declared block, in order. `mount` namespaces the wrapper ids so
 // a second screen showing the same blocks does not collide with the sheet.
-function renderBlockSheet(char, targetEl, mount) {
+// `only` names the blocks to draw, for a surface that wants some of them — a
+// pack tab. Without it the sheet draws everything EXCEPT what a tab has claimed,
+// so a block does not appear twice under two headings.
+function renderBlockSheet(char, targetEl, mount, only) {
   const el = typeof targetEl === 'string' ? document.getElementById(targetEl) : targetEl;
   if (!el || !SYS) return;
-  const blocks = (SYS.schema && SYS.schema.blocks) || [];
+  const all = (SYS.schema && SYS.schema.blocks) || [];
+  const claimed = (typeof sysTabBlockIds === 'function') ? sysTabBlockIds() : [];
+  const blocks = only && only.length
+    ? only.map(function (id) { return all.filter(function (b) { return b.id === id; })[0]; }).filter(Boolean)
+    : all.filter(function (b) { return claimed.indexOf(b.id) < 0; });
+  // The container carries the layout, the blocks carry their spans. Stamped
+  // here rather than asked of the caller so every mount — sheet, second screen,
+  // whatever a pack adds next — gets the desktop columns without being told.
+  el.classList.add('blk-sheet');
   // Rendered one at a time. A single throw used to abort the whole map, so
   // nothing was assigned and the sheet showed only the cards above this
   // element — the character looked like it had failed to finish creation.

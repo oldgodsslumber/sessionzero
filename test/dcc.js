@@ -196,7 +196,7 @@ function boot(entry) {
   const goldSheet = () => {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
     ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};");
-    ev("S.char.blocks.gold={current:0};renderHero();");
+    ev("S.char.blocks.gold={current:0};renderHero();renderSysTab('items');");
   };
   check('[gold] it is not a click-per-coin ticker', () => {
     const type = ev("(sysBlock('gold')||{}).type");
@@ -2234,7 +2234,7 @@ function boot(entry) {
   // nothing else, so nothing it did at the table was recorded anywhere.
   const itemSheet = () => {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
-    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
   };
   const invAddAs = (name, works) => {
     ev("var i=document.getElementById('inv-add-gear-inventory');i.value=" + JSON.stringify(name) + ";" +
@@ -2258,7 +2258,7 @@ function boot(entry) {
     return /to hit|untrained/.test(line) || 'nothing about using it: ' + JSON.stringify(line);
   });
   check('[item] the mechanics reach the sheet, not just the data', () => {
-    ev("blockRepaint('gear');");
+    ev("renderSysTab('items');blockRepaint('gear');");
     const h = ev("document.getElementById('blk-gear').innerHTML");
     return /Bludgeoning/.test(h) || 'the sheet still shows only a name';
   });
@@ -2308,7 +2308,7 @@ function boot(entry) {
   const gearOf = () => JSON.parse(ev("JSON.stringify(S.char.blocks.gear.equipped)"));
   const equipBuild = () => {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
-    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
   };
 
   check('[equip] a weapon put back on from the Hotlist returns to your hands', () => {
@@ -2356,7 +2356,7 @@ function boot(entry) {
     // Reported from a phone: an equipped item was unreadable. The name and the
     // controls are separate groups now so the controls can wrap.
     equipBuild();
-    ev("S.char.blocks.gear.equipped.hands[0].name='Chef Knife of Unwelcome Surprises';blockRepaint('gear');");
+    ev("renderSysTab('items');S.char.blocks.gear.equipped.hands[0].name='Chef Knife of Unwelcome Surprises';blockRepaint('gear');");
     const row = ev("!!document.querySelector('#blk-gear .inv-row')");
     if (!row) return 'the row is still built from inline styles';
     const name = ev("document.querySelector('#blk-gear .inv-name').textContent.trim()");
@@ -2430,6 +2430,7 @@ function boot(entry) {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');");
     ev("dccStoreGear('clothes','jeans and a hoodie');dccStoreGear('item','a bike lock');");
     ev("dccStoreGear('weird','12 googly eyes');dccSetFloor(1);dccFinishCreation(S.char);");
+    ev("renderHero();renderSysTab('items');");
   };
   const named = expr => JSON.parse(ev("JSON.stringify((" + expr + "||[]).map(function(x){return x.name}))"));
 
@@ -2483,10 +2484,13 @@ function boot(entry) {
     if (head.indexOf('Goblin helm') < 0) return 'lost the helm';
     return hot.indexOf('Bandage') >= 0 || 'lost the bandages';
   });
-  check('[gear] it all reaches the rendered sheet', () => {
+  // Gear moved off the sheet and onto the pack's own Items tab, so this asks the
+  // surface that draws it. What is being checked is unchanged: everything the
+  // crawler is carrying is somewhere a player can actually see it.
+  check('[gear] it all reaches the Items tab', () => {
     gearBuild();
-    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};renderHero();");
-    const h = ev("document.getElementById('hero-sheet').innerHTML");
+    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
+    const h = ev("document.getElementById('items-content').innerHTML");
     const missing = ['Club', 'jeans and a hoodie', 'a bike lock', '12 googly eyes'].filter(x => h.indexOf(x) < 0);
     return missing.length ? 'not on the sheet: ' + missing.join(', ') : true;
   });
@@ -2753,16 +2757,23 @@ function boot(entry) {
   // renderSysSheet writes its cards, THEN fills #sys-blocks separately, so any
   // throw while building the blocks left the player looking at the cards alone
   // — which reads exactly like creation having failed.
+  // Every declared block is drawn SOMEWHERE: the sheet, or a tab the pack owns.
+  // Counting the sheet alone stopped being the same question the moment Gear
+  // moved to the Items tab.
+  const drawnBlocks = () => {
+    ev("(SYS.tabs||[]).forEach(function(t){renderSysTab(t.id)})");
+    return ev("SYS.schema.blocks.filter(function(b){return !!document.getElementById('blk-'+b.id)}).length");
+  };
   check('[sheet] a null block does not blank the sheet', () => {
     ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};S.char.blocks.gear=null;renderHero();");
-    const n = ev("document.getElementById('sys-blocks').children.length");
+    const n = drawnBlocks();
     return n === ev('SYS.schema.blocks.length') || 'drew ' + n + ' blocks';
   });
   check('[sheet] every block being null is still survivable', () => {
     ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};");
     ev("SYS.schema.blocks.forEach(function(b){S.char.blocks[b.id]=null});renderHero();");
-    return ev("document.getElementById('sys-blocks').children.length") === ev('SYS.schema.blocks.length')
-      || 'the sheet collapsed to ' + ev("document.getElementById('sys-blocks').children.length") + ' blocks';
+    const n = drawnBlocks();
+    return n === ev('SYS.schema.blocks.length') || 'the sheet collapsed to ' + n + ' blocks';
   });
   check('[sheet] a block whose data is null is re-initialised, not dereferenced', () => {
     // blockCtx used to test for `undefined` only, so a null slipped past it and
@@ -2786,11 +2797,11 @@ function boot(entry) {
     ev("dccStatMethod('array');dccAssignStat('STR',6);dccAssignStat('CON',5);dccAssignStat('DEX',4);dccAssignStat('INT',3);dccAssignStat('CHA',2);");
     ev("dccRollBumps();dccChoose('race','human');dccChoose('cls','boring-ol-fighter');");
     ev("wizState(S.char).complete=true;dccFinishCreation(S.char);renderHero();");
-    const n = ev("(document.getElementById('sys-blocks')||{children:[]}).children.length");
+    const n = drawnBlocks();
     if (n !== ev('SYS.schema.blocks.length')) return 'only ' + n + ' blocks after Finish';
     // and it survives leaving the tab and coming back, which is how it was found
     ev("showTab('dice');showTab('hero');");
-    return ev("document.getElementById('sys-blocks').children.length") === ev('SYS.schema.blocks.length')
+    return drawnBlocks() === ev('SYS.schema.blocks.length')
       || 'the sheet collapsed after switching tabs';
   });
 
@@ -3183,7 +3194,7 @@ function boot(entry) {
   });
 
   check('[gear] the block renders every container', () => {
-    ev("renderHero();S.char.creation={step:0,complete:true};renderHero();");
+    ev("renderHero();S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
     const el = ev("(document.getElementById('blk-gear')||{}).innerHTML||''");
     return (/Gear Slots/.test(el) && /Hotlist/.test(el) && /Inventory/.test(el) && /Misc. Junk/.test(el))
       || 'a container is missing from the rendered block';
@@ -3683,9 +3694,10 @@ function boot(entry) {
   });
 
   // ── the sheet actually renders ───────────────────────────────────────────
-  ev('renderHero()');
-  check('[sheet] the block sheet rendered every declared block', () =>
-    ev(`SYS.schema.blocks.every(b=>!!document.getElementById('blk-'+b.id))`));
+  ev("renderHero();(SYS.tabs||[]).forEach(function(t){renderSysTab(t.id)})");
+  check('[sheet] every declared block is drawn on the sheet or on a pack tab', () =>
+    ev(`SYS.schema.blocks.every(b=>!!document.getElementById('blk-'+b.id))`)
+    || 'missing: ' + ev(`JSON.stringify(SYS.schema.blocks.filter(b=>!document.getElementById('blk-'+b.id)).map(b=>b.id))`));
   check('[sheet] a repaint touches only its own block', () => {
     ev("document.getElementById('blk-mana').setAttribute('data-probe','1')");
     ev("blockRepaint('health')");
@@ -3706,6 +3718,7 @@ function boot(entry) {
   // The ⋯ panel is a toggle, and it remembers which row is open between checks —
   // so ask for it from a known-closed state rather than flipping whatever the
   // previous check left behind.
+  const openDetail = (id, i) => ev("_skillDetailOpen='';skillDetail(" + JSON.stringify(id) + "," + i + ")");
 
   check('[spell] a Spell entry can be described, the way an item can', () => {
     spellSheet();
@@ -3749,6 +3762,65 @@ function boot(entry) {
       || 'the HUD card still has no way to spend what it costs';
   });
 
+  // Table 45: Scrolls are made with Calligraphy. A Spell was something you could
+  // only spend; now it is something you can make an item out of.
+  check('[spell] writing a scroll needs Calligraphy', () => {
+    spellSheet();
+    ev("renderHero()"); openDetail('spells', 0);
+    const none = ev("document.querySelectorAll('#blk-spells .inv-detail button').length");
+    if (none !== 0) return 'it offered to write a scroll without the Skill';
+    ev("S.char.blocks.skills.skills.push({name:'Calligraphy',rank:3,stat:'DEX',source:'test'});" +
+       "save();blockRepaint('spells')");
+    return ev("/Write a scroll/.test((document.querySelector('#blk-spells .inv-detail')||{textContent:''}).textContent)")
+      || 'a calligrapher was still not offered the scroll';
+  });
+
+  check('[spell] a written scroll is an ordinary item, and one tap casts it', () => {
+    spellSheet();
+    ev("S.char.blocks.skills.skills.push({name:'Calligraphy',rank:3,stat:'DEX',source:'test'});" +
+       "save();renderHero()");
+    openDetail('spells', 0);
+    const name = ev("S.char.blocks.spells.skills[0].name");
+    ev("document.querySelector('#blk-spells .inv-detail button').click()");
+    const inv = ev("JSON.stringify((S.char.blocks.gear.inventory||[]).map(function(x){return x.name}))");
+    if (inv.indexOf('Scroll of ' + name) < 0) return 'the Inventory reads ' + inv;
+    ev("document.querySelector('#blk-spells .inv-detail button').click()");
+    const qty = ev("(S.char.blocks.gear.inventory.filter(function(x){return x.casts})[0]||{}).qty");
+    if (qty !== 2) return 'a second scroll did not stack: qty ' + qty;
+    ev("S.char.blocks.gear.hotlist[0]=S.char.blocks.gear.inventory.filter(function(x){return x.casts})[0];save()");
+    const tap = ev("JSON.stringify(dccHudTapFor(S.char.blocks.gear.hotlist[0],S.char))");
+    return (/"roll":"/.test(tap) && /"spend":true/.test(tap))
+      || 'the scroll does not behave like a scroll: ' + tap;
+  });
+
+  // ── the pack's own tab ──────────────────────────────────────────────────
+  check('[items] the pack has a tab of its own, next to the sheet', () => {
+    const ids = ev("[].slice.call(document.querySelectorAll('#nav .nb')).map(function(b){return b.id}).join(',')");
+    if (ids.indexOf('nb-items') < 0) return 'no Items button in the nav: ' + ids;
+    return ev("!!document.getElementById('page-items')") || 'the button has no page behind it';
+  });
+
+  check('[items] Gear is on its tab and not also on the sheet', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();showTab('items')");
+    const onSheet = ev("!!document.querySelector('#sys-blocks [data-blk=\"gear\"]')");
+    if (onSheet) return 'the sheet is still drawing Gear as well';
+    return ev("!!document.querySelector('#items-blocks [data-blk=\"gear\"]')")
+      || 'Gear is not on the Items tab either';
+  });
+
+  check('[items] a change made anywhere reaches the tab', () => {
+    ev("S.char.blocks.gear.inventory.push({name:'Ball of twine',qty:1});blockRepaint('gear')");
+    return ev("/Ball of twine/.test(document.getElementById('items-content').textContent)")
+      || 'the Items tab did not follow a repaint';
+  });
+
+  check('[items] a pack cannot take over a tab the shell owns', () => {
+    const kept = ev("JSON.stringify(SYS.tabs)");
+    ev("SYS.tabs=[{id:'wiki',label:'Not the wiki',blocks:['gear']}]");
+    const ids = ev("JSON.stringify(sysTabs().map(function(t){return t.id}))");
+    ev("SYS.tabs=" + kept);
+    return ids === '[]' || 'the shell let a pack claim the wiki tab: ' + ids;
+  });
 
   // ── every shared tab must survive a pack with none of Fate's fields ──────
   // The map crashed here first: heroMarker() read S.char.costumedName directly.

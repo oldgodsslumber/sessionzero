@@ -166,6 +166,8 @@ actually calls it:
 | `SYS.dice.skillBlocks` / `.statBlocks` | `rollEntries()` — what the roller offers | — |
 | `SYS.dice.statKind` | `sysRollSkill()` — the difficulty a raw trait rolls against | — |
 | `SYS.schema.blocks` | `renderBlockSheet()` | print cards, MP sync, export |
+| `entryFields` / `entryActions` / `entryAct` | `skillList`'s ⋯ panel, `skillFacts()` | the HUD card, print, anything reading the catalogue |
+| `SYS.tabs` | `buildSysTabs()`, `renderSysTab()`, `showTab()` | the sheet, which stops drawing the blocks a tab claimed |
 | `SYS.creation` | `renderWizard()` | "Edit creation" on the sheet |
 | `SYS.renderHUD` | `renderHUD()` (the HUD tab) | — |
 | `itemFields` entry `{type:'icon'}` | `invDetailHTML()` — draws the shared picker | — |
@@ -174,6 +176,43 @@ actually calls it:
 | `SYS.lexicon` | everywhere via `lex()`/`lexU()` | check the tabs you don't use |
 
 A contract with one consumer is a contract that is 20% wired.
+
+### Describing an entry the catalogue has not got
+
+A `skillList` block may declare `entryFields` — the same vocabulary an item's
+`itemFields` uses (`text`, `number`, `lines`, select via `options`), rendered by
+the same editor into a ⋯ panel on the row. `skillFacts(block, entry)` is then
+the single answer to "what is this Skill or Spell": the catalogue row with
+anything the player filled in laid over the top, and it is what the sheet, the
+HUD and the printed page all read.
+
+Two things fall out of that, and both are the point:
+
+- a Spell that is not in the book — invented, handed out by the GM, or crafted
+  with Arcane, which Table 45 says is a thing a crawler can do — has a Mana cost,
+  damage and text like any other;
+- an entry the shipped catalogue gets WRONG can be corrected by the person
+  looking at it, on their own sheet, without touching the pack.
+
+`entryActions` / `entryAct` are the same idea for verbs: `[{id, label}]` and a
+handler returning `{ok, message, remove}`. Dungeon Crawler Carl uses them for
+"write a scroll of this Spell", which turns a Spell into an ordinary item that
+stacks, sits in a Hotlist slot and is cast with one tap.
+
+### A tab of your own
+
+`SYS.tabs` is a list of `{id, label, icon, blocks:[…]}` — or `{id, label, icon,
+render(char)}` for markup the block vocabulary has nowhere to put. The shell
+builds the nav button, the page and the routing; a tab may not take an id the
+shell already uses. Blocks a tab names are drawn there INSTEAD of on the sheet,
+and keep their canonical ids, so everything that looks a block up by id keeps
+working and `blockRepaint()` still reaches every mount.
+
+Use it when a block is big enough or reached often enough that living halfway
+down the sheet is the wrong answer — Gear is the first one. Remember the phone
+nav is a fixed bottom bar: every tab you add is a narrower button for everything
+else.
+
 
 ## 5. Test the button, not the handler
 

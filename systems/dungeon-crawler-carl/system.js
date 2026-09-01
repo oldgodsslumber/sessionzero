@@ -287,6 +287,10 @@ registerSystem({
         // does; blank means "whatever the catalogue says", so correcting one
         // printed entry does not mean retyping the rest of it.
         entryFields: 'derive.spellEntryFields',
+        // Table 45: Scrolls are crafted with Calligraphy. Knowing the Spell and
+        // knowing the Skill is what the book asks for, so that is the gate.
+        entryActions: 'derive.spellEntryActions',
+        entryAct: 'derive.spellEntryAct',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
       {
@@ -335,6 +339,24 @@ registerSystem({
         hint: 'All of it fits in one Inventory slot, however much of it there is.' },
     ],
   },
+
+  // A tab of this pack's own. Gear was the tallest thing on the sheet and the
+  // thing most often reached for, and it sat below the Stats, the Health Bar,
+  // the Skills and the Spells — so managing your bag meant scrolling past who
+  // you are. It gets its own screen, and the sheet stops drawing it.
+  //
+  // The Hotlist keypad on the HUD is untouched: that is the fighting view. This
+  // is the packing view. Same blocks, so they cannot disagree.
+  tabs: [
+    {
+      id: 'items',
+      label: 'Items',
+      hint: 'What you are carrying, what you are wearing, and what it is worth.',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+          + '<path d="M6 7h12l1.2 13H4.8z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>',
+      blocks: ['gear', 'gold'],
+    },
+  ],
 
   // The combat tracker for the conflict tab. State lives in S.conflict, which
   // multiplayer already syncs, so the whole table sees the same round.
@@ -546,9 +568,38 @@ registerSystem({
         hint: 'What using it actually achieves.' },
     ],
 
+    // Writing one of your own Spells onto a scroll — the loop the book has and
+    // the sheet did not: a Spell was something you could only spend, never make
+    // anything out of. What comes back is an ordinary item, so it stacks, it
+    // sits in a Hotlist slot, and one tap casts it like any other scroll.
+    spellEntryActions: (entry, char) => {
+      if (!entry || !dccHotlistKnown(char, 'Calligraphy')) return [];
+      return [{ id: 'scribe', label: '✎ Write a scroll of ' + entry.name }];
+    },
+
+    spellEntryAct: (action, entry, char) => {
+      if (action !== 'scribe' || !entry) return { ok: false };
+      if (!dccHotlistKnown(char, 'Calligraphy')) {
+        return { ok: false, message: 'Writing a scroll takes Calligraphy (Table 45).' };
+      }
+      char.blocks = char.blocks || {};
+      char.blocks.gear = char.blocks.gear || {};
+      const inv = char.blocks.gear.inventory = char.blocks.gear.inventory || [];
+      const name = 'Scroll of ' + entry.name;
+      // Scrolls stack like anything else you are carrying.
+      const have = inv.filter(function (x) {
+        return x && String(x.name).toLowerCase() === name.toLowerCase() && x.casts === entry.name;
+      })[0];
+      if (have) have.qty = (have.qty || 1) + 1;
+      else inv.push({ name: name, casts: entry.name, rank: entry.rank || 1, qty: 1 });
+      return { ok: true, message: name + ' — written into your Inventory at Rank ' +
+        (entry.rank || 1) + '. The GM sets the materials and the time.' };
+    },
+
     gearItemActions: (item) => (item && item.teaches)
       ? [{ id: 'learn', label: 'Read it — learn ' + item.teaches }]
       : [],
+
 
     // What ONE TAP on a Hotlist slot does. Three different things, and only the
     // pack knows which is which: a potion is drunk, a scroll is cast and then

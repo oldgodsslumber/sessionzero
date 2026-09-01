@@ -83,6 +83,9 @@ function _saveFlashEl(){var el=document.getElementById('save-flash');if(!el){el=
 function flashSaved(){var el=_saveFlashEl();el.textContent=voice('saved','Saved ✓');el.style.background='';el.style.color='';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},900);}
 // A failed write used to still flash "Saved ✓" — the flash now tells the truth.
 function flashSaveError(msg){var el=_saveFlashEl();el.textContent='⚠ '+(msg||'Not saved');el.style.background='var(--red)';el.style.color='#fff';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},2600);}
+// Neither a save nor a failure: an answer. "Scroll written into your Inventory"
+// is not an error and flashing it in red said something the app did not mean.
+function flashNote(msg){if(!msg)return;var el=_saveFlashEl();el.textContent=msg;el.style.background='';el.style.color='';clearTimeout(_saveFlashT);el.classList.add('show');_saveFlashT=setTimeout(function(){el.classList.remove('show');},2200);}
 // One icon, at a size. Kept under its old name: six renderers call it.
 function powerIco(pw,size){return (pw&&pw.icon)?iconHTML(pw.icon,size||18)+' ':'';}
 // Daring Comics' power editor, on the shared picker in core/icons.js. Its own

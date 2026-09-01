@@ -603,14 +603,23 @@ function moveHeroToUniverse(id){
 // NAV
 // ═══════════════════════════════════════════════════════════
 function showTab(id){
+  // An id with no page behind it — a stale link, a tab a pack has stopped
+  // declaring — used to throw here, AFTER every page had been hidden, so the
+  // app went blank rather than staying where it was.
+  const page=document.getElementById('page-'+id);
+  if(!page)return;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+id).classList.add('active');
+  page.classList.add('active');
   const nb=document.getElementById('nb-'+id);if(nb)nb.classList.add('active');
   if(id==='hero')renderHero();if(id==='hud')renderHUD();
   if(id==='npcs')renderNPCs();if(id==='map')renderMap();
   if(id==='dice')renderDice();if(id==='conflict')renderConflict();if(id==='notes')renderNotes();
   if(id==='wiki')renderWiki();if(id==='print')renderPrintCentre();
+  // A tab the pack declared. The shell routes to it the same way it routes to
+  // its own, which is the whole point of the contract: a surface a pack owns
+  // must be one the shell can see. See DEBRIEF.md.
+  if(typeof renderSysTab==='function')renderSysTab(id);
 }
 function renderAll(){renderHero();}
 

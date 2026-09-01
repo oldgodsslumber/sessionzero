@@ -66,11 +66,100 @@ const SHELL_CHROME = `<nav id="nav">
 <div class="modal-overlay" id="npc-export-modal"><div class="modal-inner"><div class="card" id="npc-export-modal-body"></div></div></div>`;
 
 // Inject the chrome, then let the active pack supply its fonts and themes.
+// ── tabs a pack owns ───────────────────────────────────────────────────────
+// The nav above is the shell's. A pack that wants a surface of its own used to
+// have no way to ask for one — which is how Dungeon Crawler Carl ended up with
+// its Gear buried three screens down a sheet it shares with the Stats, and how
+// the HUD had to be special-cased into the shell to exist at all.
+//
+// A tab is {id, label, icon, blocks:[…]} or {id, label, icon, render()}. The
+// shell owns the button, the page and the routing; the pack owns what is in it.
+// Blocks named here are drawn on that tab INSTEAD of on the sheet, and because
+// blockRepaint() walks every mount, one moved there is still the same block —
+// spending a potion on the Items tab moves the Hotlist on the HUD.
+const CORE_TAB_IDS = ['hero', 'hud', 'npcs', 'map', 'dice', 'conflict',
+                      'notes', 'print', 'wiki', 'second'];
+function sysTabs() {
+  const tabs = (typeof SYS !== 'undefined' && SYS && SYS.tabs) || [];
+  return tabs.filter(function (t) { return t && t.id && CORE_TAB_IDS.indexOf(t.id) < 0; });
+}
+// Which blocks a pack tab has claimed, so the sheet stops drawing them. A block
+// named by two tabs belongs to the first: a block drawn twice on two surfaces
+// would be two elements with one id, and every getElementById after that finds
+// only one of them.
+function sysTabBlockIds() {
+  const out = [];
+  sysTabs().forEach(function (t) {
+    (t.blocks || []).forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); });
+  });
+  return out;
+}
+function sysTabBlocksFor(id) {
+  const seen = [];
+  let mine = [];
+  sysTabs().forEach(function (t) {
+    const take = (t.blocks || []).filter(function (b) { return seen.indexOf(b) < 0; });
+    take.forEach(function (b) { seen.push(b); });
+    if (t.id === id) mine = take;
+  });
+  return mine;
+}
+
+function buildSysTabs() {
+  const tabs = sysTabs();
+  if (!tabs.length) return;
+  const nav = document.getElementById('nav');
+  // Next to the sheet and the HUD, because that is what they are near in the
+  // player's head: who you are, what you can do, what you are carrying.
+  const after = document.getElementById('nb-hud') || document.getElementById('nb-hero');
+  tabs.forEach(function (t) {
+    if (document.getElementById('page-' + t.id)) return;
+    const btn = document.createElement('button');
+    btn.className = 'nb';
+    btn.id = 'nb-' + t.id;
+    btn.setAttribute('onclick', 'showTab(' + JSON.stringify(t.id) + ')');
+    btn.innerHTML = (t.icon || '') + esc(t.label || t.id);
+    if (after && after.parentNode === nav) nav.insertBefore(btn, after.nextSibling);
+    else if (nav) nav.appendChild(btn);
+    const page = document.createElement('div');
+    page.className = 'page';
+    page.id = 'page-' + t.id;
+    page.innerHTML = '<div id="' + esc(t.id) + '-content"></div>';
+    document.body.appendChild(page);
+  });
+}
+
+// Draw one. A tab with its own render() supplies the markup; a tab that named
+// blocks gets them, in the order it named them.
+function renderSysTab(id) {
+  const t = sysTabs().filter(function (x) { return x.id === id; })[0];
+  const el = document.getElementById(id + '-content');
+  if (!t || !el) return;
+  const char = (typeof S !== 'undefined' && S) ? S.char : null;
+  if (typeof t.render === 'function') { el.innerHTML = t.render(char) || ''; return; }
+  let h = '';
+  if (t.title !== false) {
+    h += '<div class="pg-title">' + esc(t.label || t.id) + '</div>';
+    if (t.hint) h += '<div class="pg-sub">' + esc(t.hint) + '</div>';
+  }
+  h += '<div id="' + esc(t.id) + '-blocks"></div>';
+  el.innerHTML = h;
+  // No mount prefix: a block lives on exactly one of the sheet and the tabs, so
+  // its ids stay the canonical ones and everything that looks a block up by id
+  // keeps working. The HUD is the case that DOES need a prefix — it draws the
+  // Health Bar a second time, deliberately.
+  if (char && typeof renderBlockSheet === 'function') {
+    renderBlockSheet(char, t.id + '-blocks', '', sysTabBlocksFor(t.id));
+  }
+  if (typeof markRollSurfaces === 'function') markRollSurfaces();
+}
+
 function buildShellChrome() {
   if (document.getElementById('nav')) return;          // already built
   const host = document.createElement('div');
   host.innerHTML = SHELL_CHROME;
   while (host.firstChild) document.body.appendChild(host.firstChild);
+  buildSysTabs();
   applySysFonts();
   renderThemeSwatches();
   applyHudTab();

@@ -278,7 +278,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 #nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
   background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;
   padding-bottom:env(safe-area-inset-bottom)}
-.nb{flex:1;padding:7px 2px 5px;background:none;border:none;color:var(--muted);
+/* min-width:0 so a button may be narrower than its label: the phone bar is one
+   fixed row, and a pack that declares a tab of its own makes every button in it
+   narrower. The label ellipsises rather than pushing the row off the screen. */
+.nb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:7px 2px 5px;background:none;border:none;color:var(--muted);
   font-size:9px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;
   transition:color .15s;letter-spacing:.5px;text-transform:uppercase;font-family:var(--font-label)}
 .nb.active{color:var(--accent)}
