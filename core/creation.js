@@ -12,20 +12,14 @@ function renderHero(){
   if(sysUsesBlocks()){
     // No block-based creation wizard yet (that is phase D5), so a pack with
     // blocks starts you straight on a blank sheet.
+    // The character comes from the save file that is loaded. It used to come
+    // from a single scratch key, which is why there was only ever one crawler;
+    // the table's own state — the floor, the map, the journal, the fight —
+    // comes from the UNIVERSE now, bound at boot, because it belongs to the
+    // world rather than to whoever is being played.
     if(!S.char||S.char.systemId!==SYS.id){
-      const scratch=sysScratchLoad();
-      S.char=(scratch&&scratch.systemId===SYS.id)?scratch
-            :(SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}});
-      // Restore the table state saved alongside the character — the journal,
-      // the floor, the map and any fight that was in progress.
-      const sess=(typeof sysScratchSession==='function')?sysScratchSession():null;
-      if(sess)sysRenameStarterRegion(sess.regions);
-      if(sess)SYS_SESSION_KEYS.forEach(function(k){
-        if(sess[k]===undefined||sess[k]===null)return;
-        // A universe id is only meaningful against this game's own list.
-        if(k==='universeId'&&!getUniverse(sess[k]))return;
-        S[k]=sess[k];
-      });
+      S.char=SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}};
+      sysRenameStarterRegion(S.regions);
     }
     // A pack with creation screens starts there and stays until it is finished.
     if((SYS.creation||[]).length&&!(S.char.creation&&S.char.creation.complete)){
@@ -51,9 +45,11 @@ function sysReopenCreation(){
   wizReopen();
 }
 
+// A new one, in a file of its own. It used to REPLACE the crawler on the sheet,
+// because there was only ever one slot to be in — which is why it had to ask
+// whether you had exported them first.
 function sysNewCharacter(){
-  const nm=sysCharName(S.char);
-  if(!confirm('Start a new '+lex('hero')+'?\n\n'+(nm?'"'+nm+'" will be replaced in this slot. Export it first if you want to keep it.':'The current sheet will be replaced.')))return;
+  if(typeof newSavePrompt==='function'){newSavePrompt();renderHero();return;}
   S.char=SYS.newCharacter?SYS.newCharacter():{systemId:SYS.id,blocks:{}};
   save();renderHero();
 }
@@ -92,6 +88,7 @@ function renderSysSheet(){
     h+=`<button class="btn btn-secondary btn-xs" onclick="sysReopenCreation()" title="Go back and change your creation choices">Edit creation</button>`;
   }
   h+=`<button class="btn btn-secondary btn-xs" onclick="exportJSON()" title="Download this ${esc(lex('hero'))} as JSON">Export</button>`;
+  h+=`<button class="btn btn-secondary btn-xs" onclick="openSlotModal()" title="Every ${esc(lex('hero'))} you have">${esc(lexU('saves'))}</button>`;
   h+=`<button class="btn btn-secondary btn-xs" onclick="sysNewCharacter()" title="Start a new ${esc(lex('hero'))}">New</button>`;
   h+=`</div></div>`;
   // Where the table is NOW, falling back to the floor this character was built
@@ -107,9 +104,6 @@ function renderSysSheet(){
     h+=`<input value="${esc(String(ch[f]===undefined?'':ch[f]))}" oninput="sysIdentitySet('${esc(f)}',this.value)"></div>`;
   });
   h+=`</div></div>`;
-  h+=`<div class="card-sm" style="border-color:var(--accent);font-size:11px;color:var(--muted);margin-bottom:8px">
-      <strong style="color:var(--accent)">Preview.</strong> ${esc(SYS.name)} is not on the save-file system yet
-      &mdash; this sheet autosaves to its own scratch slot and never touches your ${esc(lex('saves'))}.</div>`;
   // A pack may have prose that no block type covers.
   if(typeof SYS.sheetExtra==='function'){try{h+=SYS.sheetExtra(ch)||'';}catch(e){}}
   // The same three roll surfaces Daring Comics has always had. A block pack got

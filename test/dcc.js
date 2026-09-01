@@ -255,8 +255,10 @@ function boot(entry) {
     return live === 'tal-adj-gold' || 'focus jumped to ' + JSON.stringify(live);
   });
   check('[gold] it survives a save and reload', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');S.universeId=u.id;" +
+       "if(currentSaveId===null)currentSaveId=createSave(S);");
     ev("S.char.blocks.gold={current:186420};save();");
-    const raw = JSON.parse(ev("JSON.stringify(JSON.parse(localStorage.getItem(sysKey('scratch'))).char.blocks.gold)") || 'null');
+    const raw = JSON.parse(ev("JSON.stringify(((getSaveData(currentSaveId)||{}).char||{}).blocks.gold)") || 'null');
     return (raw && raw.current === 186420) || 'the saved value is ' + JSON.stringify(raw);
   });
   check('[gold] the printed sheet shows the grouped figure, not a bare count', () => {
@@ -319,42 +321,46 @@ function boot(entry) {
   check('[data] gear slots: only Accessories takes more than one, at 10', () =>
     ev(`SYS.catalogs.gearSlots.filter(s=>s.max>1).map(s=>s.id+':'+s.max).join(',')`) === 'hands:3,accessories:10');
 
-  // ── a block pack must never write into a save file ───────────────────────
-  // save() persists the WHOLE state object, so a crawler sitting in S.char while
-  // any save file was loaded would overwrite that save's character on the next
-  // keystroke. One entry file per game makes the cross-game version of this
-  // impossible, but the guard still has to hold within a single app.
-  check('[isolation] save() leaves an existing save file untouched', () => {
-    ev("loadUniverses();if(!U.universes.length)createUniverse('T');");
-    ev("var keep={costumedName:'Captain Valor',skills:{}};" +
-       "var prev=S.char;S.char=keep;var id=createSave(S);S.char=prev;" +
-       "window.__probeId=id;currentSaveId=id;");
-    const before = ev("JSON.stringify(getSaveData(window.__probeId).char.costumedName)");
-    if (before !== '"Captain Valor"') return 'setup failed, got ' + before;
-    ev("S.char.blocks.stats={STR:{base:9,bonus:0}};save();poolAdj('aiFavor',1);");
-    const after = ev("JSON.stringify((getSaveData(window.__probeId).char||{}).costumedName)");
-    return after === '"Captain Valor"' || 'the save was clobbered: ' + after;
+  // ── a crawler is a save file like anybody else ───────────────────────────
+  // This pack used to be diverted to a single scratch key, because save()
+  // persists the whole state object and a half-built pack would have clobbered
+  // whichever file was loaded. That is over: crawlers are save files, there can
+  // be as many as you like, and what must hold now is that they do not leak
+  // into each other.
+  check('[isolation] a crawler writes to its own save file', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');S.universeId=u.id;save();");
+    ev("S.char.blocks.stats={STR:{base:9,bonus:0}};save();");
+    const mine = JSON.parse(ev("JSON.stringify(((getSaveData(currentSaveId)||{}).char||{}).blocks.stats||null)"));
+    if (!mine || mine.STR.base !== 9) return 'the crawler is not in its own file: ' + JSON.stringify(mine);
+    return /dungeon-crawler-carl/.test(ev("saveKey(currentSaveId)"))
+      || 'the file is not in this game\'s namespace: ' + ev("saveKey(currentSaveId)");
   });
-  check('[isolation] the crawler persists to its own namespaced scratch key', () => {
-    const raw = ev("localStorage.getItem(sysKey('scratch'))");
-    if (!raw) return 'nothing written to ' + ev("sysKey('scratch')");
-    // The scratch key holds {char, session} since save() started persisting the
-    // table state too; sysScratchLoad() unwraps it and still reads a v1 key.
-    const env = JSON.parse(raw);
-    const c = env.v === 2 ? env.char : env;
-    if (c.systemId !== 'dungeon-crawler-carl') return 'wrong systemId ' + c.systemId;
-    if (!c.blocks || !c.blocks.stats || c.blocks.stats.STR.base !== 9) return 'stats not persisted';
-    return true;
+  check('[isolation] one crawler does not write into another one', () => {
+    ev("window.__a=currentSaveId;window.__b=createSave(packNewState());loadSave(window.__b);" +
+       "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};" +
+       "S.char.blocks.stats={STR:{base:2,bonus:0}};save();");
+    const a = JSON.parse(ev("JSON.stringify((((getSaveData(window.__a)||{}).char||{}).blocks||{}).stats||null)"));
+    const b = JSON.parse(ev("JSON.stringify((((getSaveData(window.__b)||{}).char||{}).blocks||{}).stats||null)"));
+    ev("loadSave(window.__a)");
+    if (!a || a.STR.base !== 9) return 'the first crawler changed: ' + JSON.stringify(a);
+    return (b && b.STR.base === 2) || 'the second crawler was not written: ' + JSON.stringify(b);
   });
-  check('[isolation] the table state is saved alongside the crawler', () => {
-    // save() used to flash "Saved" while writing only the character, so the
-    // journal, the floor and a fight in progress were dropped on reload.
+  check('[isolation] the table state belongs to the world, not to one crawler', () => {
+    // The floor, the map, the journal and a fight in progress are the TABLE's.
+    // Two crawlers in the same universe are on the same floor of the same
+    // dungeon; each carrying a private copy is how switching character used to
+    // switch maps.
     ev("S.floor=7;S.notes=[{id:'n1',type:'main',text:'floor 3 was bad',ts:1}];dccCombatStart();save();");
-    const sess = JSON.parse(ev("JSON.stringify(sysScratchSession())") || 'null');
-    if (!sess) return 'no session written';
-    if (sess.floor !== 7) return 'floor not saved: ' + sess.floor;
-    if (!sess.notes || sess.notes.length !== 1) return 'journal not saved';
-    return (sess.conflict && sess.conflict.active === true) || 'the fight was not saved';
+    const u = JSON.parse(ev("JSON.stringify((currentUniverse()||{}).table||null)"));
+    if (!u) return 'the universe has no table state';
+    if (u.floor !== 7) return 'the floor is not the world\'s: ' + u.floor;
+    if (!u.notes || u.notes.length !== 1) return 'the journal is not the world\'s';
+    if (!(u.conflict && u.conflict.active === true)) return 'the fight is not the world\'s';
+    // and the other crawler in that universe sees all of it
+    ev("loadSave(window.__b)");
+    const seen = ev("S.floor") === 7 && ev("S.notes.length") === 1 && ev("S.conflict.active") === true;
+    ev("loadSave(window.__a)");
+    return seen || 'the other crawler saw floor ' + ev("S.floor");
   });
   check('[isolation] a v1 scratch key (bare character) still loads', () => {
     // Put the real key back afterwards — the next check reads it.
@@ -364,9 +370,75 @@ function boot(entry) {
     ev("localStorage.setItem(sysKey('scratch')," + JSON.stringify(keep) + ");");
     return (c && c.blocks.stats.STR.base === 4) || 'old scratch key no longer readable';
   });
-  check('[isolation] the scratch crawler is restored, not regenerated', () => {
-    ev("S.char=null;renderHero();");
-    return ev("S.char.blocks.stats.STR.base") === 9 || 'got ' + ev("S.char.blocks.stats.STR.base");
+  check('[isolation] the crawler in the loaded file is the one you get', () => {
+    ev("loadSave(currentSaveId);renderHero();");
+    return ev("(((S.char||{}).blocks||{}).stats||{}).STR.base") === 9
+      || 'got ' + ev("JSON.stringify((((S.char||{}).blocks||{}).stats||{}).STR)");
+  });
+
+  // The promotion. A crawler who was living on the old single scratch key
+  // becomes a save file at boot, and the scratch key is read and left alone —
+  // if this goes wrong the crawler is still where it was.
+  check('[isolation] a crawler on the old scratch key is promoted to a save file', () => {
+    const keepA = ev("window.__a"), keepB = ev("window.__b");
+    ev("var stash={saves:localStorage.getItem(storeKey('saves'))};window.__stash=stash;" +
+       "SV=null;localStorage.removeItem(storeKey('saves'));" +
+       "listSaves().forEach(function(x){});");
+    ev("localStorage.setItem(sysKey('scratch'),JSON.stringify({v:2,char:" +
+       "{systemId:'dungeon-crawler-carl',name:'Promoted',creation:{step:0,complete:true},blocks:{stats:{STR:{base:6,bonus:0}}}}," +
+       "session:{systemId:'dungeon-crawler-carl',floor:4,notes:[{id:'n9',type:'main',text:'from the scratch key',ts:2}]}}));");
+    // Into a world that has no table state of its own yet, which is what a
+    // fresh install looks like — the promoted crawler's floor and journal seed
+    // it. In a world that already has a floor, the world's wins, because that
+    // is the whole point of moving it there.
+    ev("var fresh=createUniverse('Promotion');S.universeId=fresh.id;U.activeUniverseId=fresh.id;saveUniverses();");
+    ev("currentSaveId=null;migrateScratchToSave();");
+    const name = ev("JSON.stringify((S.char||{}).name)");
+    const still = ev("!!localStorage.getItem(sysKey('scratch'))");
+    const floor = ev("S.floor");
+    // put the suite's own saves back
+    ev("localStorage.setItem(storeKey('saves'),window.__stash.saves);SV=null;loadSaves();" +
+       "window.__a=" + JSON.stringify(keepA) + ";window.__b=" + JSON.stringify(keepB) + ";loadSave(window.__a);");
+    if (name !== '"Promoted"') return 'the promoted crawler is ' + name;
+    if (!still) return 'the scratch key was destroyed rather than left alone';
+    return floor === 4 || 'the table state did not come with them: floor ' + floor;
+  });
+
+  // ── a crawler is a save file: the whole point of the change ─────────────
+  check('[saves] a crawler can have several, and switching keeps them apart', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');S.universeId=u.id;");
+    ev("var a=createSave(packNewState());loadSave(a);S.char.name='Carl';save();window.__s1=a;");
+    ev("var b=createSave(packNewState());loadSave(b);S.char.name='Donut';save();window.__s2=b;");
+    ev("loadSave(window.__s1)");
+    if (ev("S.char.name") !== 'Carl') return 'the first crawler reads ' + ev("S.char.name");
+    ev("loadSave(window.__s2)");
+    return ev("S.char.name") === 'Donut' || 'the second reads ' + ev("S.char.name");
+  });
+
+  check('[saves] the save list describes a crawler, not a comic hero', () => {
+    ev("loadSave(window.__s1);S.char.name='Carl';S.char.race='Primal';S.char.class='Compensated Anarchist';" +
+       "S.char.level=12;S.char.creation={step:0,complete:true};save();");
+    const sm = JSON.parse(ev("JSON.stringify(getSaveSummary(window.__s1))"));
+    if (sm.name !== 'Carl') return 'the row is titled ' + JSON.stringify(sm.name);
+    if (!/Primal/.test(sm.civilianName || '')) return 'it does not say what they are: ' + JSON.stringify(sm.civilianName);
+    return (sm.lines || []).some(function (l) { return /Level 12/.test(l); })
+      || 'the lines read ' + JSON.stringify(sm.lines);
+  });
+
+  check('[saves] an unfinished crawler says which screen they are on', () => {
+    ev("var id=createSave(packNewState());loadSave(id);window.__s3=id;save();");
+    const sm = JSON.parse(ev("JSON.stringify(getSaveSummary(window.__s3))"));
+    ev("loadSave(window.__s1)");
+    return /screen 1 of /.test(sm.progress || '')
+      || 'the progress line reads ' + JSON.stringify(sm.progress);
+  });
+
+  check('[saves] the sheet offers the file list and a new crawler', () => {
+    ev("loadSave(window.__s1);renderHero();");
+    const html = ev("document.getElementById('hero-sheet').innerHTML");
+    if (!/openSlotModal\(\)/.test(html)) return 'there is no way to reach the save files';
+    if (/not on the save-file system/.test(html)) return 'the sheet still calls itself a preview';
+    return /sysNewCharacter\(\)/.test(html) || 'there is no way to start another one';
   });
 
   // ── Skills catalogue (D3) ────────────────────────────────────────────────
@@ -1332,18 +1404,15 @@ function boot(entry) {
   // restored with no check of which game wrote it. Before the save store was
   // namespaced, this app could boot onto the other game's save, and the first
   // save() wrote all of that into this key.
-  check('[session] a saved session is stamped with the game that wrote it', () => {
-    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};");
-    ev("S.notes=[{id:'n',type:'main',text:'CRAWL LOG',ts:1}];S.floor=1;save();");
-    const raw = JSON.parse(ev("localStorage.getItem(sysKey('scratch'))"));
-    return (raw.session && raw.session.systemId === 'dungeon-crawler-carl')
-      || 'stamped ' + JSON.stringify(raw.session && raw.session.systemId);
-  });
-  check('[session] ...and a stamped session is restored', () => {
-    const blob = ev("localStorage.getItem(sysKey('scratch'))");
-    ev("S=defaultState();S.char=null;localStorage.setItem(sysKey('scratch')," + JSON.stringify(blob) + ");renderHero();");
-    return (ev('S.notes.length') === 1 && ev('S.floor') === 1)
-      || 'journal ' + ev('S.notes.length') + ', floor ' + ev('S.floor');
+  // The stamp still matters: it is what a promotion reads to decide whether the
+  // table state on an old scratch key was written by THIS game.
+  check('[session] a stamped session is carried into the promoted save', () => {
+    ev("localStorage.setItem(sysKey('scratch'),JSON.stringify({v:2,char:" +
+       "{systemId:'dungeon-crawler-carl',name:'Stamped',creation:{step:0,complete:true},blocks:{}}," +
+       "session:{systemId:'dungeon-crawler-carl',floor:1,notes:[{id:'n',type:'main',text:'CRAWL LOG',ts:1}]}}));");
+    const sess = JSON.parse(ev("JSON.stringify(sysScratchSession())") || 'null');
+    return (sess && sess.floor === 1 && sess.notes.length === 1)
+      || 'the session read back as ' + JSON.stringify(sess);
   });
   check('[session] a session from another game is refused', () => {
     const foreign = JSON.stringify({
@@ -1581,10 +1650,11 @@ function boot(entry) {
     const txt = ev("document.getElementById('blk-companions').innerHTML.replace(/<[^>]*>/g,' ')");
     return /Floor 3/.test(txt) || 'the pet readout still reads: ' + txt.replace(/\s+/g, ' ').slice(0, 90);
   });
-  check('[floor] it survives a reload', () => {
-    ev("save();");
-    const sess = JSON.parse(ev("JSON.stringify(sysScratchSession())") || 'null');
-    return (sess && sess.floor === 3) || 'the saved session has floor ' + JSON.stringify(sess && sess.floor);
+  check('[floor] it survives a reload, on the world rather than the crawler', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');S.universeId=u.id;bindUniverse();");
+    ev("S.floor=3;save();");
+    const t = JSON.parse(ev("JSON.stringify((currentUniverse()||{}).table||null)"));
+    return (t && t.floor === 3) || 'the world has floor ' + JSON.stringify(t && t.floor);
   });
 
   // ── building a Mob ────────────────────────────

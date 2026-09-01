@@ -59,18 +59,21 @@ function openMultiplayer(){
   loadSaves();
   if(!saveIndexHealthy())rebuildSaveIndex();
   migrateUniverseSeries();
+  // A crawler who was living on the old single scratch key becomes a save file
+  // here, before anything decides what to load.
+  if(typeof migrateScratchToSave==='function')migrateScratchToSave();
   if(SV.activeId&&getSaveData(SV.activeId))loadSave(SV.activeId);
   else{
     const first=listSaves().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))[0];
     if(first)loadSave(first.id);
   }
-  // A block pack has no save files yet (it lives on its own scratch key), so
-  // loadSave() never runs and nothing ever bound the universe. That left
-  // S.universeId null: the wiki refused to open, the universe bar read "No
-  // universe", and anything added to the bestiary was written nowhere.
-  if(typeof sysUsesBlocks==='function'&&sysUsesBlocks())bindUniverse();
+  // Every pack binds its universe: the wiki, the bestiary and the table's own
+  // state all hang off it, and a pack that never bound one had S.universeId
+  // null — the wiki refused to open and the bestiary was written nowhere.
+  bindUniverse();
   if(typeof renderFloorStrip==='function')renderFloorStrip();
   renderHero();
-  // Only a pack that uses save files can be missing one.
-  if(currentSaveId===null&&!(typeof sysUsesBlocks==='function'&&sysUsesBlocks()))openSlotModal();
+  // Nobody is loaded: open the file list rather than a blank sheet. Every pack
+  // uses save files now, so this is no longer only Daring Comics' problem.
+  if(currentSaveId===null)openSlotModal();
 })();

@@ -381,6 +381,33 @@ registerSystem({
   // multiplayer already syncs, so the whole table sees the same round.
   combat: { init: dccCombatInit, render: dccCombatRender, steps: DCC_COMBAT_STEPS },
 
+  // What a save row says about a crawler: who they are, what they are, and how
+  // far down they have got. Not forms and powers, which is what every save list
+  // in this app used to say about everybody.
+  saveSummary(state) {
+    const ch = state && state.char;
+    const floor = (state && state.floor) || (ch && ch.floor);
+    const rc = ch ? [ch.race, ch.class].filter(Boolean).join(' ') : '';
+    // The Health Bar is ten slots; how many are still live is the one number a
+    // crawler reads first.
+    const slots = (ch && ch.blocks && ch.blocks.health && ch.blocks.health.slots) || null;
+    const live = slots ? slots.filter(function (x) { return !x; }).length : null;
+    return {
+      name: (ch && String(ch.name || '').trim()) || '',
+      sub: rc,
+      lines: ch ? [
+        ch.level ? 'Level ' + ch.level : '',
+        floor ? lexU('logBreak') + ' ' + floor : '',
+        (live !== null) ? (live * 10) + '% Health Bar' : '',
+        ch.crawlerNumber ? 'Crawler ' + ch.crawlerNumber : '',
+      ].filter(Boolean) : [],
+      icon: '',
+      progress: (ch && ch.creation && ch.creation.complete) ? '' :
+        ('In creation — screen ' + (((ch && ch.creation && ch.creation.step) || 0) + 1) +
+         ' of ' + DCC_SCREENS.length),
+    };
+  },
+
   creation: DCC_SCREENS,
   finishCreation: dccFinishCreation,
   // The fight screen. Declaring this is what gives the pack a HUD tab at all;

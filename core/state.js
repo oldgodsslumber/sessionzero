@@ -27,6 +27,25 @@ function defaultRegion(name){
   return{name:name||first,cells,currentCell:12};
 }
 
+// A blank character for THIS game. The shell's own default is a Daring Comics
+// hero in miniature — a creation object full of costumed names and aspects — so
+// a pack that builds characters its own way says so here and gets its own.
+function packNewState(){
+  const st=defaultState();
+  if(typeof SYS!=='undefined'&&SYS){
+    if(typeof SYS.newState==='function'){
+      try{return Object.assign(st,SYS.newState()||{});}catch(e){}
+    }
+    if(typeof SYS.newCharacter==='function'){
+      // A pack that builds characters through its own wizard starts with the
+      // character present and its creation flag down, which is what its
+      // creation screens expect to find.
+      try{st.char=SYS.newCharacter();st.creation={step:0,complete:false};}catch(e){}
+    }
+  }
+  return st;
+}
+
 function defaultState(){
   return{series:{tone:null,level:null,experience:null},char:null,
     creation:{step:0,costumedName:'',civilianName:'',aspects:{concept:'',motivation:'',contingent:[{cat:'',text:''},{cat:'',text:''},{cat:'',text:''}]},supportingCast:[],roguesGallery:[],skills:{},powerSets:[],stunts:[]},
@@ -81,15 +100,38 @@ function _statePowerCount(st){
   return ((st?.char?.forms)||[]).reduce((n,f)=>n+((f.powerSets||[]).reduce((m,ps)=>m+((ps.powers||[]).length),0)),0);
 }
 // Everything the save list needs to draw a row, so it never has to parse blobs.
+// What a save row says about a character. The shell knows a save has a name, a
+// line or two under it and a progress note; WHICH name and which lines is the
+// pack's business — this used to read costumedName, form count and power count
+// straight off the state, which is a comic-book hero and nothing else. A pack
+// that says nothing gets a name from its own declared identity fields and a
+// creation step counted against its own wizard.
+function packSummary(state){
+  const fn=(typeof SYS!=='undefined'&&SYS&&typeof SYS.saveSummary==='function')?SYS.saveSummary:null;
+  if(fn){try{return fn(state)||{};}catch(e){return {};}}
+  const ch=state&&state.char;
+  const steps=(typeof SYS!=='undefined'&&SYS&&SYS.creation)?SYS.creation.length:0;
+  const step=ch?null:((state&&state.creation&&state.creation.step)||0);
+  return{
+    name:(typeof sysCharName==='function'?sysCharName(ch):'')||'',
+    sub:'',
+    lines:[],
+    icon:(ch&&ch.icon)||'',
+    progress:ch?'':(steps?('In creation — step '+(step+1)+' of '+steps):'In creation'),
+  };
+}
+
 function saveSummary(id,state,prev){
   const ch=state.char,cr=state.creation;
+  const p=packSummary(state)||{};
   return{
     id:id,universeId:state.universeId||null,
-    name:(ch?.costumedName||cr?.costumedName||'').trim(),
-    civilianName:(ch?.civilianName||cr?.civilianName||'').trim(),
+    name:(p.name||'').trim(),
+    civilianName:(p.sub||'').trim(),
+    lines:p.lines||[],progress:p.progress||'',
     tone:seriesIdsFor(state).tone,level:seriesIdsFor(state).level,experience:state.series?.experience||'',
     hp:_stateHP(state),forms:(ch?.forms||[]).length,powers:_statePowerCount(state),
-    icon:(ch?.forms?.[0]?.powerSets?.[0]?.powers?.[0]?.icon)||'',
+    icon:p.icon||'',
     started:!!ch,step:ch?null:(cr?.step||0),
     createdAt:prev?.createdAt||state.createdAt||Date.now(),updatedAt:Date.now()
   };
@@ -229,27 +271,57 @@ function cleanupLegacySlots(){
   renderSaveModal();
 }
 
+// The one-time promotion. A pack that used to live on a single scratch key has
+// a character and a table state sitting there; both become a proper save file
+// the first time the app boots after that stopped being how it works.
+//
+// The scratch key is READ and left alone. If this goes wrong, the crawler is
+// still where it was, and a player who reverts the app finds them.
+function migrateScratchToSave(){
+  if(typeof sysUsesBlocks!=='function'||!sysUsesBlocks())return null;
+  if(listSaves().length)return null;                       // already has files
+  const char=(typeof sysScratchLoad==='function')?sysScratchLoad():null;
+  if(!char)return null;
+  const st=defaultState();
+  st.char=char;
+  const sess=(typeof sysScratchSession==='function')?sysScratchSession():null;
+  if(sess)SYS_SESSION_KEYS.forEach(function(k){
+    if(sess[k]===undefined||sess[k]===null)return;
+    if(k==='universeId'&&!getUniverse(sess[k]))return;
+    st[k]=sess[k];
+  });
+  if(!st.universeId){
+    const u=getUniverse(U&&U.activeUniverseId)||(U&&U.universes&&U.universes[0]);
+    if(u)st.universeId=u.id;
+  }
+  const id=createSave(st);
+  if(id===null)return null;
+  loadSave(id);
+  return id;
+}
+
 function save(){
-  // A block-rendering pack is not on the save-file system yet (phase 5). Send it
-  // to its own scratch key and return: writing S here would overwrite whichever
-  // save file is loaded, because save() persists the whole state object.
-  if(typeof sysUsesBlocks==='function'&&sysUsesBlocks()){
-    // Write the table state alongside the character. Reporting "Saved" while
-    // dropping the journal, the floor, the map and the live combat tracker was
-    // worse than not saving at all.
-    const sess={};
-    SYS_SESSION_KEYS.forEach(function(k){sess[k]=S[k];});
-    if(sysScratchSave(S.char,sess))flashSaved();else flashSaveError('Not saved');
-    return;
+  // Every pack writes save files now. A block pack used to be diverted to a
+  // single scratch key, because save() persists the whole of S and a half-built
+  // pack would have clobbered whichever file was loaded. It is not half-built
+  // any more, and one character per game was never the point.
+  //
+  // A pack with no save file yet — the first boot after this — gets one, so a
+  // crawler somebody is in the middle of playing is promoted rather than lost.
+  if(currentSaveId===null&&S&&(S.char||S.creation)){
+    const id=createSave(S);
+    if(id!==null){currentSaveId=id;loadSaves();SV.activeId=id;persistSaves();}
   }
   if(currentSaveId===null)return;
   const _bound=currentUniverse()&&S.npcs===currentUniverse().roster;
   if(_bound&&S.char)syncHeroToRoster();
+  // The table's state goes to the world; the save file keeps the character.
+  const _tableMoved=syncTableToUniverse();
   const _n=S.npcs;
   if(_bound)S.npcs=[];
   const okay=writeSave(currentSaveId,S);
   S.npcs=_n;
-  if(_bound)saveUniverses();
+  if(_bound||_tableMoved)saveUniverses();
   if(okay)flashSaved();
   secondScreenPush();
 }
@@ -302,7 +374,56 @@ function migrateUniverseSeries(){
   if(changed)saveUniverses();
 }
 
-function bindUniverse(){loadUniverses();let u=getUniverse(S.universeId);if(!u){u=getUniverse(U.activeUniverseId)||U.universes[0];if(u)S.universeId=u.id;}if(u){(u.roster||[]).forEach(ensureId);S.npcs=u.roster;}else{S.npcs=S.npcs||[];}}
+// ── the table's own state ───────────────────────────────────────────────────
+// The floor you are on, the map you are drawing, the journal and the fight in
+// progress belong to the WORLD, not to one character. Two crawlers in the same
+// universe are on the same floor of the same dungeon; before this they each
+// carried a private copy, so switching character switched maps.
+//
+// The roster has always worked this way — S.npcs is the universe's roster, not
+// a copy of it — and multiplayer already syncs conflict, regions and notes at
+// universe scope. This makes the local store agree with both.
+const TABLE_KEYS = ['floor', 'regions', 'activeRegion', 'conflict', 'notes'];
+
+function ensureTable(u){
+  if(!u)return null;
+  if(!u.table)u.table={};
+  return u.table;
+}
+
+// Adopt whatever the character was carrying the first time a universe is bound,
+// so nobody loses the map they drew before the table had one of its own.
+function adoptTable(u){
+  const t=ensureTable(u);
+  TABLE_KEYS.forEach(function(k){
+    if(t[k]===undefined&&S[k]!==undefined)t[k]=S[k];
+  });
+  return t;
+}
+
+// S keeps its own names for these, so every renderer and every handler is
+// unchanged; the arrays are the SAME arrays the universe holds. Primitives
+// cannot alias, so they are copied here and written back by save().
+function bindTable(u){
+  const t=adoptTable(u);
+  TABLE_KEYS.forEach(function(k){
+    if(t[k]!==undefined)S[k]=t[k];
+    else t[k]=S[k];
+  });
+  saveUniverses();
+}
+
+function syncTableToUniverse(){
+  const u=currentUniverse();if(!u)return false;
+  const t=ensureTable(u);
+  let moved=false;
+  TABLE_KEYS.forEach(function(k){
+    if(t[k]!==S[k]){t[k]=S[k];moved=true;}
+  });
+  return moved;
+}
+
+function bindUniverse(){loadUniverses();let u=getUniverse(S.universeId);if(!u){u=getUniverse(U.activeUniverseId)||U.universes[0];if(u)S.universeId=u.id;}if(u){(u.roster||[]).forEach(ensureId);S.npcs=u.roster;bindTable(u);}else{S.npcs=S.npcs||[];}}
 
 // ═══════════════════════════════════════════════════════════
 // SLOTS
@@ -334,13 +455,20 @@ function saveStatLine(sm){
   return [sm.civilianName,tn,lv||ex].filter(Boolean).join(' · ');
 }
 function saveCardHTML(sm,active){
-  const detail=sm.started
-    ? [sm.hp?sm.hp+' HP':'',sm.forms?sm.forms+' form'+(sm.forms===1?'':'s'):'',sm.powers?sm.powers+' power'+(sm.powers===1?'':'s'):''].filter(Boolean).join(' · ')
-    : 'In creation — step '+((sm.step||0)+1)+' of 7 ('+CREATION_LABELS[sm.step||0]+')';
+  // Whatever the pack said about it, or — for a save written before packs
+  // described themselves — the comic's own line.
+  // Where they have got to comes first: a crawler halfway through creation has
+  // a Level and a Floor already, and reading those as though they were finished
+  // is how a half-built character looks like a playable one.
+  const detail=sm.progress?sm.progress
+    : (sm.lines&&sm.lines.length)?sm.lines.filter(Boolean).join(' · ')
+    : (sm.started
+        ? [sm.hp?sm.hp+' HP':'',sm.forms?sm.forms+' form'+(sm.forms===1?'':'s'):'',sm.powers?sm.powers+' power'+(sm.powers===1?'':'s'):''].filter(Boolean).join(' · ')
+        : (sm.progress||('In creation — step '+((sm.step||0)+1)+' of 7 ('+(CREATION_LABELS[sm.step||0]||'')+')')));
   let h=`<div class="card-sm" style="display:flex;align-items:center;gap:10px;cursor:pointer${active?';border-color:var(--accent)':''}" onclick="selectSave('${sm.id}')">`;
   h+=saveEmblem(sm,active);
   h+=`<div style="flex:1;min-width:0">`;
-  h+=`<div class="fw-700" style="font-size:14px">${esc(sm.name||'(unnamed hero)')}</div>`;
+  h+=`<div class="fw-700" style="font-size:14px">${esc(sm.name||('(unnamed '+lex('hero')+')'))}</div>`;
   const stat=saveStatLine(sm);
   if(stat)h+=`<div style="font-size:11px;color:var(--muted)">${esc(stat)}</div>`;
   h+=`<div style="font-size:11px;color:var(--muted)">${esc(detail)}</div>`;
@@ -392,7 +520,7 @@ function renderSaveModal(){
 function selectSave(id){if(id===currentSaveId){closeSlotModal();return;}loadSave(id);closeSlotModal();renderAll();}
 function newSavePrompt(){
   const u=currentUniverse();
-  const st=defaultState();
+  const st=packNewState();
   if(u)st.universeId=u.id;
   const id=createSave(st);
   if(!id)return;
@@ -447,7 +575,7 @@ function sysFloorStep(delta){
     if(typeof renderNPCs==='function'&&document.getElementById('npcs-content'))try{renderNPCs();}catch(e){}
   }
 }
-function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New heroes join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
+function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New ${esc(lex('hero'))}s join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
 function closeUniverseModal(){const m=document.getElementById('universe-modal');if(m)m.classList.remove('open','locked');}
 function openUniverseSetup(required,editId){
   _uniRequired=!!required;

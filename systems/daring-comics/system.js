@@ -47,4 +47,29 @@ registerSystem({
 
   // No blocks: use the legacy renderer. See core/creation.js renderHero().
   schema: { identity: ['costumedName', 'civilianName'], blocks: [] },
+
+  // What a save row says about one of these. This used to be hardcoded in the
+  // shell, which meant every game's save list described a comic-book hero: a
+  // costumed name, a civilian name, form and power counts. It is this pack's
+  // sentence to write, so it writes it.
+  saveSummary(state) {
+    const ch = state && state.char, cr = state && state.creation;
+    const labels = ['Series', 'Names', 'Aspects', 'Cast', 'Skills', 'Powers', 'Review'];
+    const step = (cr && cr.step) || 0;
+    const hp = (typeof _stateHP === 'function') ? _stateHP(state) : 0;
+    const forms = (ch && ch.forms || []).length;
+    const powers = (typeof _statePowerCount === 'function') ? _statePowerCount(state) : 0;
+    return {
+      name: ((ch && ch.costumedName) || (cr && cr.costumedName) || '').trim(),
+      sub: ((ch && ch.civilianName) || (cr && cr.civilianName) || '').trim(),
+      lines: ch ? [hp ? hp + ' HP' : '',
+                   forms ? forms + ' form' + (forms === 1 ? '' : 's') : '',
+                   powers ? powers + ' power' + (powers === 1 ? '' : 's') : ''].filter(Boolean) : [],
+      icon: (ch && ch.forms && ch.forms[0] && ch.forms[0].powerSets && ch.forms[0].powerSets[0]
+             && ch.forms[0].powerSets[0].powers && ch.forms[0].powerSets[0].powers[0]
+             && ch.forms[0].powerSets[0].powers[0].icon) || '',
+      progress: ch ? '' : ('In creation — step ' + (step + 1) + ' of ' + labels.length +
+                           ' (' + (labels[step] || '') + ')'),
+    };
+  },
 });
