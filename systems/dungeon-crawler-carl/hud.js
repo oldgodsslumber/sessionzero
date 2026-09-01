@@ -25,16 +25,23 @@ function dccRenderHUD(char) {
     return '<div class="card tac" style="padding:26px;color:var(--muted);font-size:13px">' +
       'No crawler yet. Finish creation and this is where the fight lives.</div>';
   }
+  // Two buckets: what is being done TO you on the left — the bars and the ten
+  // things you can reach in one Action — and what you can do on the right. On a
+  // phone .hud-col is display:contents, so the buckets vanish and this is the
+  // same single stack it has always been; on a desktop they are the columns.
   return dccHudHeader(char) +
     // The HUD wears the Hero page's layout: the shell fills a sticky roller
     // beside it on desktop, and this is the mobile half of that pair. The
     // attack cards below answer into the same instance, so there is one place
     // on this screen where a result appears.
     rollBarHTML('hm', { sheet: false, resultIn: 'hm-result', toast: false }) +
-    dccHudVitals(char) +
-    dccHudHotlist(char) +
-    dccHudActions(char, 'skills') +
-    dccHudActions(char, 'spells');
+    '<div class="hud-grid"><div class="hud-col">' +
+      dccHudVitals(char) +
+      dccHudHotlist(char) +
+    '</div><div class="hud-col">' +
+      dccHudActions(char, 'skills') +
+      dccHudActions(char, 'spells') +
+    '</div></div>';
 }
 
 function dccHudHeader(char) {

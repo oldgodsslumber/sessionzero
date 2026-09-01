@@ -12,7 +12,8 @@ const SUITES = [
   ['dcc',    'Dungeon Crawler Carl: rules maths, blocks, system selection'],
   ['dice',   'Dice: a roll control is reachable, at every width, in every pack'],
   ['rules',  'Database rules: GM boundary invariants, doc/file agreement'],
-  ['focus',  'Focus + markup: no handler repaints its own input or breaks its own tag']
+  ['focus',  'Focus + markup: no handler repaints its own input or breaks its own tag'],
+  ['layout', 'Desktop: the stack becomes columns above 1100px, and the phone does not move']
 ];
 
 // The suites share nothing — each is its own node process with its own JSDOM

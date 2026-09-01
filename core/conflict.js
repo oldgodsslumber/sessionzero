@@ -22,15 +22,21 @@ function renderConflict(){
   if(!c.active){h+=`<div class="tac" style="padding:30px"><div style="font-size:36px;margin-bottom:8px">\u2694</div><div class="text-muted mb-3">No active conflict</div><button class="btn btn-primary" onclick="startConflict()">Start Conflict</button></div>`;}
   else{
     h+=`<div class="card-sm" style="display:flex;justify-content:space-between;align-items:center"><div><span class="label">Round</span> <span class="fw-700 text-accent" style="font-size:20px">${c.round}</span></div><div style="display:flex;gap:4px"><button class="btn btn-secondary btn-xs" onclick="nextRound()">Next Round</button><button class="btn btn-danger btn-xs" onclick="endConflict()">End</button></div></div>`;
+    // Who acts next on one side, the ground they are fighting over on the
+    // other. .conflict-col is display:contents on a phone, so the tracker is
+    // the same single stack there that it has always been.
+    h+=`<div class="conflict-grid"><div class="conflict-col">`;
     h+=`<div class="card"><div class="label mb-1">Turn Order</div>`;
     c.turnOrder.forEach((t,i)=>{h+=`<div class="combatant ${i===c.currentTurn?'current':''}"><div style="width:20px;font-size:12px;font-weight:700;color:${i===c.currentTurn?'var(--accent)':'var(--muted)'}">${i+1}</div><div style="flex:1;font-weight:600;font-size:13px">${esc(t.name)}</div><span style="font-size:11px;color:var(--muted)">${t.type}</span><button class="btn btn-danger btn-xs" onclick="S.conflict.turnOrder.splice(${i},1);if(S.conflict.currentTurn>=${i}&&S.conflict.currentTurn>0)S.conflict.currentTurn--;save();renderConflict()" style="padding:2px 6px">X</button></div>`;});
     h+=`<div style="display:flex;gap:4px;margin-top:6px"><input id="ct-name" placeholder="Name" style="flex:1;font-size:12px;padding:6px"><select id="ct-type" style="width:80px;font-size:12px;padding:6px"><option>Hero</option><option>NPC</option><option>Villain</option><option>Team</option></select><button class="btn btn-secondary btn-xs" onclick="addCombat()">Add</button></div>`;
     if(S.team?.expanded&&!c.turnOrder.some(t=>t.type==='Team')){h+=`<button class="btn btn-gold btn-xs btn-full mt-1" onclick="addTeamToConflict()">+ Add ${esc(S.team.name)}</button>`;}
     h+=`<button class="btn btn-primary btn-sm btn-full mt-2" onclick="nextTurn()">Next Turn \u2192</button></div>`;
+    h+=`</div><div class="conflict-col">`;
     h+=`<div class="card"><div class="label mb-1">Zones</div>`;
     c.zones.forEach((z,i)=>{h+=`<div class="zone-card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="zone-name">${esc(z.name)}</div><button class="btn btn-danger btn-xs" onclick="S.conflict.zones.splice(${i},1);save();renderConflict()">X</button></div>${z.aspects?`<div style="font-size:11px;color:var(--muted);font-style:italic">${esc(z.aspects)}</div>`:''}<div style="font-size:11px;margin-top:4px">${(z.occupants||[]).map(o=>`<span class="tag" style="background:var(--surface3);color:var(--text);border:1px solid var(--border)">${esc(o)}</span>`).join(' ')}</div><div style="display:flex;gap:4px;margin-top:4px"><input id="za-${i}" placeholder="Add occupant" style="flex:1;font-size:11px;padding:4px"><button class="btn btn-secondary btn-xs" onclick="addToZone(${i})">+</button></div></div>`;});
     h+=`<div style="display:flex;gap:4px"><input id="zn-name" placeholder="New zone" style="flex:1;font-size:12px;padding:6px"><button class="btn btn-secondary btn-xs" onclick="addZone()">+ Zone</button></div></div>`;
     if(c.log.length){h+=`<div class="card"><div class="label mb-1">Log</div>`;c.log.slice(-8).reverse().forEach(e=>{h+=`<div style="font-size:11px;color:var(--muted);padding:2px 0">${esc(e)}</div>`;});h+='</div>';}
+    h+=`</div></div>`;   // close the zone column and the grid
   }
   el.innerHTML=h;
 }

@@ -193,6 +193,12 @@ function renderWiki(){
   h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">Wiki</div><div class="pg-sub">Shared across every hero in this universe</div></div>${editToggleBtn(_wikiEditMode,'toggleWikiEdit')}</div>`;
   if(!_wikiEditMode)h+=noEditBanner();
 
+  // Two buckets. The half that ASKS — intake, search, the type filters — and
+  // the half that ANSWERS. On a desktop the asking half is a sticky rail, so a
+  // filter no longer scrolls away from the entries it is filtering; on a phone
+  // .wiki-col is display:contents and this is the same page it always was.
+  h+=`<div class="wiki-grid"><div class="wiki-col wiki-side">`;
+
   // Intake — the headline feature, so it leads the page
   h+=`<div class="card edit-only" style="border-color:var(--gold)">`;
   h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><div class="label" style="margin:0">Add in plain language</div><button class="btn btn-secondary btn-xs" onclick="openAISetup()" title="Choose and configure the AI backend">${llmReady()?'⚙ '+esc(llmBackendLabel()):'⚙ AI Setup'}</button></div>`;
@@ -213,9 +219,11 @@ function renderWiki(){
   if(all.some(e=>e.hidden)||_wikiShowHidden)h+=`<button class="btn btn-xs ${_wikiShowHidden?'btn-gold':'btn-secondary'}" onclick="_wikiShowHidden=!_wikiShowHidden;renderWiki()" style="font-size:10px;padding:3px 7px" title="Reveal GM-only entries">${_wikiShowHidden?'\u{1F513} Hiding shown':'\u{1F512} Show hidden'}</button>`;
   h+=`</div>`;
 
+  h+=`</div><div class="wiki-col wiki-list">`;
+
   const v=wikiVisible();
   if(!v.length){
-    h+=`<div class="card tac"><div class="fw-700" style="margin-bottom:4px">${all.length?'Nothing matches that.':'The wiki is empty.'}</div><div style="font-size:12px;color:var(--muted)">${all.length?'Try a different search or type filter.':'Type some notes about your world above and let the AI file them, or add an entry by hand.'}</div></div>`;
+    h+=`<div class="card tac" style="grid-column:1/-1"><div class="fw-700" style="margin-bottom:4px">${all.length?'Nothing matches that.':'The wiki is empty.'}</div><div style="font-size:12px;color:var(--muted)">${all.length?'Try a different search or type filter.':'Type some notes about your world above and let the AI file them, or add an entry by hand.'}</div></div>`;
   }else{
     v.forEach(function(e){
       const td=loreTypeDef(e.type);
@@ -238,6 +246,8 @@ function renderWiki(){
       h+=`</div></div></div>`;
     });
   }
+
+  h+=`</div></div>`;   // close the entry list and the grid
 
   // Theme swatches — the Wiki replaced the Theme button in the mobile nav, so
   // the swatches move here. Hidden on desktop, where the sidebar still has them.

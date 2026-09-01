@@ -12,6 +12,12 @@ function renderSheet(){
   let h=universeBarHTML()+`<div class="${_heroEditMode?'':'no-edit'}">`;
   h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px;flex-wrap:wrap"><div style="flex:1;min-width:160px"><div class="pg-title" style="font-size:28px">${esc(ch.costumedName)}</div><div style="font-size:13px;color:var(--muted)">${esc(ch.civilianName)}</div></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${editToggleBtn(_heroEditMode,'toggleHeroEdit')}<button class="btn btn-gold btn-xs" onclick="exportJSON()">Export</button><button class="btn btn-secondary btn-xs" onclick="openSlotModal()">Saves</button><button class="btn btn-danger btn-xs edit-only" onclick="resetChar()">New</button></div></div>`;
   if(!_heroEditMode)h+=noEditBanner();
+  // The sheet in two buckets: what you READ on the left — Fate, Aspects,
+  // Stress, Consequences, Skills — and what you WORK IN on the right, which is
+  // Forms and the power sets under them. On a phone .sheet-col is
+  // display:contents, so both buckets collapse and the cards come out in the
+  // order they always did; the split only exists where there is room for it.
+  h+=`<div class="sheet-grid"><div class="sheet-col">`;
   // Fate Points
   h+=`<div class="card" style="display:flex;align-items:center;justify-content:space-between"><div><div class="label">Fate Points</div><div style="font-size:11px;color:var(--muted)">Refresh: ${ch.refresh}</div></div><div style="display:flex;align-items:center;gap:10px"><button class="sk-btn" onclick="adjFP(-1)">−</button><span style="font-size:28px;font-weight:900;font-family:var(--font-title);color:var(--gold)">${ch.fatePoints}</span><button class="sk-btn" onclick="adjFP(1)">+</button></div></div>`;
   // Aspects
@@ -31,6 +37,8 @@ function renderSheet(){
   h+=rollBarHTML();
   h+=`<div class="card"><div class="label mb-1">Skills <span class="text-muted" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">tap to load into roller</span></div>`;
   SKILLS.filter(sk=>(ch.skills[sk]||0)>0).sort((a,b)=>(ch.skills[b]||0)-(ch.skills[a]||0)).forEach(sk=>{h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);cursor:pointer" onclick="loadRoll('${sk}',0)"><div><span class="fw-700">${sk}</span><div style="font-size:10px;color:var(--muted);line-height:1.2">${SKILL_DESC[sk]||''}</div></div><span class="fw-700 text-accent" style="white-space:nowrap;margin-left:8px">${ladderName(ch.skills[sk])} (+${ch.skills[sk]})</span></div>`;});h+='</div>';
+  // ── right column: the working half of the sheet ──
+  h+=`</div><div class="sheet-col">`;
   // Forms (tabs)
   h+=`<div class="card" style="padding:8px 10px"><div class="label mb-1">Forms</div><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:6px">`;
   ch.forms.forEach((f,fi)=>{h+=`<button class="btn btn-xs ${fi===_af?'btn-primary':'btn-secondary'}" onclick="switchForm(${fi})" style="font-family:var(--font-label)">${esc(f.name||'Form '+(fi+1))}</button>`;});
@@ -69,6 +77,7 @@ function renderSheet(){
     h+=`</div>`;
   }
   h+=`<button onclick="printCharSheet()" style="width:100%;padding:11px;border-radius:var(--radius-btn);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-label)">Print Character Sheet</button>`;
+  h+=`</div></div>`;   // close the right column and the grid
   h+=`</div>`;
   document.getElementById('hero-sheet').innerHTML=h;
   // The sidebar lives outside #hero-sheet (#page-hero is a flex row), so it is

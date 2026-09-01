@@ -58,7 +58,13 @@ function renderBlock(block, char, mount) {
               : `<div class="card"><div class="label">${esc(block.id)}</div>
                  <div style="font-size:12px;color:var(--muted)">No renderer for block type
                  "${esc(block.type || 'none')}" yet.</div></div>`;
-  return `<div id="${blockElId(block.id, mount)}" class="blk" data-blk="${esc(block.id)}">${inner}</div>`;
+  // `span` is the block's own answer to "how wide am I on a desktop": 1, 2, 3 or
+  // 'full'. It is declared by the pack and read only by CSS, so a pack that says
+  // nothing gets one column and nothing here has to know what a column is. It
+  // rides on the wrapper rather than the content because blockRepaint() replaces
+  // the content — a span written inside it would be lost on the first repaint.
+  const span = block.span ? ` data-span="${esc(String(block.span))}"` : '';
+  return `<div id="${blockElId(block.id, mount)}" class="blk" data-blk="${esc(block.id)}"${span}>${inner}</div>`;
 }
 
 // Re-render a block in place, on every screen currently showing it.

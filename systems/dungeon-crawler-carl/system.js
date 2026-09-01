@@ -219,9 +219,13 @@ registerSystem({
     // Which of those are actually numbers. Race and Class are free text, and a
     // crawler is perfectly entitled to call their Race "007".
     numericIdentity: ['crawlerNumber', 'level'],
+    // `span` is desktop only: how many of the sheet's columns a block takes
+    // when there is room for more than one. The Stats, the Health Bar and the
+    // Gear all want the full width; a pool is a number and is happy narrow.
+    // Everything without a span is one column, which is the phone unchanged.
     blocks: [
       {
-        id: 'stats', type: 'traitGrid', label: 'The Five Core Stats',
+        id: 'stats', type: 'traitGrid', label: 'The Five Core Stats', span: 'full',
         hint: 'Unenhanced is you. Enhanced adds gear, Spells and Buffs. Everything rolls off the Mod.',
         layers: ['Unenhanced', 'Enhanced'],
         mod: 'derive.statMod',
@@ -231,7 +235,7 @@ registerSystem({
         extra: 'derive.wornBonus',
       },
       {
-        id: 'health', type: 'track', label: 'Health Bar',
+        id: 'health', type: 'track', label: 'Health Bar', span: 'full',
         slots: DCC_HB_SLOTS,
         slotValue: 'derive.hbSlotValue',      // = CON Mod
         fill: 'rtl', percent: true, damageInput: true,
@@ -253,7 +257,7 @@ registerSystem({
         ],
       },
       {
-        id: 'skills', type: 'skillList', label: 'Skills',
+        id: 'skills', type: 'skillList', label: 'Skills', span: 2,
         hint: 'Tick a Skill when you use it. Skills do not rise on level-up — they advance from use: '
             + 'roll d20 against the Skill’s current Rank, every 2 hours of play at Rank 4 or lower, '
             + 'at the end of each floor from Rank 5. Passive Skills never mark.',
@@ -324,7 +328,7 @@ registerSystem({
         affects: ['defence'],
       },
       {
-        id: 'companions', type: 'entityList', label: 'Pets, Mounts & Minions',
+        id: 'companions', type: 'entityList', label: 'Pets, Mounts & Minions', span: 2,
         hint: 'A pet levels twice as fast as you until 15, and rolls at the Floor Number '
             + 'however green it is. Track how many levels YOU have gained since it joined.',
         kinds: DCC_COMPANION_KINDS,

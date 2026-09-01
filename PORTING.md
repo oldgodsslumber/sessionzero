@@ -166,6 +166,7 @@ actually calls it:
 | `SYS.dice.skillBlocks` / `.statBlocks` | `rollEntries()` — what the roller offers | — |
 | `SYS.dice.statKind` | `sysRollSkill()` — the difficulty a raw trait rolls against | — |
 | `SYS.schema.blocks` | `renderBlockSheet()` | print cards, MP sync, export |
+| a block's `span` | the desktop sheet grid (`.blk-sheet`) | the HUD, if the block is mounted there too |
 | `entryFields` / `entryActions` / `entryAct` | `skillList`'s ⋯ panel, `skillFacts()` | the HUD card, print, anything reading the catalogue |
 | `SYS.tabs` | `buildSysTabs()`, `renderSysTab()`, `showTab()` | the sheet, which stops drawing the blocks a tab claimed |
 | `SYS.creation` | `renderWizard()` | "Edit creation" on the sheet |
@@ -213,6 +214,15 @@ down the sheet is the wrong answer — Gear is the first one. Remember the phone
 nav is a fixed bottom bar: every tab you add is a narrower button for everything
 else.
 
+### Blocks and the desktop sheet
+
+A block may declare `span: 1 | 2 | 'full'` — how many of the sheet's columns
+it wants where there is room for more than one. `renderBlockSheet()` stamps it
+on the block's wrapper as `data-span` and `core/shell.css` places it; a block
+that declares nothing takes one column. Below 1100px there is only ever one
+column, so a span is invisible on a phone and cannot break it. Say `full` for
+anything with a wide row of controls — a trait grid, a health track, an
+inventory — and say nothing for a pool or a readout.
 
 ## 5. Test the button, not the handler
 

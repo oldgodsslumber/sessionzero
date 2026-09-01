@@ -591,3 +591,114 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
 @media(min-width:700px){#save-flash{bottom:16px}}
 /* sticky modal search + subtle backdrop hint */
 .modal-overlay.open{animation:fadeIn .15s ease}
+
+/* ═══════════════════ DESKTOP: MULTI-COLUMN ═══════════════════
+   Everything above this line describes one column of cards, which is the phone
+   and is still the truth of the app: a page is a stack. This section takes that
+   stack apart on a wide screen and does nothing else. Every rule hangs off a
+   container the shell owns, so a pack that has never heard of this section
+   still spreads out.
+
+   The ladder. 700px turns the nav on its side (further up the file) but leaves
+   the content a 900px ribbon — the app mirrored the phone on a 27" monitor.
+   1100px is the first width where two columns of cards AND the roller rail fit
+   without squeezing any of them, so that is where the split happens. 1500px
+   adds a third column to the block sheet and gives the rail its labels.
+
+   Phone order is preserved by declaring the buckets display:contents below the
+   breakpoint: the wrappers disappear and their cards flow in DOM order, exactly
+   as they did before anything was bucketed. Nothing about the phone changes. */
+.sheet-col,.conflict-col,.wiki-col{display:contents}
+
+@media (min-width:1100px){
+  /* The frame: centred and capped rather than fluid. The rail is furniture at
+     the edge of the screen; the app is a document in the middle of it. Padding
+     rather than margin because *{box-sizing:border-box} means the cap then
+     covers the rail too, and one number describes the whole app. */
+  body{max-width:1240px;margin:0 auto;padding-left:80px;padding-right:8px}
+
+  /* A block pack's sheet. renderBlockSheet() stamps each block's declared span
+     on its own wrapper, so placement is the pack's decision and it is the same
+     placement after every repaint — a balancing column set would slide the
+     Health Bar into another column while somebody was being hit. */
+  .blk-sheet{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;align-items:start}
+  /* The gap between blocks is the grid's now. Left to the card's own margin it
+     would be added to it, and only under the block that happened to be last in
+     its column — which reads as one crooked row. On a phone the margin is still
+     the only thing holding the stack apart, so this stays inside the query. */
+  .blk-sheet>.blk>*:last-child{margin-bottom:0}
+  /* Two columns is the ceiling, so a span of 2 or 3 is the full width today.
+     The vocabulary is wider than the layout on purpose: a block says how much
+     room it WANTS, and a third column — if a pack ever has enough narrow blocks
+     to fill one — is then a change to this file alone. Three columns were tried
+     against the crawler sheet and left a permanent hole beside every wide
+     block, which is a narrower sheet drawn on a wider screen. */
+  .blk[data-span="2"],.blk[data-span="3"],.blk[data-span="full"]{grid-column:1/-1}
+
+  /* Daring Comics' sheet: the numbers you read on the left, the powers you
+     work in on the right. The right column is wider because power sets carry
+     editable prose and the left column is a column of short readouts. */
+  .sheet-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);
+    gap:14px;align-items:start}
+  .sheet-col{display:block}
+  .sheet-col>*:last-child{margin-bottom:0}
+
+  /* Wiki: the intake box and the filters stop scrolling away from the entries
+     they filter, and the entries become a shelf instead of a queue. */
+  .wiki-grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
+  .wiki-col{display:block}
+  .wiki-side{position:sticky;top:16px}
+  .wiki-side>*:last-child{margin-bottom:0}
+  .wiki-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+  .wiki-list>*{margin-bottom:0}
+
+  /* Map: the grid was capped at 420px for a phone. Give it room and put the
+     cell you clicked beside it rather than below the fold. */
+  .map-split{display:grid;grid-template-columns:minmax(0,700px) minmax(0,360px);
+    gap:16px;align-items:start;justify-content:start}
+  .map-split>*:last-child{position:sticky;top:16px}
+  /* Room, not sprawl: uncapped, a 5x5 of square cells grew to a thousand pixels
+     tall and pushed its own legend off the screen. */
+  .map-split #map-grid{max-width:640px}
+
+  /* Conflict: turn order and the zones it moves people between, side by side.
+     Watching a fight should not need scrolling between the two halves of it. */
+  .conflict-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:14px;align-items:start}
+  .conflict-col{display:block}
+  .conflict-col>*:last-child{margin-bottom:0}
+
+  /* The HUD wears the same idea: vitals and the Hotlist on the left, the things
+     you can do on the right. Declared by the pack, laid out here. */
+  .hud-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:14px;align-items:start}
+  .hud-col{display:block}
+  .hud-col>*:last-child{margin-bottom:0}
+
+  /* The journal is prose. Widening the frame must not widen the line. */
+  #notes-content{max-width:900px}
+  textarea{max-width:72ch}
+
+  /* The modals that are editors rather than questions. A confirmation is still
+     460px wide, because a confirmation with 300px of empty air is worse. */
+  #power-modal .modal-inner,#gear-modal .modal-inner,#lore-modal .modal-inner,
+  #npc-modal .modal-inner,#npc-export-modal .modal-inner{max-width:760px}
+}
+
+@media (min-width:1500px){
+  body{max-width:1660px;padding-left:168px}
+  /* The rail earns its labels. Same buttons, turned on their side. */
+  #nav{width:168px;max-width:168px;align-items:stretch}
+  .nb{flex-direction:row;justify-content:flex-start;gap:10px;padding:11px 16px;font-size:11px}
+  .nb svg{width:19px;height:19px;flex-shrink:0}
+  #theme-wrap{margin-top:auto}
+
+  .roller-side{width:320px}
+  .wiki-list{grid-template-columns:repeat(3,minmax(0,1fr))}
+  /* The print catalogue is a list of checkboxes; two columns of it is half the
+     scrolling, and the document rail stays put beside them. */
+  .pr-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .pr-col>*{margin-bottom:0}
+  .pr-doc{flex:0 0 380px}
+}
