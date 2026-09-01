@@ -3358,6 +3358,114 @@ function boot(entry) {
       || 'a container is missing from the rendered block';
   });
 
+  // ── the item catalogue (pp. 72, 116, 216-218, 328) ──────────────────────
+  // The book's regular items: consumables, tools, explosives, generic worn gear
+  // and the sample vehicles. It is PACK data, not character data — which is what
+  // makes it reach every save, every browser and every player at the table with
+  // no migration, and what lets a corrected row reach them too.
+  check('[gear-cat] the catalogue is pack data the shell can see', () => {
+    if (!ev("Array.isArray(DCC_GEAR)")) return 'DCC_GEAR is not an array';
+    if (!ev("SYS.catalogs.gear === DCC_GEAR")) return 'the pack does not publish it as a catalogue';
+    return ev("DCC_GEAR.length") > 40 || 'only ' + ev("DCC_GEAR.length") + ' rows';
+  });
+
+  check('[gear-cat] every row has an id, a name, a kind and a page', () => {
+    const bad = ev("JSON.stringify(DCC_GEAR.filter(function(g){return !g.id||!g.name||!g.kind||!g.page}).map(function(g){return g.id||g.name}))");
+    return bad === '[]' || 'incomplete rows: ' + bad;
+  });
+
+  check('[gear-cat] ids and names are unique', () => {
+    const dupes = ev("(function(){var seen={},out=[];DCC_GEAR.forEach(function(g){" +
+      "['id','name'].forEach(function(k){var v=k+':'+String(g[k]).toLowerCase();" +
+      "if(seen[v])out.push(v);seen[v]=1})});return JSON.stringify(out)})()");
+    return dupes === '[]' || 'repeated: ' + dupes;
+  });
+
+  // The rows that name something in another catalogue have to resolve, the way
+  // DCC_RANDOM_SPELLS does. A typo here is a weapon that works as nothing.
+  check('[gear-cat] a row that names a Skill, a Spell or a slot resolves', () => {
+    const bad = ev("JSON.stringify(DCC_GEAR.filter(function(g){" +
+      "return (g.skill&&!dccSkillByName(g.skill))||(g.casts&&!dccSpellByName(g.casts))||" +
+      "(g.teaches&&!dccSpellByName(g.teaches))||" +
+      "(g.slot&&!DCC_GEAR_SLOTS.some(function(s){return s.id===g.slot}))" +
+      "}).map(function(g){return g.id}))");
+    return bad === '[]' || 'dangling references: ' + bad;
+  });
+
+  check('[gear-cat] every number on a row is a real, non-negative number', () => {
+    const bad = ev("JSON.stringify(DCC_GEAR.filter(function(g){" +
+      "return ['dr','grantsStatN','grantsSkillN','rank','qty'].some(function(k){" +
+      "return g[k]!==undefined&&(!isFinite(g[k])||g[k]<0)})}).map(function(g){return g.id}))");
+    return bad === '[]' || 'bad numbers: ' + bad;
+  });
+
+  check('[gear-cat] the book is offered on the add box', () => {
+    itemSheet();
+    const opts = ev("document.querySelectorAll('#inv-cat-gear-inventory option').length");
+    return opts === ev("DCC_GEAR.length") || 'the datalist has ' + opts + ' of ' + ev("DCC_GEAR.length");
+  });
+
+  check('[gear-cat] typing a name from the book gets you the item, not the words', () => {
+    itemSheet();
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='healing potion';invAdd('gear','inventory')");
+    const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return /Healing Potion/i.test(x.name)})[0]||null)"));
+    if (!it) return 'nothing was added';
+    if (it.name !== 'Healing Potion') return "it kept the typing rather than the book's name: " + it.name;
+    return /Heals 5 Health Bar slots/.test(it.notes || '') || 'it carries no mechanics: ' + JSON.stringify(it);
+  });
+
+  check('[gear-cat] what the book says shows up in the readout', () => {
+    const line = ev("SYS.derive.gearItemReadout(S.char.blocks.gear.inventory.filter(function(x){return /Healing Potion/i.test(x.name)})[0],S.char)");
+    return /Heals 5/.test(line) || 'the sheet reads ' + JSON.stringify(line);
+  });
+
+  // Bookkeeping stays in the pack. A page number on a character is a page number
+  // that has to be migrated the day the book is corrected.
+  check('[gear-cat] catalogue bookkeeping never lands on the character', () => {
+    const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return /Healing Potion/i.test(x.name)})[0])"));
+    const leaked = ['id', 'kind', 'tier', 'page', 'effect', 'slot'].filter(k => k in it);
+    return !leaked.length || 'the item carries ' + leaked.join(', ');
+  });
+
+  check('[gear-cat] the book knows where its own things are worn', () => {
+    itemSheet();
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Silver Ring of +2 to a Stat';invAdd('gear','inventory')");
+    ev("invMove('gear','inventory','equipped','',S.char.blocks.gear.inventory.findIndex(function(x){return /Ring/.test(x.name)}))");
+    if (!ev("(S.char.blocks.gear.equipped.accessories||[]).length")) return 'the ring did not reach Accessories';
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Random Piece of Armor';invAdd('gear','inventory')");
+    ev("invMove('gear','inventory','equipped','',S.char.blocks.gear.inventory.findIndex(function(x){return /Armor/.test(x.name)}))");
+    if (!ev("(S.char.blocks.gear.equipped.torso||[]).length")) return 'the armour did not reach Torso';
+    return ev("SYS.derive.dr(S.char)") >= 1 || 'its +1 DR never reached the sheet';
+  });
+
+  // A Torch is a stick of burning wood. There is also a Spell called Torch, and
+  // the readout's name matching was telling a crawler holding one that they had
+  // no Ranks in it.
+  check('[gear-cat] an item that shares a name with a Spell is still an item', () => {
+    itemSheet();
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Torch';invAdd('gear','inventory')");
+    const line = ev("SYS.derive.gearItemReadout(S.char.blocks.gear.inventory.filter(function(x){return x.name==='Torch'})[0],S.char)");
+    if (/no Ranks in it/.test(line)) return 'the torch is being read as the Spell: ' + JSON.stringify(line);
+    return /Bright light/.test(line) || 'it says nothing useful: ' + JSON.stringify(line);
+  });
+
+  check('[gear-cat] a name the book has never heard of still adds', () => {
+    itemSheet();
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Grandpa hat';invAdd('gear','inventory')");
+    const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return /Grandpa/.test(x.name)})[0]||null)"));
+    return (it && it.name === 'Grandpa hat' && !it.notes) || 'it came back as ' + JSON.stringify(it);
+  });
+
+  // A scroll and a tome say what they do without naming a Spell, because the
+  // book does not name one: "one shot, no Mana casting" and "a new, weak Spell".
+  check('[gear-cat] a scroll off the shelf leaves the Spell to the player', () => {
+    const scroll = JSON.parse(ev("JSON.stringify(dccGearByName('Spell Scroll'))"));
+    const tome = JSON.parse(ev("JSON.stringify(dccGearByName('Magic Tome'))"));
+    if (scroll.casts || tome.teaches) return 'the catalogue invented a Spell the book did not print';
+    return /one shot/i.test(scroll.effect) && /learn/i.test(tome.effect)
+      || 'they do not say what they are for';
+  });
+
   // ── Spells (D7) ──────────────────────────────────────────────────────────
   eq(ev('DCC_SPELLS.length'), 54, '[spells] 54 Spells');
   check('[spells] every Spell has an id, a name and a Mana cost', () => {

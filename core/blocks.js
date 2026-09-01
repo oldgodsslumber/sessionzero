@@ -1156,9 +1156,19 @@ function invAdder(b, c) {
     : '';
   // An input, a slot picker, a "works as" picker and a button never fit one
   // line on a phone, so they are grouped and allowed to wrap.
+  // The pack's own catalogue on the box, so the book's items can be typed by
+  // name and arrive with what the book says they do. A pack with no catalogue
+  // gets the plain box it always had.
+  const cat = (b.catalog && SYS && SYS.catalogs && SYS.catalogs[b.catalog]) || [];
+  const listId = 'inv-cat-' + b.id + '-' + c.id;
+  const datalist = cat.length
+    ? `<datalist id="${esc(listId)}">` +
+      cat.map(x => `<option value="${esc(x.name || x)}">`).join('') + `</datalist>`
+    : '';
   return `<div class="inv-add">
     <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…"
-      onkeydown="if(event.key==='Enter')invAdd('${esc(b.id)}','${esc(c.id)}')">
+      ${cat.length ? `list="${esc(listId)}"` : ''}
+      onkeydown="if(event.key==='Enter')invAdd('${esc(b.id)}','${esc(c.id)}')">${datalist}
     <div class="inv-add-opts">${slotPick}${invAsPick(b, c, '')}
       <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div></div>`;
 }
@@ -1279,7 +1289,7 @@ function invAdd(id, cid) {
     // the item at index 10 of a ten-slot Hotlist, where nothing renders it —
     // not the sheet, not the HUD, not print — while invRoom still counted it,
     // so the visibly empty slot refused everything for ever after.
-    invPlace(list, works ? { name, qty: 1, skill: works } : { name, qty: 1 }, c.size || 10);
+    invPlace(list, invNewItem(t.block, name, works), c.size || 10);
     if (inp) inp.value = '';
     save(); blockSyncAll(id, { force: true }); refocus();
     return;
@@ -1289,12 +1299,24 @@ function invAdd(id, cid) {
     if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
     return;
   }
-  const item = works ? { name, qty: 1, skill: works } : { name, qty: 1 };
+  const item = invNewItem(t.block, name, works);
   if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
   else if (c.kind === 'stack') invPlace(t.ctx.data[cid], item, c.size || 10);
   else t.ctx.data[cid].push(item);
   if (inp) inp.value = '';
   save(); blockSyncAll(id, { force: true }); refocus();
+}
+
+// One new item. A pack that declares an item template gets asked first, so a
+// name in its catalogue arrives carrying what the book gives it; anything else
+// is a name and a quantity, which is what an item has always been.
+function invNewItem(block, name, works) {
+  const fn = sysDerive(block.itemTemplate);
+  let base = null;
+  if (fn) { try { base = fn(name) || null; } catch (e) { base = null; } }
+  const item = Object.assign({ name: name, qty: 1 }, base || {});
+  if (works) item.skill = works;
+  return item;
 }
 
 // Does the pack's "works as" list offer this name? Used to decide whether a

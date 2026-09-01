@@ -323,6 +323,11 @@ registerSystem({
         itemActions: 'derive.gearItemActions',
         itemAct: 'derive.gearItemAct',
         lookup: 'derive.skillLookup',
+        // The book's own items. `catalog` puts their names on the add box; the
+        // template is what one of them arrives carrying, so typing "Healing
+        // Potion" gets you the potion rather than the words.
+        catalog: 'gear',
+        itemTemplate: 'derive.gearTemplate',
         // Worn armour changes your Damage Resistance, so the defence readout
         // has to be redrawn when gear changes.
         affects: ['defence'],
@@ -479,7 +484,11 @@ registerSystem({
       // the Spell every crawler starts with, and the keypad resolves it by name
       // when you tap it — so it is connected, and nothing on screen said so. It
       // read as a stray label attached to nothing.
-      if (!item.skill && !item.casts && !item.teaches) {
+      // ...unless the book has an item by that name. A Torch is a torch: there
+      // is also a Spell called Torch, and the name match was telling a crawler
+      // holding a stick of burning wood that they had no Ranks in it.
+      if (!item.skill && !item.casts && !item.teaches &&
+          !(typeof dccGearByName === 'function' && dccGearByName(item.name))) {
         const n = String(item.name || '').toLowerCase();
         const own = function (blockId) {
           const b = char && char.blocks && char.blocks[blockId];
@@ -724,7 +733,13 @@ registerSystem({
       return n;
     },
 
+    gearTemplate: (name) => dccGearTemplate(name),
+
     gearSlotFor: (item) => {
+      // The catalogue knows where its own things are worn: a ring is an
+      // Accessory, a random piece of armour goes on your Torso.
+      const row = (typeof dccGearByName === 'function') ? dccGearByName(item && item.name) : null;
+      if (row && row.slot) return row.slot;
       // What it WORKS AS decides, not what it is called. Asking the name alone
       // sent a Club renamed "Tire Iron" to the first slot with room, which is
       // Head — while the HUD's Draw put the same weapon in your hands, so the
@@ -827,6 +842,7 @@ registerSystem({
   catalogs: {
     skills: DCC_SKILLS,
     spells: DCC_SPELLS,
+    gear: DCC_GEAR,
     craftingTables: DCC_CRAFTING_TABLES,
     craftingSkills: DCC_CRAFTING_SKILLS,
     salvage: DCC_SALVAGE,
