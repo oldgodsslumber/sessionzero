@@ -1702,6 +1702,31 @@ function boot(entry) {
       || 'coming back up did not find the map that was there';
   });
 
+  // The map's icons come from game-icons.net like every other icon in the app,
+  // rather than emoji — an emoji is whatever the reader's device decides it is.
+  check('[map] the room types are game-icons, not emoji', () => {
+    const bad = ev("JSON.stringify((SYS.map.zoneTypes||[]).filter(function(z){return !iconIsSlug(z.icon)}).map(function(z){return z.name+':'+z.icon}))");
+    return bad === '[]' || 'still emoji: ' + bad;
+  });
+
+  check('[map] a typed room draws the masked icon, not a character', () => {
+    mapTab();
+    ev("setMapZone(7,'Saferoom')");
+    const cell = ev("document.querySelectorAll('#map-grid .map-cell')[7].innerHTML");
+    if (!/mask-image/.test(cell)) return 'the square is not drawing an icon: ' + cell.slice(0, 90);
+    return /game-icons%3Acampfire/.test(cell) || 'the wrong icon: ' + cell.slice(0, 140);
+  });
+
+  check('[map] the type picker draws them too', () => {
+    mapTab();
+    ev("enterSZ(3)");
+    const html = ev("document.getElementById('map-content').innerHTML");
+    const txt = ev("document.getElementById('map-content').textContent");
+    ev("renderMap()");
+    if (/\$\{/.test(txt)) return 'the heading is printing its own template: ' + txt.slice(0, 60);
+    return /mask-image/.test(html) || 'the picker still lists bare text';
+  });
+
   // ── nothing in this game may be shaped like the other one ───────────────
   // A different rule set is not a preference: Fate's aspects, stress boxes and
   // stunts are not "wording" in a d20 dungeon game, they are the wrong rules on

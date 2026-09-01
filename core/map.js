@@ -244,8 +244,10 @@ function enterSZ(ci){
   const r=S.regions[S.activeRegion];if(!r)return;const c=r.cells[ci];
   if(!c.subZone){
     const types=mapZoneTypes();
-    let h='<div class="card"><div class="pg-title" style="font-size:18px">Zone Type</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">What kind of location is this?</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
-    types.forEach(t=>{const icons=mapZoneIcons();h+=`<button class="btn btn-primary" style="padding:12px;font-size:13px" onclick="createSZ(${ci},'${t}')">${icons[t]||''} ${t}</button>`;});
+    let h='<div class="card"><div class="pg-title" style="font-size:18px">'+esc(mapZoneWord())+' Type</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">What kind of '+esc(mapCellWord().toLowerCase())+' is this?</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+    // Through iconHTML, so a game-icons slug draws as the same masked line art
+    // the rest of the app uses and a legacy emoji still prints as itself.
+    types.forEach(t=>{const icons=mapZoneIcons();h+=`<button class="btn btn-primary" style="padding:12px;font-size:13px;display:flex;align-items:center;gap:8px;justify-content:center" onclick="createSZ(${ci},'${esc(t)}')">${iconHTML(icons[t],18)} ${esc(t)}</button>`;});
     h+='</div></div>';
     document.getElementById('map-content').innerHTML=h;return;
   }

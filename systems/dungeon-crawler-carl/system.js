@@ -172,13 +172,21 @@ registerSystem({
     perFloor: true,
     // A square of a dungeon is a Room, and what is not map is rock.
     words: { cell: 'Room', zone: 'Area', blocked: 'Solid rock' },
+    // game-icons.net, through the same masked-icon path every other icon in the
+    // app uses, rather than emoji: an emoji is whatever the reader's device
+    // decides it is, and beside a shelf of game-icons line art it reads as a
+    // sticker stuck on the map. Every slug below was checked against the set
+    // before it was written down.
     zoneTypes: [
-      { name: 'Room',      icon: '\u{1F6AA}' },
-      { name: 'Hallway',   icon: '\u{1F6E4}' },
-      { name: 'Stairwell', icon: '\u{1FA9C}' },
-      { name: 'Saferoom',  icon: '\u{1F6E1}' },
-      { name: 'Guild',     icon: '\u{1F3F0}' },
-      { name: 'Boss Room', icon: '\u{1F480}' },
+      { name: 'Room',       icon: 'door' },
+      { name: 'Hallway',    icon: 'stone-path' },
+      { name: 'Stairwell',  icon: 'stairs' },
+      { name: 'Saferoom',   icon: 'campfire' },
+      { name: 'Guild',      icon: 'castle' },
+      { name: 'Boss Room',  icon: 'crowned-skull' },
+      { name: 'Loot Room',  icon: 'chest' },
+      { name: 'Trap',       icon: 'trap-mask' },
+      { name: 'Waystation', icon: 'gate' },
     ],
     hints: {
       cellName: 'e.g. Tutorial Guild, Bathroom, Reward Room',
