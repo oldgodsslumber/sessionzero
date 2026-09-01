@@ -103,6 +103,14 @@ function lex(key) {
   return (SYS && SYS.lexicon && SYS.lexicon[key]) || DEFAULT_LEXICON[key] || key;
 }
 
+// A surface's title and subtitle, in the pack's words. The map of a comic city
+// and the map of a dungeon floor are not the same page and should not carry the
+// same heading; a pack that says nothing keeps the plain wording.
+function sysCopy(surface, field, plain) {
+  const c = (SYS && SYS.copy && SYS.copy[surface]) || null;
+  return (c && c[field]) || plain;
+}
+
 // Optional copy: returns '' when neither the pack nor the default defines it,
 // so a caller can fall back. lex() cannot be used for this — it returns the key
 // itself for an unknown term, which is always truthy.

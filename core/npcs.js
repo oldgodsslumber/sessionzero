@@ -186,12 +186,23 @@ function renderNPCs(){
   h+=`</div>`;
   h+=`<div class="edit-only" style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-primary" style="flex:1" onclick="openAddNPC()">+ Quick Add</button>`;
   h+=`<button class="btn btn-gold" style="flex:1" onclick="openFullNPCBuilder(null)">+ Full Builder</button>`;
-  h+=`</div><div class="edit-only" style="font-size:10px;color:var(--muted);margin-top:4px;text-align:center">Quick Add = name, blurb & stress. Full Builder = aspects, skills, powers, stunts & consequences.</div></div>`;
+  h+=`</div><div class="edit-only" style="font-size:10px;color:var(--muted);margin-top:4px;text-align:center">${esc(npcAddHint())}</div></div>`;
   el.innerHTML=h;
 }
 // What this panel is called and what it says it is for. A bestiary is not a
 // cast list, and a pack that has said `roster: 'Bestiary'` should not be handed
 // a heading about villains and a super-team.
+// What the two buttons under the roster are for, in the words of whatever game
+// this is. It used to promise aspects, stunts and consequences to everybody.
+function npcAddHint(){
+  if(SYS&&SYS.npc&&SYS.npc.addHint)return SYS.npc.addHint;
+  if(npcQuickFields()){
+    const label=((SYS&&SYS.npc&&SYS.npc.label)||lexU('npc')).toLowerCase();
+    return 'Quick Add = enough to run the '+label+'. Full Builder = every field there is.';
+  }
+  return 'Quick Add = name, blurb & stress. Full Builder = aspects, skills, powers, stunts & consequences.';
+}
+
 function npcPanelTitle(){
   // Only what the pack SAYS. Reaching for lex('roster') renamed Daring Comics'
   // panel to "Rogues Gallery", which is one of the five things on it rather
@@ -205,8 +216,53 @@ function npcPanelHint(){
 function openAddNPC(){_npcEdit=null;renderNM();document.getElementById('npc-modal').classList.add('open');}
 function editNPC(i){_npcEdit=i;renderNM();document.getElementById('npc-modal').classList.add('open');}
 function closeNM(){document.getElementById('npc-modal').classList.remove('open');}
+// The two-tap version of the builder. It used to be Fate's short form —
+// Aspects for a Main NPC, an Obstacle Rating for a Nameless one, stress boxes —
+// which in a game with none of those meant a name, a blurb, and nothing you
+// could actually run the thing with. A pack that describes its own entries gets
+// the fields it marked `quick`, so a Mob comes out of it with a Level and a
+// Floor and is therefore playable.
+function npcQuickFields(){
+  const all=(typeof sysNpcFields==='function')?sysNpcFields():null;
+  if(!all||!all.length)return null;
+  const picked=all.filter(function(f){return f.quick&&!f.derive;});
+  return picked.length?picked:null;
+}
+
+function renderPackNM(){
+  const npc=_npcEdit!==null?S.npcs[_npcEdit]:null;
+  const fields=npcQuickFields();
+  const label=(SYS&&SYS.npc&&SYS.npc.label)||lexU('npc');
+  if(!S._npcDraft||_npcEdit===null)S._npcDraft=sysNpcDefaults(npc);
+  const d=S._npcDraft;
+  let h=`<h2 style="font-family:var(--font-title);font-size:20px;margin-bottom:4px">${npc?'Edit':'Add'} ${esc(label)}</h2>`;
+  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">${esc(npcKindLabel(d.type||npcTab()))} — the rest can wait for the builder.</div>`;
+  fields.forEach(function(f){
+    const v=d[f.key];
+    h+=`<div class="form-group"><label>${esc(f.label)}</label>`;
+    if(f.options){
+      const opts=(typeof f.options==='function')?f.options():f.options;
+      h+=`<select onchange="sysNpcSet('${esc(f.key)}',this.value)">`+
+        (opts||[]).map(function(o){
+          const val=o.value===undefined?o:o.value,lab=o.label===undefined?val:o.label;
+          return `<option value="${esc(val)}"${String(val)===String(v)?' selected':''}>${esc(lab)}</option>`;
+        }).join('')+`</select>`;
+    }else{
+      h+=`<input type="${f.type==='number'?'number':'text'}" value="${esc(v===undefined?'':String(v))}"`+
+        ` placeholder="${esc(f.hint||'')}" oninput="sysNpcSet('${esc(f.key)}',this.value)">`;
+    }
+    h+=`</div>`;
+  });
+  h+=`<div style="display:flex;gap:8px;margin-top:12px">`+
+     `<button class="btn btn-secondary" style="flex:1" onclick="closeNM()">Cancel</button>`+
+     `<button class="btn btn-primary" style="flex:1" onclick="saveSysNPC();closeNM();">Save</button></div>`;
+  h+=`<div class="tac mt-2"><button class="btn btn-gold btn-xs" onclick="closeNM();openFullNPCBuilder(${_npcEdit===null?'null':_npcEdit})">Everything else \u2192</button></div>`;
+  document.getElementById('npc-modal-body').innerHTML=h;
+}
+
 function renderNM(){
-  const npc=_npcEdit!==null?S.npcs[_npcEdit]:null,type=npc?.type||_npcTab;
+  if(npcQuickFields()){renderPackNM();return;}
+  const npc=_npcEdit!==null?S.npcs[_npcEdit]:null,type=npc?.type||npcTab();
   let h=`<h2 style="font-family:var(--font-title);font-size:20px;margin-bottom:12px">${npc?'Edit':'Add'} NPC</h2><div class="form-group"><label>Name</label><input id="nm-name" value="${esc(npc?.name||'')}"></div><div class="form-group"><label>Description</label><textarea id="nm-desc">${esc(npc?.desc||'')}</textarea></div>`;
   if(type==='main'||type==='rogue')h+=`<div class="form-group"><label>Aspects (comma-sep)</label><input id="nm-asp" value="${esc((npc?.aspects||[]).join(', '))}"></div><div class="form-group"><label>Key Skills</label><input id="nm-sk" value="${esc(npc?.skillText||'')}"></div><div class="form-group"><label>Powers Summary</label><input id="nm-pw" value="${esc(npc?.powers||'')}"></div><div class="form-group"><label>Stress Boxes</label><input type="number" id="nm-st" min="0" max="10" value="${npc?.stress?.length||4}"></div>`;
   if(type==='nameless')h+=`<div class="form-group"><label>Obstacle Rating</label><input id="nm-ob" value="${esc(npc?.obstacle||'+2')}"></div><div class="form-group"><label>Stress Boxes</label><input type="number" id="nm-st" min="0" max="6" value="${npc?.stress?.length||2}"></div>`;

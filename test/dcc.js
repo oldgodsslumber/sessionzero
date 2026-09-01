@@ -1657,6 +1657,49 @@ function boot(entry) {
     return (t && t.floor === 3) || 'the world has floor ' + JSON.stringify(t && t.floor);
   });
 
+  // ── nothing in this game may be shaped like the other one ───────────────
+  // A different rule set is not a preference: Fate's aspects, stress boxes and
+  // stunts are not "wording" in a d20 dungeon game, they are the wrong rules on
+  // the screen. These fence off the surfaces that used to carry them.
+  check('[voice] the nav says the words of this game', () => {
+    const nav = JSON.parse(ev("JSON.stringify([].slice.call(document.querySelectorAll('#nav .nb')).map(function(b){return b.textContent.trim()}))"));
+    const want = ['Crawler', 'Mobs', 'Log', 'Codex', 'Combat'];
+    const missing = want.filter(function (x) { return nav.indexOf(x) < 0; });
+    return !missing.length || 'the nav reads ' + JSON.stringify(nav);
+  });
+
+  check('[voice] no page in this game shows Fate on it', () => {
+    const fate = /aspect|stress box|stunt|consequence|fate point|power set|rogues gallery|costumed|civilian name/i;
+    const bad = [];
+    ['hero', 'items', 'npcs', 'map', 'conflict', 'notes', 'wiki'].forEach(function (t) {
+      ev("showTab(" + JSON.stringify(t) + ")");
+      const txt = ev("(document.getElementById('page-' + " + JSON.stringify(t) + ")||{textContent:''}).textContent");
+      const hit = txt.match(fate);
+      if (hit) bad.push(t + ': ' + hit[0]);
+    });
+    ev("showTab('hero')");
+    return !bad.length || 'the other game showed through on ' + bad.join(', ');
+  });
+
+  check('[voice] Quick Add builds a Mob, not a Fate NPC', () => {
+    ev("showTab('npcs');_npcTab='mob';renderNPCs();openAddNPC()");
+    const body = ev("(document.getElementById('npc-modal-body')||{textContent:''}).textContent");
+    ev("closeNM()");
+    if (/Aspects|Obstacle Rating|stress/i.test(body)) return 'it still asks for Fate: ' + body.slice(0, 80);
+    if (!/Level/.test(body)) return 'it does not ask for a Level: ' + body.slice(0, 80);
+    return /Attacks/.test(body) || 'a Mob you cannot attack with is not runnable: ' + body.slice(0, 80);
+  });
+
+  check('[voice] the pages are called what this game calls them', () => {
+    const titleOf = (t) => { ev("showTab(" + JSON.stringify(t) + ")");
+      return ev("((document.getElementById('page-' + " + JSON.stringify(t) + ").querySelector('.pg-title'))||{textContent:''}).textContent"); };
+    const map = titleOf('map'), notes = titleOf('notes'), wiki = titleOf('wiki');
+    ev("showTab('hero')");
+    if (!/Neighborhood/.test(map)) return 'the map is called ' + JSON.stringify(map);
+    if (!/Crawl Log/.test(notes)) return 'the journal is called ' + JSON.stringify(notes);
+    return /Codex/.test(wiki) || 'the wiki is called ' + JSON.stringify(wiki);
+  });
+
   // ── the roster is this game's, not the comic's ──────────────────────────
   // The tabs inside NPCs were Fate's categories and Daring Comics' cast list —
   // Cast, Rogues, Nameless, Main, Team — so a Mob was filed under "Cast" and

@@ -18,7 +18,7 @@ function renderConflict(){
     return;
   }
   const c=S.conflict;
-  let h=`<div class="pg-title">Conflict</div><div class="pg-sub">Zone-based combat tracker</div>`;
+  let h=`<div class="pg-title">${esc(sysCopy('conflict','title','Conflict'))}</div><div class="pg-sub">${esc(sysCopy('conflict','hint','Zone-based combat tracker'))}</div>`;
   if(!c.active){h+=`<div class="tac" style="padding:30px"><div style="font-size:36px;margin-bottom:8px">\u2694</div><div class="text-muted mb-3">No active conflict</div><button class="btn btn-primary" onclick="startConflict()">Start Conflict</button></div>`;}
   else{
     h+=`<div class="card-sm" style="display:flex;justify-content:space-between;align-items:center"><div><span class="label">Round</span> <span class="fw-700 text-accent" style="font-size:20px">${c.round}</span></div><div style="display:flex;gap:4px"><button class="btn btn-secondary btn-xs" onclick="nextRound()">Next Round</button><button class="btn btn-danger btn-xs" onclick="endConflict()">End</button></div></div>`;

@@ -190,7 +190,7 @@ function renderWiki(){
   if(!currentUniverse()){el.innerHTML=universeBarHTML()+`<div class="card tac"><div class="pg-title" style="font-size:18px">No universe yet</div><div class="pg-sub">The wiki belongs to a universe. Create one first.</div></div>`;return;}
   const all=listLore();
   let h=universeBarHTML()+`<div class="${_wikiEditMode?'':'no-edit'}">`;
-  h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">Wiki</div><div class="pg-sub">Shared across every hero in this universe</div></div>${editToggleBtn(_wikiEditMode,'toggleWikiEdit')}</div>`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">${esc(sysCopy('wiki','title',lexOpt('wiki')||'Wiki'))}</div><div class="pg-sub">${esc(sysCopy('wiki','hint','Shared across every '+lexL('hero')+' in this '+lexL('universe')))}</div></div>${editToggleBtn(_wikiEditMode,'toggleWikiEdit')}</div>`;
   if(!_wikiEditMode)h+=noEditBanner();
 
   // Two buckets. The half that ASKS — intake, search, the type filters — and

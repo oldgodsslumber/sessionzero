@@ -111,6 +111,22 @@ registerSystem({
   // here would let a player pick a comic palette for a dungeon crawl.
   defaultTheme: 'crawler',
 
+  // The nav is a fixed row of buttons, so these are the SHORT words for each
+  // surface. The long ones live in the lexicon: a map here is of a
+  // Neighborhood, but that word across eight buttons on a phone is an ellipsis.
+  nav: {
+    hero: 'Crawler', npcs: 'Mobs', map: 'Map', notes: 'Log',
+    wiki: 'Codex', conflict: 'Combat',
+  },
+
+  // What each surface calls itself, in the System AI's words rather than a
+  // comic's. Anything omitted keeps the plain wording.
+  copy: {
+    map:      { title: 'Neighborhood Map', hint: 'Twenty-five squares of floor. Click an adjacent one to travel.' },
+    conflict: { title: 'Combat', hint: 'Rounds, Actions and who is still standing.' },
+    notes:    { title: 'Crawl Log', hint: '' },
+  },
+
   // The app is the Crawler Interface, so the words are the System AI's.
   lexicon: {
     universe: 'Crawl',        universes: 'Crawls',
@@ -215,7 +231,7 @@ registerSystem({
       ].filter(Boolean);
     },
     fields: () => [
-      { key: 'name',  label: 'Name', group: 'Identity',
+      { key: 'name',  label: 'Name', group: 'Identity', quick: true,
         hint: 'The Tongue Lasher, The Regret Collector...' },
       { key: 'kind',  label: 'Type', group: 'Identity',
         hint: 'Beastly, Undead, Humanoid, Ooze...' },
@@ -223,8 +239,8 @@ registerSystem({
         options: () => DCC_SIZES.map(z => ({ value: z.n, label: z.name + ' (' + z.n + ')' })),
         def: 4 },
 
-      { key: 'level', label: 'Level', type: 'number', def: 1, group: 'Numbers' },
-      { key: 'floor', label: 'Floor it belongs to', type: 'number', group: 'Numbers',
+      { key: 'level', label: 'Level', type: 'number', def: 1, group: 'Numbers', quick: true },
+      { key: 'floor', label: 'Floor it belongs to', type: 'number', group: 'Numbers', quick: true,
         def: () => (typeof S !== 'undefined' && S && S.floor) || 1,
         hint: 'A Mob from another floor keeps its home floor' },
       { key: 'hbSlots', label: 'Health Bar slots', group: 'Numbers',
@@ -239,7 +255,7 @@ registerSystem({
       { key: 'stats', label: 'Stats', group: 'Stats', rows: 2,
         hint: 'STR 6, CON 8, DEX 4, INT 2, CHA 1' },
 
-      { key: 'attacks', label: 'Attacks', group: 'Attacks', rows: 3,
+      { key: 'attacks', quick: true, label: 'Attacks', group: 'Attacks', rows: 3,
         hint: 'Bite - 2d6 + STR Piercing, and the target gains the Bleeding Debuff' },
 
       { key: 'desc',  label: 'What the crawlers see', group: 'Notes', rows: 2 },

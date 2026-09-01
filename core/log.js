@@ -5,7 +5,7 @@ function renderNotes(){
   const nf=window._logNewest,reorder=window._logReorder,entries=S.notes||[];
   let h='';
   // Header
-  h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px"><div class="pg-title">Journal</div><div style="display:flex;gap:4px;flex-wrap:wrap">`;
+  h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px"><div class="pg-title">${esc(sysCopy('notes','title',lexOpt('log')||'Journal'))}</div><div style="display:flex;gap:4px;flex-wrap:wrap">`;
   if(!reorder){
     h+=`<button class="btn btn-xs btn-gold" onclick="addIssueBreak()">\u25b6 NEW ISSUE</button>`;
     h+=`<button class="btn btn-xs btn-secondary" onclick="exportLog()">\u2197 Export</button>`;
