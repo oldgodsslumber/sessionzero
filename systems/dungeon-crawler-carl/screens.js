@@ -1395,20 +1395,38 @@ function dccStartingHotlist(char) {
 // twice. Anything creation put here is replaced; anything the player has picked
 // up since is left exactly where it is.
 function dccApplyStartingGear(gear, char) {
-  // A stack keeps its slot numbers by leaving holes, so drop those too —
-  // concat() below repacks the list anyway, and carrying nulls through would
-  // put empty slots in the middle of a freshly built Hotlist.
+  // Creation can be re-run on a crawler who has been playing — "Edit creation"
+  // is a button on the sheet — so the grants have to fit around what is already
+  // there rather than being poured on top of it. Concatenating did three wrong
+  // things at once: it pushed the Hotlist past ten slots (where nothing renders
+  // it), it put a fourth item in a three-item Hands slot, and it renumbered
+  // every key the player had learned by muscle memory.
   const mine = function (e) { return !!e && e.src !== 'creation'; };
-  const kept = (gear.hotlist || []).filter(mine);
-  gear.hotlist = dccStartingHotlist(char).concat(kept);
 
+  // The Hotlist: what the player put there keeps its slot number, and the
+  // grants fill the holes that are left.
+  const kept = (gear.hotlist || []).slice(0, DCC_HOTLIST_SLOTS);
+  const hot = [];
+  kept.forEach(function (e, i) { if (mine(e)) hot[i] = e; });
+  dccStartingHotlist(char).forEach(function (g) {
+    if (typeof invPlace === 'function') invPlace(hot, g, DCC_HOTLIST_SLOTS);
+    else hot.push(g);
+  });
+  // Left as invPlace leaves it: dense at the front for a crawler who has just
+  // been made, with holes only where the player made them.
+  gear.hotlist = hot.slice(0, DCC_HOTLIST_SLOTS);
+
+  // The Gear Slots: the grant goes in first (it is the weapon you chose), then
+  // whatever the player was already wearing, up to what the slot holds.
   const eq = dccStartingEquipped(char);
   gear.equipped = gear.equipped || {};
   DCC_GEAR_SLOTS.forEach(function (sl) {
     const held = (gear.equipped[sl.id] || []).filter(mine);
-    gear.equipped[sl.id] = (eq[sl.id] || []).concat(held);
+    gear.equipped[sl.id] = (eq[sl.id] || []).concat(held).slice(0, sl.max || 1);
   });
 
+  // Inventory has no ceiling — it is weightless, and the only limit is whether
+  // you could pick the thing up.
   gear.inventory = dccStartingInventory(char).concat((gear.inventory || []).filter(mine));
 }
 

@@ -2262,6 +2262,155 @@ function boot(entry) {
     const h = ev("document.getElementById('blk-gear').innerHTML");
     return /Bludgeoning/.test(h) || 'the sheet still shows only a name';
   });
+  // ── what two testers found by driving the real controls ──────────────────
+  // Every check below is a bug that shipped. They are grouped because they share
+  // a cause worth naming: the screen and the data disagreed, and the app looked
+  // fine while doing the wrong thing.
+
+  // The Add box lives INSIDE the Gear block, and blockSyncAll() refused to
+  // repaint a block holding the caret — a guard meant for keystrokes. So adding
+  // an item with Enter stored it and drew nothing, and the player added it twice.
+  check('[item] adding with the box focused actually draws the item', () => {
+    itemSheet();
+    const inp = ev("document.getElementById('inv-add-gear-inventory')");
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.focus();i.value='Healing Potion';invAdd('gear','inventory')");
+    if (!/Healing Potion/.test(ev("JSON.stringify(S.char.blocks.gear.inventory)"))) return 'it was not stored at all';
+    return ev("/Healing Potion/.test(document.querySelector('[data-blk=\"gear\"]').innerHTML)")
+      || 'stored, but the block never redrew';
+  });
+
+  // A browser focuses a button when you click it. With the block frozen, the
+  // rows kept stale indices and the next ✕ deleted a different item.
+  check('[item] a discrete action redraws even from a focused button', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Apple',qty:1},{name:'Bread',qty:1}];save();blockRepaint('gear')");
+    ev("var b=document.querySelector('[data-blk=\"gear\"] button');if(b)b.focus();invRemove('gear','inventory','',0)");
+    const shown = ev("/Apple/.test(document.querySelector('[data-blk=\"gear\"]').innerHTML)");
+    ev("document.activeElement&&document.activeElement.blur&&document.activeElement.blur()");
+    return !shown || 'the deleted row is still on screen, so the next click aims at the wrong item';
+  });
+
+  // A stack is a keypad: adding fills the first hole. Appending put the item at
+  // index 10 of a ten-slot Hotlist, where nothing renders it, while invRoom
+  // still counted it — so the visibly empty slot refused everything for ever.
+  check('[item] a new Hotlist item fills the empty slot, not the end', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.hotlist=[];for(var i=1;i<=10;i++)S.char.blocks.gear.hotlist.push({name:'Item'+i,qty:1});" +
+       "S.char.blocks.gear.hotlist[2]=null;save();blockRepaint('gear')");
+    ev("var i=document.getElementById('inv-add-gear-hotlist');i.value='Bomb';invAdd('gear','hotlist')");
+    const len = ev("S.char.blocks.gear.hotlist.length");
+    if (len > 10) return 'the Hotlist grew to ' + len + ' slots';
+    return ev("(S.char.blocks.gear.hotlist[2]||{}).name") === 'Bomb'
+      || 'it did not land in the hole: ' + ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x&&x.name}))");
+  });
+
+  check('[item] an action consumes one of a stack, not the stack', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Grimoire',teaches:'Torch',qty:3}];save()");
+    ev("invAct('gear','inventory','',0,'learn')");
+    return ev("(S.char.blocks.gear.inventory[0]||{}).qty") === 2
+      || 'reading one book left ' + ev("JSON.stringify(S.char.blocks.gear.inventory)");
+  });
+
+  // What it WORKS AS decides where it goes. Asking the name alone sent a Club
+  // renamed "Tire Iron" to the first slot with room, which is Head.
+  check('[item] a renamed weapon is equipped into your hands, not onto your head', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Tire Iron',skill:'Club',qty:1}];save()");
+    ev("invMove('gear','inventory','equipped','',0)");
+    if (ev("(S.char.blocks.gear.equipped.head||[]).length")) return 'it went on your head';
+    return ev("/Tire Iron/.test(JSON.stringify(S.char.blocks.gear.equipped.hands||[]))")
+      || 'it is not in your hands either: ' + ev("JSON.stringify(S.char.blocks.gear.equipped)");
+  });
+
+  // The open panel used to be a positional key, so deleting a row above it left
+  // the panel attached to a different item and the next field typed landed there.
+  check('[item] the open detail panel follows its item, not its index', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Rusty Sword',qty:1},{name:'Silk Robe',qty:1},{name:'Torch',qty:1}];save();blockRepaint('gear')");
+    ev("invDetail('gear','inventory::1')");
+    ev("invRemove('gear','inventory','',0)");
+    const on = ev("(function(){var p=document.querySelector('#blk-gear .inv-detail');var r=p&&p.closest('.inv-row');" +
+      "return r?r.querySelector('.inv-name').textContent.trim():'(closed)'})()");
+    return /Silk Robe/.test(on) || 'the panel is now on ' + JSON.stringify(on);
+  });
+
+  check('[item] adding to a container the save has never used does not throw', () => {
+    itemSheet();
+    ev("delete S.char.blocks.gear.inventory;save()");
+    let threw = '';
+    try { ev("var i=document.getElementById('inv-add-gear-inventory');if(i)i.value='Rope';invAdd('gear','inventory')"); }
+    catch (e) { threw = e.message; }
+    if (threw) return 'it threw: ' + threw;
+    return /Rope/.test(ev("JSON.stringify(S.char.blocks.gear.inventory||[])")) || 'the Rope went nowhere';
+  });
+
+  check('[item] moving a repeat into the Hotlist stacks it, as adding one does', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.hotlist=[{name:'Healing Potion',qty:1}];" +
+       "S.char.blocks.gear.inventory=[{name:'Healing Potion',qty:1}];save()");
+    ev("invMove('gear','inventory','hotlist','',0)");
+    const hot = ev("JSON.stringify(S.char.blocks.gear.hotlist.filter(Boolean).map(function(x){return x.name+' x'+(x.qty||1)}))");
+    return /x2/.test(hot) && ev("S.char.blocks.gear.hotlist.filter(Boolean).length") === 1
+      || 'the Hotlist reads ' + hot;
+  });
+
+  // Undo restored blind, so anything put in that slot since was destroyed.
+  check('[item] undo will not overwrite a slot that is occupied again', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.hotlist=[{name:'Potion',qty:1}];save()");
+    ev("var u=invSpend('gear','hotlist',0);S.char.blocks.gear.hotlist[0]={name:'Bomb',qty:1};save();invUnspend(u)");
+    return ev("(S.char.blocks.gear.hotlist[0]||{}).name") === 'Bomb'
+      || 'the Bomb was destroyed: ' + ev("JSON.stringify(S.char.blocks.gear.hotlist)");
+  });
+
+  // "Edit creation" re-runs the grants on a crawler who has been playing.
+  check('[gear] re-finishing creation fits the grants around what you carry', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.hotlist=[];for(var i=1;i<=10;i++)S.char.blocks.gear.hotlist.push({name:'Mine'+i,qty:1});" +
+       "S.char.blocks.gear.equipped.hands=[{name:'A'},{name:'B'},{name:'C'}];" +
+       "S.char.blocks.gear.equipped.torso=[{name:'My Vest'}];save()");
+    ev("dccFinishCreation(S.char);save()");
+    if (ev("S.char.blocks.gear.hotlist.length") > 10) return 'the Hotlist grew past ten slots';
+    if (ev("S.char.blocks.gear.equipped.hands.length") > 3) return 'Hands holds more than three';
+    if (ev("S.char.blocks.gear.equipped.torso.length") > 1) return 'Torso holds more than one';
+    return ev("(S.char.blocks.gear.hotlist[0]||{}).name") === 'Mine1'
+      || 'the player keys were renumbered: slot 1 is now ' + ev("JSON.stringify((S.char.blocks.gear.hotlist[0]||{}).name)");
+  });
+
+  // Coercing by what the value LOOKS like read a Note of "007" as 7 and turned
+  // a typed space into 0. The pack says which fields are numbers.
+  check('[item] a text field stays text and a number field stays sane', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'X',qty:1}];save()");
+    ev("invSetField('gear','inventory','',0,'resist','007')");
+    if (ev("S.char.blocks.gear.inventory[0].resist") !== '007') {
+      return 'a text field was coerced to ' + ev("JSON.stringify(S.char.blocks.gear.inventory[0].resist)");
+    }
+    ev("invSetField('gear','inventory','',0,'dr','-5')");
+    if (ev("S.char.blocks.gear.inventory[0].dr") < 0) return 'DR went negative';
+    ev("invSetField('gear','inventory','',0,'dr','1e400')");
+    return isFinite(ev("S.char.blocks.gear.inventory[0].dr"))
+      || 'DR is not a finite number: ' + ev("String(S.char.blocks.gear.inventory[0].dr)");
+  });
+
+  check('[item] the Inventory does not inherit the Hotlist stack cap', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Arrow',qty:999}];save()");
+    ev("invQty('gear','inventory',0,1)");
+    return ev("S.char.blocks.gear.inventory[0].qty") === 1000
+      || 'a weightless backpack capped arrows at ' + ev("S.char.blocks.gear.inventory[0].qty");
+  });
+
+  check('[item] a hole in a Gear Slot does not take the whole block down', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.equipped.torso=[null];save()");
+    let threw = '';
+    try { ev("blockRepaint('gear')"); } catch (e) { threw = e.message; }
+    if (threw) return 'the block threw: ' + threw;
+    return ev("!!document.getElementById('blk-gear')") || 'the block vanished';
+  });
+
   check('[item] typing an exact catalogue name links itself', () => {
     itemSheet();
     const d = invAddAs('Dagger', '');
@@ -2284,16 +2433,25 @@ function boot(entry) {
     return /1d6/.test(ev("SYS.derive.gearItemReadout(S.char.blocks.gear.equipped.hands[0],S.char)"))
       || 'no mechanics on the held weapon';
   });
+  // Through the control a player actually has. This used to call invSetSkill(),
+  // which nothing in the app ever rendered a button for: the row composed a
+  // "works as" select and then dropped it out of its own markup, so the check
+  // was green on a capability that could not be reached. The ⋯ panel is the
+  // route that exists.
   check('[item] an item added wrongly can be reclassified in place', () => {
     itemSheet();
     invAddAs('Baseball bat', '');
-    ev("invSetSkill('gear','inventory','',S.char.blocks.gear.inventory" +
-       ".findIndex(function(x){return x.name==='Baseball bat'}),'Club');");
+    const at = ev("S.char.blocks.gear.inventory.findIndex(function(x){return x.name==='Baseball bat'})");
+    ev("invDetail('gear','inventory::" + at + "')");
+    const sel = ev("(function(){var s=[].slice.call(document.querySelectorAll('#blk-gear .inv-detail select'))" +
+      ".filter(function(x){return /[\"']skill[\"']/.test(x.getAttribute('onchange')||'')})[0];" +
+      "if(!s)return 'no works-as control in the panel';s.value='Club';" +
+      "s.dispatchEvent(new Event('change'));return ''})()");
+    if (sel) return sel;
     const bat = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory" +
                               ".filter(function(x){return x.name==='Baseball bat'})[0])"));
     if (bat.skill !== 'Club') return 'still ' + JSON.stringify(bat);
-    ev("invSetSkill('gear','inventory','',S.char.blocks.gear.inventory" +
-       ".findIndex(function(x){return x.name==='Baseball bat'}),'');");
+    ev("invSetField('gear','inventory',''," + at + ",'skill','')");
     return !JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory" +
       ".filter(function(x){return x.name==='Baseball bat'})[0])")).skill
       || 'could not be cleared again';

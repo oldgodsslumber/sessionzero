@@ -1033,26 +1033,11 @@ function invItemRow(b, c, item, where, idx, extra) {
   // them, folded away until asked for so the row stays readable on a phone.
   const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
   const rowKey = c.id + ':' + where + ':' + idx;
-  const openDetail = _invDetailOpen === rowKey;
+  const openDetail = _invDetailItem ? _invDetailItem === item : _invDetailOpen === rowKey;
   let detail = '';
   if (fields && fields.length) {
     detail = `<button class="btn btn-secondary btn-xs" title="What this is"
       onclick="invDetail('${esc(b.id)}','${esc(rowKey)}')">${openDetail ? '−' : '⋯'}</button>`;
-  }
-  // Change what an existing item works as, so a mis-added Baseball Bat can be
-  // made into a Club without deleting and retyping it.
-  const asFn = sysDerive(b.itemOptions);
-  let asPick = '';
-  if (asFn) {
-    let opts = [];
-    try { opts = asFn() || []; } catch (e) { opts = []; }
-    if (opts.length) {
-      asPick = `<select title="What this works as" style="flex:0 0 auto;font-size:11px;padding:2px 4px"
-        onchange="invSetSkill('${esc(b.id)}','${esc(c.id)}','${esc(where)}',${idx},this.value)">` +
-        `<option value="">—</option>` +
-        opts.map(o => `<option value="${esc(o.value)}"${o.value === (item.skill || '') ? ' selected' : ''}>${esc(o.value)}</option>`).join('') +
-        `</select>`;
-    }
   }
   const moves = (b.containers || []).filter(x => x.id !== c.id).map(x =>
     `<button class="btn btn-secondary btn-xs" title="Move to ${esc(x.label || x.id)}"
@@ -1083,8 +1068,10 @@ function invSlots(b, c, d) {
       <div class="inv-slot-h${full ? ' is-full' : ''}">
         ${esc(s.name)}<span class="inv-slot-n">${items.length}/${s.max || 1}</span></div>
       <div class="inv-slot-items">`;
-    if (!items.length) h += `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
-    items.forEach((it, i) => { h += invItemRow(b, c, it, s.id, i); });
+    if (!items.filter(Boolean).length) h += `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
+    // A hole in a slots container is not a thing to draw. One null here used to
+    // throw out of invItemRow and take the whole Gear block with it.
+    items.forEach((it, i) => { if (it) h += invItemRow(b, c, it, s.id, i); });
     h += `</div></div>`;
   });
   return h;
@@ -1111,7 +1098,7 @@ function invStack(b, c, d) {
     // at arm's length on the HUD keypad. Two playtesters found it independently.
     const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
     const rowKey = c.id + ':' + '' + ':' + i;
-    const openDetail = _invDetailOpen === rowKey;
+    const openDetail = _invDetailItem ? _invDetailItem === it : _invDetailOpen === rowKey;
     h += `<div class="inv-name">${it.icon ? iconHTML(it.icon, 15) + ' ' : ''}${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
       <div class="inv-ctl">
       <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
@@ -1133,8 +1120,8 @@ function invStack(b, c, d) {
 
 function invList(b, c, d) {
   const items = d[c.id] || [];
-  if (!items.length) return `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
-  return items.map((it, i) => invItemRow(b, c, it, '', i,
+  if (!items.filter(Boolean).length) return `<div style="font-size:11px;color:var(--muted);padding:2px 0">empty</div>`;
+  return items.map((it, i) => !it ? '' : invItemRow(b, c, it, '', i,
     `<button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
      <div style="min-width:26px;text-align:center;font-weight:700">${it.qty || 1}</div>
      <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},1)">+</button>`)).join('');
@@ -1234,6 +1221,19 @@ function invAdd(id, cid) {
   const name = (inp && inp.value || '').trim();
   if (!name) return;
   const c = _container(t.block, cid);
+  if (!c) return;
+  // A container this save has never used may simply be absent. invMove creates
+  // it; adding threw instead, and the throw was silent because the button has
+  // nowhere to report to.
+  if (!t.ctx.data[cid]) t.ctx.data[cid] = c.kind === 'slots' ? {} : [];
+  // Adding from the box leaves the caret in the box: you type, press Enter, and
+  // type the next one.
+  const keepFocus = !!inp && document.activeElement === inp;
+  const refocus = function () {
+    if (!keepFocus) return;
+    const again = document.getElementById('inv-add-' + id + '-' + cid);
+    if (again) again.focus();
+  };
   const sel = document.getElementById('inv-slot-' + id + '-' + cid);
   const slotId = sel ? sel.value : '';
   // What it works as: the player's pick, or an exact catalogue match on the
@@ -1243,7 +1243,12 @@ function invAdd(id, cid) {
   if (!works) {
     const look = sysDerive(t.block.lookup);
     const hit = look ? look(name) : null;
-    if (hit && hit.name && hit.name.toLowerCase() === name.toLowerCase()) works = hit.name;
+    // Only to something the editor can also SHOW. The lookup covers every Skill
+    // in the catalogue while the "works as" list is weapons, so typing "Cooking"
+    // used to attach a Skill the dropdown then rendered as "—" — an invisible
+    // value the player could not see, keep or clear.
+    if (hit && hit.name && hit.name.toLowerCase() === name.toLowerCase()
+        && invOffers(t.block, hit.name)) works = hit.name;
   }
 
   // A stack container holds one entry per NAME, counted up — "You may place up
@@ -1262,7 +1267,7 @@ function invAdd(id, cid) {
       }
       list[at].qty = (list[at].qty || 1) + 1;
       if (inp) inp.value = '';
-      save(); blockSyncAll(id);
+      save(); blockSyncAll(id, { force: true }); refocus();
       return;
     }
     // A new name needs a free slot of its own.
@@ -1270,9 +1275,13 @@ function invAdd(id, cid) {
       if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
       return;
     }
-    list.push(works ? { name, qty: 1, skill: works } : { name, qty: 1 });
+    // invPlace, not push: a stack is a keypad. Appending past the last slot put
+    // the item at index 10 of a ten-slot Hotlist, where nothing renders it —
+    // not the sheet, not the HUD, not print — while invRoom still counted it,
+    // so the visibly empty slot refused everything for ever after.
+    invPlace(list, works ? { name, qty: 1, skill: works } : { name, qty: 1 }, c.size || 10);
     if (inp) inp.value = '';
-    save(); blockSyncAll(id);
+    save(); blockSyncAll(id, { force: true }); refocus();
     return;
   }
 
@@ -1285,7 +1294,21 @@ function invAdd(id, cid) {
   else if (c.kind === 'stack') invPlace(t.ctx.data[cid], item, c.size || 10);
   else t.ctx.data[cid].push(item);
   if (inp) inp.value = '';
-  save(); blockSyncAll(id);
+  save(); blockSyncAll(id, { force: true }); refocus();
+}
+
+// Does the pack's "works as" list offer this name? Used to decide whether a
+// name typed into the add box may quietly link itself to a catalogue entry.
+function invOffers(block, name) {
+  const fn = sysDerive(block.itemOptions);
+  if (!fn) return false;
+  let opts = [];
+  try { opts = fn() || []; } catch (e) { return false; }
+  const want = String(name).toLowerCase();
+  return opts.some(function (o) {
+    const v = o && o.value !== undefined ? o.value : o;
+    return String(v).toLowerCase() === want;
+  });
 }
 function invRemove(id, cid, slotId, i) {
   const t = _inv(id); if (!t) return;
@@ -1293,7 +1316,7 @@ function invRemove(id, cid, slotId, i) {
   const arr = c.kind === 'slots' ? (t.ctx.data[cid] || {})[slotId] : t.ctx.data[cid];
   if (!arr) return;
   invVacate(arr, i, c.kind === 'stack');
-  save(); blockSyncAll(id);
+  save(); blockSyncAll(id, { force: true });
 }
 function invQty(id, cid, i, delta) {
   const t = _inv(id); if (!t) return;
@@ -1301,9 +1324,11 @@ function invQty(id, cid, i, delta) {
   const arr = t.ctx.data[cid];
   const it = Array.isArray(arr) ? arr[i] : null;
   if (!it) return;
-  const max = c.stackMax || 999;
+  // Only a container that declares a cap has one. The Hotlist's 999 was being
+  // applied to the Inventory, whose only stated limit is what you can lift.
+  const max = c.stackMax || Infinity;
   it.qty = Math.max(1, Math.min(max, (it.qty || 1) + delta));
-  save(); blockSyncAll(id);
+  save(); blockSyncAll(id, { force: true });
 }
 
 // Spend one. Unlike invQty this can reach empty: quantity clamps at 1 there
@@ -1324,7 +1349,7 @@ function invSpend(id, cid, i) {
                  item: JSON.parse(JSON.stringify(it)), emptied: qty <= 1 };
   if (qty <= 1) invVacate(arr, i, stack);
   else it.qty = qty - 1;
-  save(); blockSyncAll(id);
+  save(); blockSyncAll(id, { force: true });
   return undo;
 }
 
@@ -1336,17 +1361,42 @@ function invUnspend(u) {
   const arr = t.ctx.data[u.cid];
   if (!Array.isArray(arr)) return;
   if (!u.emptied && arr[u.index]) arr[u.index].qty = (arr[u.index].qty || 0) + 1;
-  else if (u.stack) arr[u.index] = u.item;
-  else arr.splice(u.index, 0, u.item);
-  save(); blockSyncAll(u.blockId);
+  else if (u.stack) {
+    // Only into the slot it left, and only while that slot is still empty.
+    // Restoring blind overwrote whatever had been put there since — the item
+    // was not moved anywhere, it was destroyed.
+    if (arr[u.index]) {
+      if (typeof flashSaveError === 'function') {
+        flashSaveError('Slot ' + (u.index + 1) + ' is not empty any more');
+      }
+      return;
+    }
+    arr[u.index] = u.item;
+  } else arr.splice(u.index, 0, u.item);
+  save(); blockSyncAll(u.blockId, { force: true });
 }
 // Move an item between containers, refusing when the destination is full.
 // Which gear slot an item belongs in. The shell cannot know a Club is held
 // rather than worn, so the pack decides; without an answer we fall back to the
 // first slot with room, which is what used to put weapons on your head.
+// Which item's detail panel is open — the item itself, not where it sits. A
+// positional key survived a reindex: delete the row above the open one and the
+// panel stayed open on what was now a different item, so the next field typed
+// landed on something the player had not opened.
 let _invDetailOpen = '';
+let _invDetailItem = null;
+function invDetailFind(id, rowKey) {
+  const t = _inv(id); if (!t) return null;
+  const bits = String(rowKey).split(':');
+  const c = _container(t.block, bits[0]); if (!c) return null;
+  const list = c.kind === 'slots' ? (t.ctx.data[bits[0]] || {})[bits[1]] : t.ctx.data[bits[0]];
+  return (list && list[Number(bits[2])]) || null;
+}
 function invDetail(id, rowKey) {
-  _invDetailOpen = _invDetailOpen === rowKey ? '' : rowKey;
+  const item = invDetailFind(id, rowKey);
+  const same = _invDetailOpen === rowKey && _invDetailItem === item;
+  _invDetailOpen = same ? '' : rowKey;
+  _invDetailItem = same ? null : item;
   blockRepaint(id);
   // The picker's preview and results can only be filled once its markup is in
   // the DOM, which is after the repaint above.
@@ -1438,14 +1488,31 @@ function invDetailHTML(b, c, item, where, idx, fields) {
   return h + '</div>';
 }
 
+// What a field's declared type says this string IS. Coercing by what the value
+// LOOKS like read a Note of "007" as the number 7, turned a typed space into 0,
+// and let a DR of "1e400" become Infinity, which JSON then saved as null.
+function fieldNamed(spec, key) {
+  const fn = sysDerive(spec);
+  let fields = [];
+  if (fn) { try { fields = fn() || []; } catch (e) { fields = []; } }
+  else if (Array.isArray(spec)) fields = spec;
+  return fields.filter(function (f) { return f && f.key === key; })[0] || null;
+}
+function fieldValue(f, value) {
+  if (!f || f.type !== 'number') return value;
+  const n = Number(value);
+  if (!isFinite(n)) return 0;
+  return (f.min !== undefined && n < f.min) ? f.min : n;
+}
+
 // Store a field WITHOUT repainting: this runs on every keystroke in a text box.
 function invSetField(id, cid, where, i, key, value) {
   const t = _inv(id); if (!t) return;
   const c = _container(t.block, cid); if (!c) return;
   const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
   const item = list && list[i]; if (!item) return;
-  const num = value !== '' && !isNaN(Number(value));
-  if (value === '') delete item[key]; else item[key] = num ? Number(value) : value;
+  if (value === '') delete item[key];
+  else item[key] = fieldValue(fieldNamed(t.block.itemFields, key), value);
   save();
   // This runs on every keystroke, so the block being typed into is NOT
   // repainted — that would take the field out from under the caret. Everything
@@ -1467,21 +1534,19 @@ function invAct(id, cid, where, i, actionId) {
   // every later slot up by one, so reading the tome in Slot 1 quietly moved the
   // Heal in Slot 4 to Slot 3 — on a keypad whose whole value is that Slot 4 is
   // always Slot 4.
-  if (res && res.remove) invVacate(list, i, invIsStack(t.block, cid));
-  save(); blockSyncAll(id);
+  //
+  // And it consumes ONE. Reading one book off a stack of three burned all three
+  // — invSpend has always counted down, and this did not.
+  if (res && res.remove) {
+    const qty = item.qty || 1;
+    if (qty > 1) item.qty = qty - 1;
+    else invVacate(list, i, invIsStack(t.block, cid));
+  }
+  save(); blockSyncAll(id, { force: true });
   if (res && res.message && typeof flashSaveError === 'function' && res.ok === false) flashSaveError(res.message);
   // Returned so a caller with a place to say what happened can say it. The
   // flash above is the fallback for the surfaces that have nowhere.
   return res || null;
-}
-
-function invSetSkill(id, cid, where, i, value) {
-  const t = _inv(id); if (!t) return;
-  const c = _container(t.block, cid); if (!c) return;
-  const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
-  const item = list && list[i]; if (!item) return;
-  if (value) item.skill = value; else delete item.skill;
-  save(); blockSyncAll(id);
 }
 
 // Redraw every block except the ones the player is typing into.
@@ -1494,14 +1559,23 @@ function invSetSkill(id, cid, where, i, value) {
 // the sheet instead.
 //
 // The caret guard is the reason this is safe to call from an oninput handler.
-function blockSyncAll(changedId) {
+// `opts.force` redraws even the block holding the caret. The guard below exists
+// for KEYSTROKES — an oninput handler that repaints its own field takes the box
+// out from under the typist — and it was applied to discrete actions too, which
+// was wrong in a way that made the Gear block look broken: the Add box lives
+// INSIDE that block, so adding an item with Enter (or with any Gear button,
+// which a browser focuses on click) stored the item and drew nothing. The
+// player then adds it again. Worse, the stale rows keep stale indices, so the
+// next ✕ deletes a different item than the one under the pointer.
+function blockSyncAll(changedId, opts) {
+  const force = !!(opts && opts.force);
   const blocks = (SYS && SYS.schema && SYS.schema.blocks) || [];
   blocks.forEach(function (b) {
-    if (blockHoldsFocus(b.id)) return;
+    if (!force && blockHoldsFocus(b.id)) return;
     blockRepaint(b.id);
   });
   // The one being edited is redrawn last, and only if it is not being typed in.
-  if (changedId && !blockHoldsFocus(changedId)) blockRepaint(changedId);
+  if (changedId && (force || !blockHoldsFocus(changedId))) blockRepaint(changedId);
 }
 
 function invSlotFor(block, container, item) {
@@ -1543,15 +1617,30 @@ function invMove(id, fromId, toId, slotId, i, wantSlot, wantIndex) {
     const s = named || (to.slots || []).find(fits);
     if (!s) { if (typeof flashSaveError === 'function') flashSaveError(voice('noFreeSlot','No free slot')); return; }
     destSlot = s.id;
-  } else if (invRoom(t.block, t.ctx.data, toId, '') === 0) {
+  }
+  // A stack holds one entry per name, counted up — the same rule invAdd follows.
+  // Moving a second Healing Potion in took a second of the ten slots instead of
+  // making the first read x2, so the two routes to the Hotlist disagreed.
+  let mergeAt = -1;
+  if (to.kind === 'stack') {
+    const arr = t.ctx.data[toId] || [];
+    const want = String(item.name || '').toLowerCase();
+    mergeAt = arr.findIndex(function (x) { return x && String(x.name).toLowerCase() === want; });
+    const max = to.stackMax || 999;
+    if (mergeAt >= 0 && (arr[mergeAt].qty || 1) + (item.qty || 1) > max) mergeAt = -1;
+  }
+  if (to.kind !== 'slots' && mergeAt < 0 && invRoom(t.block, t.ctx.data, toId, '') === 0) {
     if (typeof flashSaveError === 'function') flashSaveError((to.label || to.id) + ' is full');
     return;
   }
   invVacate(src, i, from.kind === 'stack');
   if (to.kind === 'slots') (t.ctx.data[toId][destSlot] = t.ctx.data[toId][destSlot] || []).push(item);
-  else if (to.kind === 'stack') invPlace(t.ctx.data[toId], item, to.size || 10, wantIndex);
-  else t.ctx.data[toId].push(item);
-  save(); blockSyncAll(id);
+  else if (to.kind === 'stack') {
+    const arr = t.ctx.data[toId];
+    if (mergeAt >= 0) arr[mergeAt].qty = (arr[mergeAt].qty || 1) + (item.qty || 1);
+    else invPlace(arr, item, to.size || 10, wantIndex);
+  } else t.ctx.data[toId].push(item);
+  save(); blockSyncAll(id, { force: true });
 }
 function invCounter(id, cid, delta) {
   const t = _inv(id); if (!t) return;

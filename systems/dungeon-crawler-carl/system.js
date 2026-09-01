@@ -439,7 +439,9 @@ registerSystem({
     gearItemReadout: (item, char) => {
       if (!item) return '';
       const out = [];
-      if (item.dr) out.push('+' + item.dr + ' DR');
+      // Only when it is a number: a DR typed as "abc" printed "+abc DR", which
+      // reads as armour and contributes nothing.
+      if (Number(item.dr)) out.push((Number(item.dr) > 0 ? '+' : '') + Number(item.dr) + ' DR');
       if (item.resist) out.push(item.resist + ' Resistance');
       if (item.casts) {
         // "A crawler can't attempt a Spell without Ranks in the Spell (unless
@@ -522,7 +524,7 @@ registerSystem({
       // you actually read on the Hotlist keypad mid-fight.
       { key: 'icon',    label: 'Icon',      type: 'icon' },
       { key: 'skill',   label: 'Works as',  options: () => DCC_SKILLS.filter(x => x.kind === 'attack').map(x => x.name) },
-      { key: 'dr',      label: 'Armour DR', type: 'number', hint: '0' },
+      { key: 'dr',      label: 'Armour DR', type: 'number', min: 0, hint: '0' },
       { key: 'resist',  label: 'Resists',   hint: 'e.g. Fire' },
       { key: 'casts',   label: 'Scroll of', options: () => DCC_SPELLS.map(x => x.name) },
       { key: 'rank',    label: 'at Rank',   type: 'number', hint: '1' },
@@ -723,7 +725,12 @@ registerSystem({
     },
 
     gearSlotFor: (item) => {
-      const cat = item && item.name ? dccSkillByName(item.name) : null;
+      // What it WORKS AS decides, not what it is called. Asking the name alone
+      // sent a Club renamed "Tire Iron" to the first slot with room, which is
+      // Head — while the HUD's Draw put the same weapon in your hands, so the
+      // two surfaces disagreed about the same item.
+      const name = (typeof dccItemSkillName === 'function') ? dccItemSkillName(item) : (item && item.name);
+      const cat = name ? dccSkillByName(name) : null;
       if (cat && /Weapon|Hand-To-Hand/i.test(cat.category || '')) return 'hands';
       return '';
     },
