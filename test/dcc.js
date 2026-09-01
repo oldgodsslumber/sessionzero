@@ -4168,14 +4168,120 @@ function boot(entry) {
   });
 
   // Three different taps, and only the pack knows which is which.
-  check('[hud] a weapon in the Hotlist rolls without being spent', () => {
+  //
+  // A weapon used to roll from the Hotlist. That contradicted the Attacks list,
+  // which refuses to offer a weapon you are not holding — you cannot shoot a gun
+  // out of your own backpack, drawing it is an Action — so one tap now draws it
+  // and the roll is the card's, once it is in your hand.
+  check('[hud] tapping a stowed weapon draws it into your hand', () => {
     hudSheet([{ name: 'Club', rank: 3, stat: 'STR', checkType: 'evade' }], [],
              [{ name: 'Club', skill: 'Club', qty: 1 }]);
     ev('S.dice=null;dccHudTap(0);');
-    const d = ev('S.dice');
-    if (!d || d.skill !== 'Club') return 'tapping it rolled ' + JSON.stringify(d && d.skill);
-    return ev('S.char.blocks.gear.hotlist.length') === 1
-      || 'rolling a weapon consumed it';
+    const hands = ev("JSON.stringify((S.char.blocks.gear.equipped||{}).hands||[])");
+    if (!/Club/.test(hands)) return 'after the tap your hands hold ' + hands;
+    if (ev('S.char.blocks.gear.hotlist[0]')) return 'it is in your hand AND still in the Hotlist';
+    return ev("!S.dice || !S.dice.skill") || 'drawing it also rolled it';
+  });
+
+  // The gun a crawler named after the Skill, with no "Works as" filled in. It is
+  // the commonest way one is added and it used to be invisible to every rule
+  // that asked what an item works as.
+  check('[hud] a weapon named after its Skill is drawn and shows as in hand', () => {
+    hudSheet([{ name: 'Handgun', rank: 3, stat: 'DEX', checkType: 'evade' }], [],
+             [{ name: 'Handgun', qty: 1 }]);
+    ev('dccHudTap(0)');
+    const hands = ev("JSON.stringify((S.char.blocks.gear.equipped||{}).hands||[])");
+    if (!/Handgun/.test(hands)) return 'it did not reach your hands: ' + hands;
+    ev('renderHUD()');
+    return ev("/in hand/.test(document.getElementById('hud-content').textContent)")
+      || 'the Attacks list does not know it is being held';
+  });
+
+  check('[hud] a drawn weapon can be put back, in the slot it left', () => {
+    hudSheet([], [], [{ name: 'Rope', qty: 1 }, { name: 'Club', skill: 'Club', qty: 1 }]);
+    ev('dccHudTap(1)');
+    if (!ev("!!document.querySelector('#hud-content .hot-undo button')")) return 'no way back was offered';
+    ev("document.querySelector('#hud-content .hot-undo button').click()");
+    return ev("(S.char.blocks.gear.hotlist[1]||{}).name") === 'Club'
+      || 'it came back to ' + ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x&&x.name}))");
+  });
+
+  // Falling through to "the first slot with room" is how a Handgun ends up on
+  // your head. A named destination that is full is a refusal.
+  check('[hud] drawing with both hands full refuses rather than wearing it', () => {
+    hudSheet([], [], [{ name: 'Club', skill: 'Club', qty: 1 }]);
+    ev("S.char.blocks.gear.equipped={head:[],torso:[],arms:[],legs:[],feet:[]," +
+       "hands:[{name:'Axe'},{name:'Shield'},{name:'Gloves'}],accessories:[]};save();renderHUD();");
+    ev('dccHudTap(0)');
+    if (ev("JSON.stringify(S.char.blocks.gear.equipped.head)") !== '[]') return 'it went on your head';
+    return ev("(S.char.blocks.gear.hotlist[0]||{}).name") === 'Club'
+      || 'it left the Hotlist without going anywhere';
+  });
+
+  // The tap repaints the HUD, and the repaint rebuilds the roller beside it. Roll
+  // first and the answer is wiped before it can be read, which is what "I tapped
+  // it and nothing happened" was.
+  check('[hud] a tap that rolls leaves the answer on screen', () => {
+    hudSheet([], [{ name: 'Heal', rank: 1, stat: 'INT' }], [{ name: 'Heal', qty: 1 }]);
+    ev('dccHudTap(0)');
+    const shown = ev("[].slice.call(document.querySelectorAll('[id$=-result]'))" +
+                     ".map(function(e){return e.textContent}).join('')");
+    return /Heal/.test(shown) || 'every roller reads ' + JSON.stringify(shown).slice(0, 60);
+  });
+
+  // A tome in the Hotlist used to be a dead key: the tap returned null "leave it
+  // to the detail panel", and the panel behind a long-press did not offer to
+  // read it either — so on a phone there was no way to read a book you had put
+  // within reach.
+  check('[hud] tapping a tome reads it and the Spell arrives', () => {
+    hudSheet([], [], [{ name: 'Tome of Torch', teaches: 'Torch', qty: 1 }]);
+    ev('dccHudTap(0)');
+    const known = ev("JSON.stringify(((S.char.blocks.spells||{}).skills||[]).map(function(x){return x.name}))");
+    if (!/Torch/.test(known)) return 'after reading it you know ' + known;
+    if (ev('S.char.blocks.gear.hotlist[0]')) return 'the tome survived being read';
+    return ev("/Torch/.test((document.getElementById('hot-undo')||{textContent:''}).textContent)")
+      || 'nothing on screen said what happened';
+  });
+
+  check('[hud] a tome you cannot use says why, and stays a tome', () => {
+    hudSheet([], [{ name: 'Torch', rank: 1, stat: 'INT' }],
+             [{ name: 'Tome of Torch', teaches: 'Torch', qty: 1 }]);
+    ev('dccHudTap(0)');
+    if (!ev("(S.char.blocks.gear.hotlist[0]||{}).teaches")) return 'it was consumed anyway';
+    return ev("/already know/.test((document.getElementById('hot-undo')||{textContent:''}).textContent)")
+      || 'the refusal was silent';
+  });
+
+  // The keypad's value is that Slot 4 is always Slot 4. invAct() spliced, so
+  // reading the tome in Slot 1 moved everything below it up one.
+  check('[hud] reading a tome leaves the other slots where they were', () => {
+    hudSheet([], [], [{ name: 'Tome of Torch', teaches: 'Torch', qty: 1 },
+                      { name: 'Rope', qty: 1 }, { name: 'Standard Health Potion', qty: 2 }]);
+    ev('dccHudTap(0)');
+    return ev("(S.char.blocks.gear.hotlist[2]||{}).name") === 'Standard Health Potion'
+      || 'the Hotlist reads ' + ev("JSON.stringify(S.char.blocks.gear.hotlist.map(function(x){return x&&x.name}))");
+  });
+
+  check('[hud] a tome read by mistake can be unread', () => {
+    hudSheet([], [], [{ name: 'Tome of Torch', teaches: 'Torch', qty: 1 }]);
+    ev('dccHudTap(0)');
+    if (!ev("!!document.querySelector('#hud-content .hot-undo button')")) return 'no way back was offered';
+    ev("document.querySelector('#hud-content .hot-undo button').click()");
+    const known = ev("JSON.stringify(((S.char.blocks.spells||{}).skills||[]).map(function(x){return x.name}))");
+    if (/Torch/.test(known)) return 'the Spell stayed after undo: ' + known;
+    return ev("(S.char.blocks.gear.hotlist[0]||{}).name") === 'Tome of Torch'
+      || 'the tome did not come back to its slot';
+  });
+
+  check('[hud] the long-press panel offers what the item can do', () => {
+    hudSheet([], [], [{ name: 'Tome of Torch', teaches: 'Torch', qty: 1 }]);
+    ev("dccHudSlotDetail(0,{preventDefault:function(){},currentTarget:document.querySelector('.hot-slot')})");
+    const pop = ev("(document.querySelector('.roll-pop')||{textContent:''}).textContent");
+    if (!/Read it/.test(pop)) return 'the panel reads ' + JSON.stringify(pop).slice(0, 80);
+    ev("[].slice.call(document.querySelectorAll('.roll-pop button'))" +
+       ".filter(function(b){return /Read it/.test(b.textContent)})[0].click()");
+    return ev("/Torch/.test(JSON.stringify(((S.char.blocks.spells||{}).skills||[]).map(function(x){return x.name})))")
+      || 'the panel button did nothing';
   });
 
   check('[hud] a scroll is cast and spent in one tap', () => {

@@ -125,8 +125,11 @@ function dccHudTapFor(it, char) {
   try { return fn(it, char) || null; } catch (e) { return null; }
 }
 
-// The tap. Roll first so the result is on screen, then spend, then offer the way
-// back — a button that takes a potion with no ± to correct it needs an undo.
+// The tap. Change the world first, redraw, and roll LAST — because renderHUD()
+// rebuilds the roller beside it, so a result drawn before the repaint is wiped
+// by it. That is exactly what "I tapped my Handgun and nothing happened" was:
+// the roll fired, and then the redraw erased the answer before it was read. The
+// roll itself does not depend on the order — it reads Ranks, not the slot.
 function dccHudTap(i) {
   const char = S.char;
   const items = ((char.blocks && char.blocks.gear) || {}).hotlist || [];
@@ -134,11 +137,94 @@ function dccHudTap(i) {
   if (!it) return;
   const tap = dccHudTapFor(it, char);
   if (!tap) return;
-  if (tap.roll) dccHudRoll(tap.roll);
   let undo = null;
+  if (tap.equip) { dccHudDraw(i, tap.equip); return; }
+  if (tap.act) { dccHudAct(i, tap.act); return; }
   if (tap.spend) undo = invSpend('gear', 'hotlist', i);
   renderHUD();
+  if (tap.roll) dccHudRoll(tap.roll);
   if (undo) dccHudUndo(undo, it.name);
+}
+
+// Draw a weapon out of the Hotlist and into your hand. The item moves, because
+// a thing is in one place: the Hotlist is reach, a Gear Slot is holding it. The
+// slot it leaves behind is the surprise in that, so the note under the keypad
+// says what happened and offers the way back — the same shape the spend undo
+// has, for the same reason.
+function dccHudDraw(i, slotId) {
+  const it = (((S.char.blocks && S.char.blocks.gear) || {}).hotlist || [])[i];
+  if (!it) return;
+  const name = it.name;
+  invMove('gear', 'hotlist', 'equipped', '', i, slotId || 'hands');
+  const held = ((S.char.blocks.gear.equipped || {})[slotId || 'hands'] || []);
+  const at = held.indexOf(it);
+  renderHUD();
+  if (at < 0) return;                       // the move was refused; it said why
+  const el = document.getElementById('hot-undo');
+  if (!el) return;
+  el.innerHTML = '<div class="hot-undo">Drew ' + esc(name) +
+    ' — it is in your hands now, and Slot ' + (i + 1) + ' is empty' +
+    ' <button class="btn btn-secondary btn-xs" onclick="dccHudPutBack(' +
+    dccHudArg(slotId || 'hands') + ',' + at + ',' + i + ')">Put back</button></div>';
+}
+
+// Back into the Hotlist, in the slot it came from, so undoing a mis-tap leaves
+// the keypad the shape it was — which is the whole point of a keypad.
+function dccHudPutBack(slotId, at, want) {
+  invMove('gear', 'equipped', 'hotlist', slotId, at, '', want);
+  renderHUD();
+}
+
+// Do the thing the item can do — reading a tome, so far. The shell runs the
+// pack's own item action, which is the same one the sheet's detail panel calls,
+// so a tome read here and a tome read there cannot drift apart.
+//
+// It says what happened either way. A refusal ("You already know Torch") is an
+// answer; silence is what a dead button looks like.
+function dccHudAct(i, actionId) {
+  const list = ((S.char.blocks && S.char.blocks.gear) || {}).hotlist || [];
+  const it = list[i];
+  if (!it) return;
+  const before = JSON.parse(JSON.stringify(it));
+  const res = invAct('gear', 'hotlist', '', i, actionId);
+  renderHUD();
+  const el = document.getElementById('hot-undo');
+  if (!el) return;
+  if (!res || res.ok === false) {
+    el.innerHTML = '<div class="hot-undo">' +
+      esc((res && res.message) || ('Nothing happened when you used ' + before.name)) + '</div>';
+    return;
+  }
+  const learned = before.teaches || '';
+  el.innerHTML = '<div class="hot-undo">Read ' + esc(before.name) +
+    (learned ? ' — ' + esc(learned) + ' is in your ' + esc(lexL('spell')) + 's now' : '') +
+    (res.remove ? ' <button class="btn btn-secondary btn-xs" onclick="dccHudUnread(' +
+      dccHudArg(learned) + ',' + i + ',' + dccHudArg(JSON.stringify(before)) +
+      ')">Undo</button>' : '') +
+    '</div>';
+}
+
+// A mis-tap on a tome costs you the tome, so it can be taken back: the Spell it
+// taught comes off the list and the book returns to the slot it was read from.
+// Only a Spell this action added is removed — `source` says a tome taught it, so
+// one you already had by another route is left alone.
+function dccHudUnread(spellName, at, itemJSON) {
+  const sp = (S.char.blocks && S.char.blocks.spells) || null;
+  if (sp && spellName) {
+    const k = (sp.skills || []).findIndex(function (x) {
+      return x && x.source === 'tome' && String(x.name).toLowerCase() === String(spellName).toLowerCase();
+    });
+    if (k >= 0) sp.skills.splice(k, 1);
+  }
+  let item = null;
+  try { item = JSON.parse(itemJSON); } catch (e) { item = null; }
+  if (item) {
+    const list = S.char.blocks.gear.hotlist = S.char.blocks.gear.hotlist || [];
+    invPlace(list, item, DCC_HOTLIST_SLOTS, at);
+  }
+  save();
+  if (typeof blockSyncAll === 'function') blockSyncAll('gear');
+  renderHUD();
 }
 
 let _hudUndo = null;
@@ -167,10 +253,20 @@ function dccHudSlotDetail(i, ev) {
   const b = sysBlock('gear');
   const line = b ? invReadout(b, it, char) : '';
   const tap = dccHudTapFor(it, char);
+  // Whatever the pack says this item can DO goes here as well, because the panel
+  // behind a long-press is the only detail view the HUD has: a tome that could
+  // only be read from the sheet was, on a phone, a book you could not open.
+  const actFn = sysDerive(b && b.itemActions);
+  let acts = [];
+  if (actFn) { try { acts = actFn(it, char) || []; } catch (e) { acts = []; } }
   popOpen('<div class="pg-title" style="font-size:15px;margin-bottom:4px">' + esc(it.name) + '</div>' +
     (line ? '<div class="sk-effect">' + esc(line) + '</div>' : '') +
     '<div style="font-size:11px;color:var(--muted);margin:6px 0">Slot ' + (i + 1) +
     ' · ' + (it.qty || 1) + ' carried' + (tap ? ' · tap to ' + esc(tap.label) : '') + '</div>' +
+    acts.map(function (a) {
+      return '<button class="btn btn-primary btn-xs" style="margin-right:4px" onclick="popClose();dccHudAct(' +
+        i + ',' + dccHudArg(a.id) + ')">' + esc(a.label) + '</button>';
+    }).join('') +
     '<button class="btn btn-danger btn-xs" onclick="dccHudSlotClear(' + i + ')">Remove from Hotlist</button>',
     ev && ev.currentTarget);
   return false;
@@ -205,7 +301,10 @@ function dccHeldWeapons(char) {
       Object.keys(held).forEach(function (sl) {
         (held[sl] || []).forEach(function (it) {
           if (!it) return;
-          const name = it.skill || it.grantsSkill;
+          // Named rather than linked counts too: a crawler who picked "Handgun"
+          // out of the catalogue and put it in their hand was holding something
+          // the Attacks list could not see, so the card never said "in hand".
+          const name = dccItemSkillName(it);
           if (!name) return;
           const cat = dccSkillByName(name);
           if (cat && cat.kind !== 'attack') return;

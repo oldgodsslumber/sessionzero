@@ -41,6 +41,39 @@ function dccHotlistKnown(char, name) {
   return hit;
 }
 
+// What Skill an item works as. An explicit "Works as" wins; failing that the
+// item's own name is matched against the catalogue, because a gun a crawler
+// simply named "Handgun" is a Handgun. That is the rule the attack icons
+// already follow — an explicit link beats a name, but a name still connects —
+// and it is what makes a weapon added straight from the catalogue usable
+// without the player also filling in a field they have no reason to know about.
+function dccItemSkillName(item) {
+  if (!item) return '';
+  const explicit = item.skill || item.grantsSkill;
+  if (explicit) return explicit;
+  const cat = item.name ? dccSkillByName(item.name) : null;
+  return cat ? cat.name : '';
+}
+
+// ...and the same answer, but only when the Skill is one you must be holding
+// something to use. dccNeedsWeapon() owns that rule; this asks it rather than
+// carrying a second copy of the category test.
+function dccItemWeaponSkill(item) {
+  const name = dccItemSkillName(item);
+  const cat = name ? dccSkillByName(name) : null;
+  return (cat && typeof dccNeedsWeapon === 'function' && dccNeedsWeapon(cat)) ? cat.name : '';
+}
+
+// Is this exact item in a Gear Slot right now? Identity, not name: two Clubs
+// are two Clubs, and only the one you drew is in your hand.
+function dccItemInHand(item, char) {
+  const eq = char && char.blocks && char.blocks.gear && char.blocks.gear.equipped;
+  if (!eq || !item) return false;
+  return Object.keys(eq).some(function (sl) {
+    return (eq[sl] || []).some(function (x) { return x === item; });
+  });
+}
+
 // One d20, with Advantage (+1) / Disadvantage (-1) / neither (0).
 function dccRollD20(adv) {
   const d = () => 1 + Math.floor(Math.random() * 20);
@@ -484,15 +517,30 @@ registerSystem({
       if (!item) return null;
       // A scroll casts the Spell written on it and is consumed doing so.
       if (item.casts) return { roll: item.casts, spend: true, label: 'Cast ' + item.casts };
-      // A weapon or tool works as a Skill. Rolling it costs you nothing.
+      // A weapon you are not holding is not an attack you can make: the Attacks
+      // list already refuses to offer one, and the Hotlist tap must not quietly
+      // disagree with it by rolling a gun out of your backpack. Drawing it is
+      // the Action the Hotlist is for, so that is what one tap does; the next
+      // tap, with the thing in your hand, rolls it.
+      const wpn = dccItemWeaponSkill(item);
+      if (wpn && !dccItemInHand(item, char)) {
+        return { equip: 'hands', roll: '', spend: false, label: 'Draw ' + (item.name || wpn) };
+      }
+      if (wpn) return { roll: wpn, spend: false, label: 'Roll ' + wpn };
+      // A tool works as a Skill in the same way. Rolling it costs you nothing.
       if (item.skill) return { roll: item.skill, spend: false, label: 'Roll ' + item.skill };
       // A Spell or Skill you know, parked in the Hotlist so it is reachable
       // under pressure. Rolling it does not consume the slot.
       const known = dccHotlistKnown(char, item.name);
       if (known) return { roll: known, spend: false, label: 'Roll ' + known };
-      // A tome is read, which is an action rather than a tap — leave it to the
-      // detail panel, where it says what it will teach you first.
-      if (item.teaches) return null;
+      // A tome is read, and reading it is exactly the kind of thing the Hotlist
+      // is for. It used to return null here — "leave it to the detail panel" —
+      // which made the key inert: tapping the tome you had put within reach did
+      // nothing, and the panel behind a long-press did not offer to read it
+      // either, so on a phone there was no way to read it at all.
+      if (item.teaches) {
+        return { act: 'learn', roll: '', spend: false, label: 'Read it — learn ' + item.teaches };
+      }
       // Everything else that stacks is a consumable: potions, rations, ammo.
       return { roll: '', spend: true, label: 'Use ' + item.name };
     },

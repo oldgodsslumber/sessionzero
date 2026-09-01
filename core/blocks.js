@@ -1073,7 +1073,11 @@ function invVacate(arr, i, isStack) {
   if (!Array.isArray(arr)) return;
   if (isStack) arr[i] = null; else arr.splice(i, 1);
 }
-function invPlace(arr, item, size) {
+// `at` asks for one particular slot number — what a keypad needs, where the
+// point of Slot 4 is that it is always Slot 4. It is a preference, not a
+// demand: an occupied slot falls through to the first one with room.
+function invPlace(arr, item, size, at) {
+  if (at != null && at >= 0 && at < size && !arr[at]) { arr[at] = item; return at; }
   for (let k = 0; k < size; k++) {
     if (!arr[k]) { arr[k] = item; return k; }
   }
@@ -1279,12 +1283,19 @@ function invAct(id, cid, where, i, actionId) {
   const list = c.kind === 'slots' ? (t.ctx.data[cid] || {})[where] : t.ctx.data[cid];
   const item = list && list[i]; if (!item) return;
   const fn = sysDerive(t.block.itemAct);
-  if (!fn) return;
+  if (!fn) return null;
   let res;
   try { res = fn(actionId, item, S.char); } catch (e) { res = { ok: false, message: e.message }; }
-  if (res && res.remove) list.splice(i, 1);
+  // A stack keeps its slot numbers when something leaves it. Splicing shifted
+  // every later slot up by one, so reading the tome in Slot 1 quietly moved the
+  // Heal in Slot 4 to Slot 3 — on a keypad whose whole value is that Slot 4 is
+  // always Slot 4.
+  if (res && res.remove) invVacate(list, i, invIsStack(t.block, cid));
   save(); blockSyncAll(id);
   if (res && res.message && typeof flashSaveError === 'function' && res.ok === false) flashSaveError(res.message);
+  // Returned so a caller with a place to say what happened can say it. The
+  // flash above is the fallback for the surfaces that have nowhere.
+  return res || null;
 }
 
 function invSetSkill(id, cid, where, i, value) {
@@ -1322,13 +1333,19 @@ function invSlotFor(block, container, item) {
   try { return fn(item, container) || ''; } catch (e) { return ''; }
 }
 
-function invMove(id, fromId, toId, slotId, i, wantSlot) {
+function invMove(id, fromId, toId, slotId, i, wantSlot, wantIndex) {
   const t = _inv(id); if (!t) return;
   const from = _container(t.block, fromId), to = _container(t.block, toId);
   if (!from || !to) return;
   const src = from.kind === 'slots' ? (t.ctx.data[fromId] || {})[slotId] : t.ctx.data[fromId];
   const item = src && src[i];
   if (!item) return;
+  // A container this save has never put anything in can simply be absent — a
+  // character older than the container, or a pack that has just added one.
+  // invRoom() reads it defensively and reports room, so the move gets all the
+  // way here and then threw on the write. Create it in the shape its kind
+  // implies instead.
+  if (!t.ctx.data[toId]) t.ctx.data[toId] = to.kind === 'slots' ? {} : [];
   // A slots destination needs a target slot. Taking the first one with room put
   // a Club on your head, because Head is simply the first slot in the list.
   // Ask the caller, then the pack, then fall back.
@@ -1336,8 +1353,17 @@ function invMove(id, fromId, toId, slotId, i, wantSlot) {
   if (to.kind === 'slots') {
     const want = wantSlot || invSlotFor(t.block, to, item);
     const fits = x => invRoom(t.block, t.ctx.data, toId, x.id) > 0;
-    const s = (want && (to.slots || []).find(x => x.id === want && fits(x)))
-           || (to.slots || []).find(fits);
+    const named = want ? (to.slots || []).find(x => x.id === want) : null;
+    // A named destination is a decision — the pack's (a weapon goes in your
+    // hands) or the player's (they dropped it there). A full one is a refusal,
+    // not an invitation to find somewhere else: falling through to "the first
+    // slot with room" is how drawing a Handgun with both hands full would put
+    // it on the crawler's head.
+    if (named && !fits(named)) {
+      if (typeof flashSaveError === 'function') flashSaveError((named.name || named.id) + ' is full');
+      return;
+    }
+    const s = named || (to.slots || []).find(fits);
     if (!s) { if (typeof flashSaveError === 'function') flashSaveError(voice('noFreeSlot','No free slot')); return; }
     destSlot = s.id;
   } else if (invRoom(t.block, t.ctx.data, toId, '') === 0) {
@@ -1346,7 +1372,7 @@ function invMove(id, fromId, toId, slotId, i, wantSlot) {
   }
   invVacate(src, i, from.kind === 'stack');
   if (to.kind === 'slots') (t.ctx.data[toId][destSlot] = t.ctx.data[toId][destSlot] || []).push(item);
-  else if (to.kind === 'stack') invPlace(t.ctx.data[toId], item, to.size || 10);
+  else if (to.kind === 'stack') invPlace(t.ctx.data[toId], item, to.size || 10, wantIndex);
   else t.ctx.data[toId].push(item);
   save(); blockSyncAll(id);
 }
