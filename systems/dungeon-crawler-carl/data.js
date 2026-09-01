@@ -126,6 +126,17 @@ const DCC_CHECK_KINDS = [
   { id: 'stat',      name: 'Stat Check', hint: '10 + Floor — resisting an effect, no Skill Ranks added' },
 ];
 
+// How a Skill or Spell is checked, as the catalogue records it. Separate from
+// the difficulty kinds above: this says what you are rolling AGAINST, and it is
+// the vocabulary a player picks from when describing a Skill the book has not
+// got.
+const DCC_SKILL_CHECK_TYPES = [
+  { value: 'evade',     label: 'vs Evade (an attack)' },
+  { value: 'unopposed', label: 'Unopposed' },
+  { value: 'opposed',   label: 'Opposed' },
+  { value: 'passive',   label: 'Passive — never rolled' },
+];
+
 // ─── the Health Bar (pp. 93–94) ─────────────────────────────────────────────
 // Damage is NOT subtracted. Walk the unmarked slots consuming one slot per
 // `slotValue` of damage; the remainder that cannot fill a whole slot is lost.

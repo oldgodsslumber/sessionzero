@@ -3692,6 +3692,64 @@ function boot(entry) {
     return ev("document.getElementById('blk-mana').getAttribute('data-probe')") === '1';
   });
 
+  // ── describing a Spell the book has not got ─────────────────────────────
+  // The sheet could describe a piece of gear in detail and could not describe a
+  // Spell at all: an entry off the catalogue was a name and a number, with no
+  // Mana cost, no damage and no text, on the sheet, in the HUD and in print.
+  // Table 45 says a Spell is something you can CRAFT, so this is not an exotic
+  // case; and the shipped catalogue was read out of a PDF, so correcting one of
+  // its own entries matters too.
+  const spellSheet = () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};" +
+       "dccFinishCreation(S.char);renderHero();");
+  };
+  // The ⋯ panel is a toggle, and it remembers which row is open between checks —
+  // so ask for it from a known-closed state rather than flipping whatever the
+  // previous check left behind.
+
+  check('[spell] a Spell entry can be described, the way an item can', () => {
+    spellSheet();
+    const fields = ev("JSON.stringify(entryFieldsOf(sysBlock('spells')).map(function(f){return f.key}))");
+    return (/mana/.test(fields) && /effect/.test(fields) && /baseDamage/.test(fields))
+      || 'the Spell block declares no fields: ' + fields;
+  });
+
+  check('[spell] an invented Spell carries its own Mana, damage and text', () => {
+    spellSheet();
+    ev("S.char.blocks.spells.skills.push({name:'Wormfinger',rank:2,stat:'INT',source:'custom',custom:true});");
+    const i = ev("S.char.blocks.spells.skills.length") - 1;
+    ev("skillSetField('spells'," + i + ",'mana',7);" +
+       "skillSetField('spells'," + i + ",'baseDamage','1d6 + INT Necrotic');" +
+       "skillSetField('spells'," + i + ",'effect','Your finger becomes a worm.')");
+    const line = ev("skillInfo(sysBlock('spells'),S.char.blocks.spells.skills[" + i + "])");
+    if (!/7 Mana/.test(line)) return 'no Mana in the readout: ' + JSON.stringify(line);
+    if (!/1d6 \+ INT Necrotic/.test(line)) return 'no damage: ' + JSON.stringify(line);
+    return /worm/.test(line) || 'no effect text: ' + JSON.stringify(line);
+  });
+
+  check('[spell] what you write beats what the book says', () => {
+    spellSheet();
+    const i = ev("S.char.blocks.spells.skills.findIndex(function(x){return x.name==='Heal'})");
+    if (i < 0) return 'the starting crawler no longer knows Heal';
+    ev("skillSetField('spells'," + i + ",'mana',99)");
+    const facts = ev("JSON.stringify(skillFacts(sysBlock('spells'),S.char.blocks.spells.skills[" + i + "]))");
+    if (!/"mana":99/.test(facts)) return 'the book still wins: ' + facts;
+    // and clearing the field hands it back to the catalogue rather than to blank
+    ev("skillSetField('spells'," + i + ",'mana','')");
+    return /"mana":2/.test(ev("JSON.stringify(skillFacts(sysBlock('spells'),S.char.blocks.spells.skills[" + i + "]))"))
+      || 'clearing the field did not fall back to the book';
+  });
+
+  check('[spell] an invented Spell gets its Mana button on the HUD', () => {
+    spellSheet();
+    ev("S.char.blocks.spells.skills.push({name:'Wormfinger',rank:2,stat:'INT',source:'custom',custom:true});");
+    const i = ev("S.char.blocks.spells.skills.length") - 1;
+    ev("skillSetField('spells'," + i + ",'mana',7);showTab('hud');renderHUD();");
+    return ev("/Spend 7 Mana/.test(document.getElementById('hud-content').textContent)")
+      || 'the HUD card still has no way to spend what it costs';
+  });
+
+
   // ── every shared tab must survive a pack with none of Fate's fields ──────
   // The map crashed here first: heroMarker() read S.char.costumedName directly.
   check('[tabs] all nine tabs render under a non-Fate pack', () => {

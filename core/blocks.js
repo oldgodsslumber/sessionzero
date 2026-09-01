@@ -500,6 +500,99 @@ function rollRowBtn(ref, title) {
 
 // Give a Skill an icon. Skills have no detail panel to put a field in, so the
 // popover IS the affordance — the same shell panel the roller is summoned into.
+// The ⋯ that opens one entry's own fields. Only shown where the pack has
+// declared some, so a block with no vocabulary gets the row it always had.
+let _skillDetailOpen = '';
+function skillDetailKey(id, i) { return id + ':' + i; }
+function skillDetailBtn(b, i) {
+  if (!entryFieldsOf(b).length) return '';
+  const open = _skillDetailOpen === skillDetailKey(b.id, i);
+  return '<button class="btn btn-secondary btn-xs ic-btn" title="' +
+    (open ? 'Close' : 'What this is — Mana, range, what it does') + '"' +
+    ' onclick="skillDetail(' + jsArg(b.id) + ',' + i + ')">' + (open ? '−' : '⋯') + '</button>';
+}
+
+function skillDetail(id, i) {
+  const key = skillDetailKey(id, i);
+  _skillDetailOpen = _skillDetailOpen === key ? '' : key;
+  blockRepaint(id);
+}
+
+// One entry's fields, plus what the catalogue would have said if the player
+// leaves them empty — because a blank box beside a Spell the book DOES describe
+// reads as though the app has lost the description.
+function skillDetailPanel(b, entry, i) {
+  if (_skillDetailOpen !== skillDetailKey(b.id, i)) return '';
+  const fields = entryFieldsOf(b);
+  if (!fields.length) return '';
+  const look = sysDerive(b.lookup);
+  let cat = null;
+  try { cat = look ? look(entry.name) : null; } catch (e) { cat = null; }
+  let h = '<div class="inv-detail">';
+  h += detailFieldsHTML(fields, entry, {
+    set: function (f) {
+      return 'skillSetField(' + jsArg(b.id) + ',' + i + ',' + jsArg(f.key) + ',this.value)';
+    },
+    // Skills already carry an icon button of their own on the row, so the
+    // picker is not repeated inside the panel.
+    icon: null,
+  });
+  // Anything the pack can DO with this entry — writing a scroll of it, so far.
+  // Same shape as an item's actions, in the same panel, for the same reason.
+  const actFn = sysDerive(b.entryActions);
+  let acts = [];
+  if (actFn) {
+    try { acts = actFn(entry, (typeof S !== 'undefined' && S) ? S.char : null) || []; } catch (e) { acts = []; }
+  }
+  acts.forEach(function (a) {
+    h += '<button class="btn btn-primary btn-xs" onclick="skillAct(' + jsArg(b.id) + ',' + i +
+         ',' + jsArg(a.id) + ')">' + esc(a.label) + '</button>';
+  });
+  if (cat) {
+    const from = fields.filter(function (f) {
+      return (entry[f.key] === undefined || entry[f.key] === '') &&
+             cat[f.key] !== undefined && cat[f.key] !== null && cat[f.key] !== '';
+    }).map(function (f) { return f.label + ': ' + String(cat[f.key]); });
+    if (from.length) {
+      h += '<div class="inv-f inv-f-wide" style="font-size:10px;color:var(--muted)">' +
+        'From the book, unless you fill it in: ' + esc(from.join(' · ')) + '</div>';
+    }
+  } else {
+    h += '<div class="inv-f inv-f-wide" style="font-size:10px;color:var(--muted)">' +
+      esc(entry.name) + ' is not in the book, so what it does is whatever you write here.</div>';
+  }
+  return h + '</div>';
+}
+
+// Do the thing this entry can do. The pack owns what that is and what it costs;
+// the shell runs it, saves, redraws and says what came back.
+function skillAct(id, i, actionId) {
+  const t = _skillData(id); if (!t) return null;
+  const entry = (t.ctx.data.skills || [])[i]; if (!entry) return null;
+  const fn = sysDerive(t.block.entryAct); if (!fn) return null;
+  let res;
+  try { res = fn(actionId, entry, S.char); } catch (e) { res = { ok: false, message: e.message }; }
+  if (res && res.remove) t.ctx.data.skills.splice(i, 1);
+  save(); blockSyncAll(null);
+  if (res && res.message) {
+    if (res.ok === false) { if (typeof flashSaveError === 'function') flashSaveError(res.message); }
+    else if (typeof flashNote === 'function') flashNote(res.message);
+  }
+  return res || null;
+}
+
+// Store WITHOUT repainting the block being typed into — same rule as gear.
+function skillSetField(id, i, key, value) {
+  const t = _skillData(id); if (!t) return;
+  const entry = (t.ctx.data.skills || [])[i]; if (!entry) return;
+  const num = value !== '' && !isNaN(Number(value));
+  if (value === '') delete entry[key]; else entry[key] = num ? Number(value) : value;
+  save();
+  // Everything else is redrawn, because a Mana cost typed here changes the
+  // Spell's card on the HUD; the block holding the caret is left alone.
+  blockSyncAll(null);
+}
+
 function skillIconBtn(b, s, i) {
   if (typeof iconField !== 'function') return '';
   return '<button class="btn btn-secondary btn-xs ic-btn" title="' +
@@ -600,11 +693,12 @@ registerBlockType('skillList', {
              title="Rank. Skills advance from use, not by hand.">${s.rank || 0}</div>
         <div class="sk-total" style="min-width:44px;text-align:right;font-weight:700;color:var(--accent)">${total >= 0 ? '+' : ''}${total}</div>
         ${skillIconBtn(b, s, i)}
+        ${skillDetailBtn(b, i)}
         ${skillRollBtn(s, b.id)}
         ${skillIsYours(s)
           ? `<button class="btn btn-secondary btn-xs" title="Remove this ${esc(b.label || 'entry')} — you added it yourself" onclick="skillDel('${esc(b.id)}',${i})">✕</button>`
           : `<span style="width:24px" title="This came from character creation, so it is part of who you are rather than something to delete"></span>`}
-      </div>`;
+      </div>${skillDetailPanel(b, s, i)}`;
     });
     // Offer to put back anything creation granted that is no longer listed.
     // Skills your gear lends you. Not editable and not advanced from use — they
@@ -686,12 +780,45 @@ function skillLent(block, char) {
   return out.filter(function (g) { return have.indexOf(String(g.name).toLowerCase()) < 0; });
 }
 
+// The fields a pack lets a player fill in on one entry — the Spell's Mana, its
+// effect, what it does. Declared exactly like an item's `itemFields`.
+function entryFieldsOf(block) {
+  const fn = sysDerive(block && block.entryFields);
+  if (!fn) return Array.isArray(block && block.entryFields) ? block.entryFields : [];
+  try { return fn() || []; } catch (e) { return []; }
+}
+
+// What this entry actually IS: the catalogue row, with anything the player has
+// filled in themselves laid over the top.
+//
+// The catalogue used to be the only answer, which meant a Spell that is not in
+// the book — one you invented, one the GM handed you, one crafted with Arcane,
+// which Table 45 says is a thing you can do — had no Mana cost, no damage and
+// no text, on the sheet, in the HUD and on the printed page alike. It also
+// meant a garbled entry (the catalogue was read out of a PDF and some of it
+// came back mangled) could not be corrected by the person looking at it.
+//
+// One resolution point, so every surface agrees about what a Spell costs.
+function skillFacts(block, entry) {
+  if (!entry) return null;
+  const look = sysDerive(block && block.lookup);
+  let cat = null;
+  try { cat = look ? look(entry.name) : null; } catch (e) { cat = null; }
+  const out = Object.assign({}, cat || {});
+  entryFieldsOf(block).forEach(function (f) {
+    const v = entry[f.key];
+    if (v === undefined || v === null || v === '') return;
+    out[f.key] = v;
+  });
+  if (!cat && !Object.keys(out).length) return null;
+  if (!out.name) out.name = entry.name;
+  return out;
+}
+
 function skillInfo(block, entry, char) {
   char = char || ((typeof S !== 'undefined' && S) ? S.char : null);
-  const look = sysDerive(block.lookup);
-  if (!look || !entry) return '';
-  let cat = null;
-  try { cat = look(entry.name); } catch (e) { return ''; }
+  if (!entry) return '';
+  const cat = skillFacts(block, entry);
   if (!cat) return '';
   const bits = [];
   if (cat.mana !== undefined && cat.mana !== null) bits.push(cat.mana + ' Mana');
@@ -1213,42 +1340,75 @@ function invDetail(id, rowKey) {
   }
 }
 
-function invDetailHTML(b, c, item, where, idx, fields) {
-  let h = '<div class="inv-detail">';
-  fields.forEach(function (f) {
+// ── the shared field editor ────────────────────────────────────────────────
+// The vocabulary — text, number, lines, select, icon — belongs to the pack; the
+// ADDRESSING belongs to the host, because an item is found by container and slot
+// and a Skill by block and index. Everything else about the two was identical,
+// which is exactly the sort of thing that gets copied once and then drifts: gear
+// could be described in detail and a Spell could not, and the reason was that
+// only one of them had ever been given this panel.
+//
+//   fields — the pack's declared list
+//   item   — the thing being edited, read for current values
+//   o.set(f) — a JS call expression, as text, that stores this field's value.
+//              It is spliced into an inline handler, so it must end mid-call
+//              with `this.value` already supplied by the caller.
+//   o.icon — {host, onPick} for the shared picker, or nothing to skip icon
+//            fields entirely (a host that has its own icon control).
+function detailFieldsHTML(fields, item, o) {
+  let h = '';
+  (fields || []).forEach(function (f) {
     const val = item[f.key] === undefined || item[f.key] === null ? '' : item[f.key];
-    // An icon field is the shared picker rather than a text box. Only one item
-    // detail panel is open at a time, so one instance is right; it commits
-    // through invSetField like every other field, so nothing else changes.
+    // An icon field is the shared picker rather than a text box. Only one detail
+    // panel is open at a time, so one instance is right.
     if (f.type === 'icon') {
-      iconInit('inv', {
+      if (!o.icon || typeof iconInit !== 'function') return;
+      iconInit(o.icon.host, {
         value: String(val), fallback: item.name || '',
-        onPick: function (v) { invSetField(b.id, c.id, where, idx, f.key, v); },
+        onPick: function (v) { o.icon.onPick(v, f); },
       });
-      h += '<div class="inv-f inv-f-wide">' + iconField('inv', {
+      h += '<div class="inv-f inv-f-wide">' + iconField(o.icon.host, {
         label: f.label,
         placeholder: 'Search icons — ' + (item.name ? esc(item.name) + ', ' : '') + 'potion, sword…',
       }) + '</div>';
       return;
     }
-    h += '<label class="inv-f"><span>' + esc(f.label) + '</span>';
+    // Prose — a Spell's effect, a homebrew Skill's rules text — needs room and
+    // line breaks. A one-line input for it is a field nobody fills in.
+    if (f.type === 'lines') {
+      h += '<label class="inv-f inv-f-wide"><span>' + esc(f.label) + '</span>' +
+        '<textarea rows="' + (f.rows || 3) + '" placeholder="' + esc(f.hint || '') +
+        '" oninput="' + o.set(f) + '">' + esc(String(val)) + '</textarea></label>';
+      return;
+    }
+    h += '<label class="inv-f' + (f.wide ? ' inv-f-wide' : '') + '"><span>' + esc(f.label) + '</span>';
     if (f.options) {
       const opts = typeof f.options === 'function' ? f.options() : f.options;
-      h += '<select onchange="invSetField(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) +
-           ',' + idx + ',' + jsArg(f.key) + ',this.value)"><option value="">—</option>' +
-           (opts || []).map(function (o) {
-             const v = o.value === undefined ? o : o.value;
-             const l = o.label === undefined ? v : o.label;
+      h += '<select onchange="' + o.set(f) + '"><option value="">—</option>' +
+           (opts || []).map(function (op) {
+             const v = op.value === undefined ? op : op.value;
+             const l = op.label === undefined ? v : op.label;
              return '<option value="' + esc(v) + '"' + (String(v) === String(val) ? ' selected' : '') +
                     '>' + esc(l) + '</option>';
            }).join('') + '</select>';
     } else {
       h += '<input type="' + (f.type === 'number' ? 'number' : 'text') + '" value="' + esc(String(val)) +
-           '" placeholder="' + esc(f.hint || '') + '"' +
-           ' oninput="invSetField(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) +
-           ',' + idx + ',' + jsArg(f.key) + ',this.value)">';
+           '" placeholder="' + esc(f.hint || '') + '" oninput="' + o.set(f) + '">';
     }
     h += '</label>';
+  });
+  return h;
+}
+
+function invDetailHTML(b, c, item, where, idx, fields) {
+  const setCall = function (f) {
+    return 'invSetField(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) +
+           ',' + idx + ',' + jsArg(f.key) + ',this.value)';
+  };
+  let h = '<div class="inv-detail">';
+  h += detailFieldsHTML(fields, item, {
+    set: setCall,
+    icon: { host: 'inv', onPick: function (v, f) { invSetField(b.id, c.id, where, idx, f.key, v); } },
   });
   // Anything the pack can DO with this item, such as reading a tome.
   const actFn = sysDerive(b.itemActions);

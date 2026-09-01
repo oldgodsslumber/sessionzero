@@ -284,6 +284,9 @@ function dccHudSlotClear(i) {
 // fall back to its check type, because checking against Evade is what makes a
 // Skill an attack in the first place.
 function dccHudIsAttack(s, cat) {
+  // `s.kind` is the crawler's own answer for a Skill the book has not got, and
+  // it outranks a guess made from the check type.
+  if (s && s.kind) return s.kind === 'attack';
   if (cat && cat.kind) return cat.kind === 'attack';
   return s.checkType === 'evade';
 }
@@ -395,6 +398,12 @@ function dccHudStowed(names) {
 }
 
 function dccHudCard(char, s, cat, spells, held) {
+  // The catalogue row with whatever the crawler has written on this entry laid
+  // over it. A Spell you invented has its Mana cost and its damage here and
+  // nowhere else, so a card built from the catalogue alone showed a name, a
+  // number, and no way to spend the Mana it costs.
+  const blk = (typeof sysBlock === 'function') ? sysBlock(spells ? 'spells' : 'skills') : null;
+  if (blk && typeof skillFacts === 'function') cat = skillFacts(blk, s) || cat;
   const rank = s.rank || 0;
   const stat = s.stat || (spells ? 'INT' : '');
   const statMod = stat ? dccModOf(char, stat) : 0;

@@ -266,10 +266,14 @@ registerSystem({
         upgrades: 'derive.activeUpgrades',
         granted: 'derive.grantedSkills',
         catalog: 'skills',
+        // What one Skill IS, for a Skill the book does not have — which the book
+        // itself says you are entitled to (p. 174). Anything left blank falls
+        // back to the catalogue.
+        entryFields: 'derive.skillEntryFields',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
       {
-        id: 'spells', type: 'skillList', label: 'Spells',
+        id: 'spells', type: 'skillList', label: 'Spells', span: 2,
         hint: 'A Spell has to be in your Hotlist to cast it under pressure. Spells cannot be '
             + 'attempted untrained, except from a scroll.',
         statMod: 'derive.spellStatMod',
@@ -278,10 +282,15 @@ registerSystem({
         upgrades: 'derive.activeUpgrades',
         granted: 'derive.grantedSpells',
         catalog: 'spells',
+        // A Spell is craftable with Arcane (Table 45), so a crawler can hold one
+        // that is not in the book at all. These are what it costs and what it
+        // does; blank means "whatever the catalogue says", so correcting one
+        // printed entry does not mean retyping the rest of it.
+        entryFields: 'derive.spellEntryFields',
         rankCap: DCC_SKILL_RANK_SOFT_CAP,
       },
       {
-        id: 'gear', type: 'inventory', label: 'Gear',
+        id: 'gear', type: 'inventory', label: 'Gear', span: 'full',
         hint: 'Only what is in a Gear Slot gives you anything. The Hotlist is for reach, not bonuses '
             + '— an item put back into it turns its benefits off. Inventory is weightless; the '
             + 'only limit is whether you could pick the thing up.',
@@ -503,6 +512,40 @@ registerSystem({
     ],
 
     // A tome is the one item that changes your sheet by being used.
+    // The Spell vocabulary. Same shape as gearItemFields, and deliberately the
+    // same words the book uses on a Spell entry, so filling one in is copying
+    // rather than translating.
+    spellEntryFields: () => [
+      { key: 'mana',       label: 'Mana',        type: 'number', hint: '0' },
+      { key: 'range',      label: 'Range',       hint: 'e.g. 30 feet' },
+      { key: 'baseDamage', label: 'Base Damage', hint: 'e.g. 1d6 + INT Fire' },
+      { key: 'checkType',  label: 'Check',       options: DCC_SKILL_CHECK_TYPES },
+      { key: 'kind',       label: 'Type',        options: [
+        { value: 'attack',  label: 'Attack' },
+        { value: 'utility', label: 'Utility' },
+      ] },
+      { key: 'cooldown',   label: 'Cooldown',    hint: 'e.g. once per floor' },
+      { key: 'effect',     label: 'What it does', type: 'lines', rows: 3,
+        hint: 'The Spell in your own words — this is what the sheet, the HUD and the printed page will say.' },
+      { key: 'limitations', label: 'Limitations', type: 'lines', rows: 2,
+        hint: 'Anything it cannot do, or what it costs you.' },
+    ],
+
+    // A Skill the book does not have. Fewer fields than a Spell because a Skill
+    // is mostly a Rank and a Stat, and both already have a home on the row.
+    skillEntryFields: () => [
+      { key: 'category',   label: 'Category',    hint: 'e.g. Ranged Weapon' },
+      { key: 'baseDamage', label: 'Base Damage', hint: 'e.g. 1d8 Piercing' },
+      { key: 'range',      label: 'Range',       hint: 'e.g. 150 feet' },
+      { key: 'checkType',  label: 'Check',       options: DCC_SKILL_CHECK_TYPES },
+      { key: 'kind',       label: 'Type',        options: [
+        { value: 'attack',  label: 'Attack' },
+        { value: 'utility', label: 'Utility' },
+      ] },
+      { key: 'effect',     label: 'What it does', type: 'lines', rows: 3,
+        hint: 'What using it actually achieves.' },
+    ],
+
     gearItemActions: (item) => (item && item.teaches)
       ? [{ id: 'learn', label: 'Read it — learn ' + item.teaches }]
       : [],
