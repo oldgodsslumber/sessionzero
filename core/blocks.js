@@ -1031,7 +1031,7 @@ function invItemRow(b, c, item, where, idx, extra) {
   // grants DR, a scroll casts a Spell you have no Ranks in, a tome teaches one.
   // The pack declares which fields an item can carry; this is the editor for
   // them, folded away until asked for so the row stays readable on a phone.
-  const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
+  const fields = invDetailFields(b, item);
   const rowKey = c.id + ':' + where + ':' + idx;
   const openDetail = _invDetailItem ? _invDetailItem === item : _invDetailOpen === rowKey;
   let detail = '';
@@ -1096,7 +1096,7 @@ function invStack(b, c, d) {
     // added straight to the Hotlist could never be given an icon or told what it
     // works as — and the Hotlist is exactly the container whose icons are read
     // at arm's length on the HUD keypad. Two playtesters found it independently.
-    const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
+    const fields = invDetailFields(b, it);
     const rowKey = c.id + ':' + '' + ':' + i;
     const openDetail = _invDetailItem ? _invDetailItem === it : _invDetailOpen === rowKey;
     h += `<div class="inv-name">${it.icon ? iconHTML(it.icon, 15) + ' ' : ''}${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
@@ -1130,15 +1130,79 @@ function invList(b, c, d) {
 // What an item IS, as opposed to what it is called. A pack lists the things an
 // item can work as — for a weapon that is the Skill you attack with — so a
 // Baseball Bat can be a real Club rather than a label.
+// ─── what KIND of thing is this ─────────────────────────────────────────────
+// The first question used to be "which weapon is it?" — the only control on the
+// add box was a list of attack Skills, so a potion, a rope and a coupon all had
+// to answer a question that was not about them, and every field in the editor
+// was shown for every item whatever it was.
+//
+// A pack declares its kinds; the shell asks which one first and then shows only
+// what that kind needs. `other` is the way out: an item that is none of these is
+// still just a name, which is how "12 googly eyes" got onto a sheet.
+function invKinds(block) {
+  const fn = sysDerive(block && block.itemKinds);
+  let kinds = [];
+  if (fn) { try { kinds = fn() || []; } catch (e) { kinds = []; } }
+  else if (Array.isArray(block && block.itemKinds)) kinds = block.itemKinds;
+  return kinds;
+}
+function invKind(block, id) {
+  return invKinds(block).filter(function (k) { return k.id === id; })[0] || null;
+}
+
+// The fields this kind cares about, in the pack's declared order. A kind that
+// names none — or an item with no kind at all — gets the whole list, which is
+// what every item used to get.
+function invFieldsFor(block, kindId) {
+  const fn = sysDerive(block.itemFields);
+  let all = [];
+  if (fn) { try { all = fn() || []; } catch (e) { all = []; } }
+  else if (Array.isArray(block.itemFields)) all = block.itemFields;
+  const k = invKind(block, kindId);
+  if (!k || !k.fields || !k.fields.length) return all;
+  return k.fields.map(function (key) {
+    return all.filter(function (f) { return f.key === key; })[0];
+  }).filter(Boolean);
+}
+
+// What this kind may work AS. A weapon swings with an attack Skill; a tool is
+// used with any Skill at all; a potion works as nothing. The pack answers, and
+// is asked with the kind so it can give a different list per kind.
+function invAsOptions(block, kindId) {
+  const fn = sysDerive(block.itemOptions);
+  if (!fn) return [];
+  try { return fn(kindId) || []; } catch (e) { return []; }
+}
+
+let _invAddKind = {};
+function invAddKindKey(bId, cId) { return bId + ':' + cId; }
+function invSetAddKind(bId, cId, value) {
+  _invAddKind[invAddKindKey(bId, cId)] = value;
+  blockRepaint(bId);
+}
+
 function invAsPick(b, c, chosen) {
-  const fn = sysDerive(b.itemOptions);
-  if (!fn) return '';
-  let opts = [];
-  try { opts = fn() || []; } catch (e) { return ''; }
+  const kindId = _invAddKind[invAddKindKey(b.id, c.id)] || '';
+  const opts = invAsOptions(b, kindId);
   if (!opts.length) return '';
-  return `<select id="inv-as-${esc(b.id)}-${esc(c.id)}" title="What this works as" style="flex:0 0 132px">` +
-    `<option value="">— just an item —</option>` +
+  const k = invKind(b, kindId);
+  const label = (k && k.asLabel) || 'What this works as';
+  return `<select id="inv-as-${esc(b.id)}-${esc(c.id)}" title="${esc(label)}" style="flex:0 0 132px">` +
+    `<option value="">— ${esc(label)} —</option>` +
     opts.map(o => `<option value="${esc(o.value)}"${o.value === chosen ? ' selected' : ''}>${esc(o.label)}</option>`).join('') +
+    `</select>`;
+}
+
+// The kind picker itself, which only exists for a pack that declares kinds.
+function invKindPick(b, c) {
+  const kinds = invKinds(b);
+  if (!kinds.length) return '';
+  const cur = _invAddKind[invAddKindKey(b.id, c.id)] || '';
+  return `<select id="inv-kind-${esc(b.id)}-${esc(c.id)}" title="What kind of thing this is"
+      style="flex:0 0 128px"
+      onchange="invSetAddKind(${jsArg(b.id)},${jsArg(c.id)},this.value)">` +
+    `<option value="">— what is it? —</option>` +
+    kinds.map(k => `<option value="${esc(k.id)}"${k.id === cur ? ' selected' : ''}>${esc(k.label || k.id)}</option>`).join('') +
     `</select>`;
 }
 
@@ -1165,12 +1229,17 @@ function invAdder(b, c) {
     ? `<datalist id="${esc(listId)}">` +
       cat.map(x => `<option value="${esc(x.name || x)}">`).join('') + `</datalist>`
     : '';
+  // Kind first, then the name, then whatever that kind needs. Picking a kind
+  // redraws the row, so a weapon grows a Skill picker and a potion does not.
+  const kindId = _invAddKind[invAddKindKey(b.id, c.id)] || '';
+  const k = invKind(b, kindId);
   return `<div class="inv-add">
-    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="Add to ${esc(c.label || c.id)}…"
+    <input id="inv-add-${esc(b.id)}-${esc(c.id)}" placeholder="${esc(k ? 'Name your ' + String(k.label || k.id).toLowerCase() + '…' : 'Add to ' + (c.label || c.id) + '…')}"
       ${cat.length ? `list="${esc(listId)}"` : ''}
       onkeydown="if(event.key==='Enter')invAdd('${esc(b.id)}','${esc(c.id)}')">${datalist}
-    <div class="inv-add-opts">${slotPick}${invAsPick(b, c, '')}
-      <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div></div>`;
+    <div class="inv-add-opts">${invKindPick(b, c)}${slotPick}${invAsPick(b, c, '')}
+      <button class="btn btn-secondary btn-xs" onclick="invAdd('${esc(b.id)}','${esc(c.id)}')">Add</button></div>
+    ${k && k.hint ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">${esc(k.hint)}</div>` : ''}</div>`;
 }
 
 // ─── mutators ───────────────────────────────────────────────────────────────
@@ -1248,6 +1317,8 @@ function invAdd(id, cid) {
   const slotId = sel ? sel.value : '';
   // What it works as: the player's pick, or an exact catalogue match on the
   // name so typing "Club" simply is a Club.
+  const kindSel = document.getElementById('inv-kind-' + id + '-' + cid);
+  let kindId = kindSel ? kindSel.value : (_invAddKind[invAddKindKey(id, cid)] || '');
   const asSel = document.getElementById('inv-as-' + id + '-' + cid);
   let works = asSel ? asSel.value : '';
   if (!works) {
@@ -1257,8 +1328,14 @@ function invAdd(id, cid) {
     // in the catalogue while the "works as" list is weapons, so typing "Cooking"
     // used to attach a Skill the dropdown then rendered as "—" — an invisible
     // value the player could not see, keep or clear.
-    if (hit && hit.name && hit.name.toLowerCase() === name.toLowerCase()
-        && invOffers(t.block, hit.name)) works = hit.name;
+    // With a kind chosen, only link to what that kind can work as. With none —
+    // somebody typing "Club" straight into the box, which is the fastest way to
+    // add a weapon and has always worked — let the name say what it is, and
+    // record that it is a weapon.
+    if (hit && hit.name && hit.name.toLowerCase() === name.toLowerCase()) {
+      if (kindId && invOffers(t.block, hit.name, kindId)) works = hit.name;
+      else if (!kindId && invOffers(t.block, hit.name, 'weapon')) { works = hit.name; kindId = 'weapon'; }
+    }
   }
 
   // A stack container holds one entry per NAME, counted up — "You may place up
@@ -1289,7 +1366,7 @@ function invAdd(id, cid) {
     // the item at index 10 of a ten-slot Hotlist, where nothing renders it —
     // not the sheet, not the HUD, not print — while invRoom still counted it,
     // so the visibly empty slot refused everything for ever after.
-    invPlace(list, invNewItem(t.block, name, works), c.size || 10);
+    invPlace(list, invNewItem(t.block, name, works, kindId), c.size || 10);
     if (inp) inp.value = '';
     save(); blockSyncAll(id, { force: true }); refocus();
     return;
@@ -1299,7 +1376,7 @@ function invAdd(id, cid) {
     if (typeof flashSaveError === 'function') flashSaveError(voice('noRoom','No room there'));
     return;
   }
-  const item = invNewItem(t.block, name, works);
+  const item = invNewItem(t.block, name, works, kindId);
   if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
   else if (c.kind === 'stack') invPlace(t.ctx.data[cid], item, c.size || 10);
   else t.ctx.data[cid].push(item);
@@ -1310,22 +1387,25 @@ function invAdd(id, cid) {
 // One new item. A pack that declares an item template gets asked first, so a
 // name in its catalogue arrives carrying what the book gives it; anything else
 // is a name and a quantity, which is what an item has always been.
-function invNewItem(block, name, works) {
+function invNewItem(block, name, works, kindId) {
   const fn = sysDerive(block.itemTemplate);
   let base = null;
   if (fn) { try { base = fn(name) || null; } catch (e) { base = null; } }
-  const item = Object.assign({ name: name, qty: 1 }, base || {});
+  const k = invKind(block, kindId);
+  // The kind rides along on the item. It is what lets the ⋯ panel keep showing
+  // the right fields a week later, and what a long catalogue is filtered by.
+  const item = Object.assign({ name: name, qty: 1 },
+                             (k && k.defaults) || {}, base || {},
+                             kindId ? { kind: kindId } : {});
   if (works) item.skill = works;
   return item;
 }
 
 // Does the pack's "works as" list offer this name? Used to decide whether a
 // name typed into the add box may quietly link itself to a catalogue entry.
-function invOffers(block, name) {
-  const fn = sysDerive(block.itemOptions);
-  if (!fn) return false;
-  let opts = [];
-  try { opts = fn() || []; } catch (e) { return false; }
+function invOffers(block, name, kindId) {
+  const opts = invAsOptions(block, kindId);
+  if (!opts.length) return false;
   const want = String(name).toLowerCase();
   return opts.some(function (o) {
     const v = o && o.value !== undefined ? o.value : o;
@@ -1429,6 +1509,20 @@ function invDetail(id, rowKey) {
   }
 }
 
+// What the panel shows for THIS item: the fields its kind needs, or all of them
+// for an item that never said what it was. "Show every field" is the escape
+// hatch, because an item can turn out to be more than it looked.
+let _invAllFields = false;
+function invDetailFields(b, item) {
+  if (_invAllFields || !item || !item.kind) {
+    const fn = sysDerive(b.itemFields);
+    if (fn) { try { return fn() || []; } catch (e) { return []; } }
+    return Array.isArray(b.itemFields) ? b.itemFields : [];
+  }
+  return invFieldsFor(b, item.kind);
+}
+function invToggleAllFields(blockId) { _invAllFields = !_invAllFields; blockRepaint(blockId); }
+
 // ── the shared field editor ────────────────────────────────────────────────
 // The vocabulary — text, number, lines, select, icon — belongs to the pack; the
 // ADDRESSING belongs to the host, because an item is found by container and slot
@@ -1511,6 +1605,12 @@ function invDetailHTML(b, c, item, where, idx, fields) {
   // resists, what it casts — is worth keeping, and the next one is then one tap
   // away in the catalogue instead of a retype. Explicit, because a bag is full
   // of one-offs and a catalogue that fills itself is a junk drawer.
+  if (invKinds(b).length) {
+    h += '<button class="btn btn-secondary btn-xs" title="' +
+      (_invAllFields ? 'Show only what this kind needs' : 'Show every field there is') + '"' +
+      ' onclick="invToggleAllFields(' + jsArg(b.id) + ')">' +
+      (_invAllFields ? 'Fewer fields' : 'All fields') + '</button>';
+  }
   if (b.catalog && typeof catalogSaveItem === 'function') {
     h += '<button class="btn btn-secondary btn-xs" title="Keep this in the catalogue"' +
       ' onclick="catalogSaveItem(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) + ',' + idx +

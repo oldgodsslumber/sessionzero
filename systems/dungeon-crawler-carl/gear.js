@@ -362,7 +362,11 @@ const DCC_GEAR = [
 // The keys above that are BOOKKEEPING rather than item data. Everything else on
 // a row is a field the gear block understands, so the template is "the row,
 // minus these".
-const DCC_GEAR_META_KEYS = ['id', 'kind', 'tier', 'page', 'effect', 'slot'];
+// `kind` is NOT bookkeeping: it travels with the item, because it is what the
+// editor shapes itself around later and what a hundred-row catalogue is
+// filtered by. The rest — where the row came from and where it is printed —
+// stays in the pack.
+const DCC_GEAR_META_KEYS = ['id', 'tier', 'page', 'effect', 'slot'];
 
 function dccGearByName(name) {
   const n = String(name || '').trim().toLowerCase();

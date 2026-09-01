@@ -2236,7 +2236,11 @@ function boot(entry) {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
     ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();showSysView('items','bag');");
   };
-  const invAddAs = (name, works) => {
+  // Creation asks what KIND of thing it is first now, and only then what it
+  // works as — the "works as" control does not exist until a kind that has one
+  // is chosen. A caller that names a Skill is making a weapon.
+  const invAddAs = (name, works, kind) => {
+    ev("invSetAddKind('gear','inventory'," + JSON.stringify(kind || (works ? 'weapon' : '')) + ")");
     ev("var i=document.getElementById('inv-add-gear-inventory');i.value=" + JSON.stringify(name) + ";" +
        "var a=document.getElementById('inv-as-gear-inventory');if(a)a.value=" + JSON.stringify(works || '') + ";" +
        "invAdd('gear','inventory');");
@@ -3426,10 +3430,15 @@ function boot(entry) {
 
   // Bookkeeping stays in the pack. A page number on a character is a page number
   // that has to be migrated the day the book is corrected.
+  //
+  // `kind` is the exception, and deliberately so: it says what the thing IS, so
+  // it shapes the editor when the item is opened again a week later and it is
+  // what a hundred-row catalogue is filtered by. It travels.
   check('[gear-cat] catalogue bookkeeping never lands on the character', () => {
     const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return /Healing Potion/i.test(x.name)})[0])"));
-    const leaked = ['id', 'kind', 'tier', 'page', 'effect', 'slot'].filter(k => k in it);
-    return !leaked.length || 'the item carries ' + leaked.join(', ');
+    const leaked = ['id', 'tier', 'page', 'effect', 'slot'].filter(k => k in it);
+    if (leaked.length) return 'the item carries ' + leaked.join(', ');
+    return it.kind === 'consumable' || 'it did not bring its kind: ' + JSON.stringify(it.kind);
   });
 
   check('[gear-cat] the book knows where its own things are worn', () => {
@@ -3469,6 +3478,81 @@ function boot(entry) {
     if (scroll.casts || tome.teaches) return 'the catalogue invented a Spell the book did not print';
     return /one shot/i.test(scroll.effect) && /learn/i.test(tome.effect)
       || 'they do not say what they are for';
+  });
+
+  // ── making something: what is it, and then what it needs ────────────────
+  // The add box used to ask one question — "which weapon is it?" — because its
+  // only control was a list of attack Skills. A potion, a rope and a coupon all
+  // had to answer a question that was not about them, and the editor then
+  // showed every field there is for every item whatever it was.
+  check('[kind] the first question is what kind of thing it is', () => {
+    itemSheet();
+    const sel = ev("document.getElementById('inv-kind-gear-inventory')");
+    if (!ev("!!document.getElementById('inv-kind-gear-inventory')")) return 'there is no kind picker';
+    const opts = ev("JSON.stringify([].slice.call(document.querySelectorAll('#inv-kind-gear-inventory option')).map(function(o){return o.value}))");
+    return /weapon/.test(opts) && /consumable/.test(opts) && /other/.test(opts)
+      || 'the kinds are ' + opts;
+  });
+
+  check('[kind] nothing is asked about weapons until you are making one', () => {
+    itemSheet();
+    if (ev("!!document.getElementById('inv-as-gear-inventory')")) return 'it still leads with the weapon question';
+    ev("invSetAddKind('gear','inventory','weapon')");
+    return ev("!!document.getElementById('inv-as-gear-inventory')") || 'a weapon is not asked what it swings with';
+  });
+
+  // A tool is used with a Skill rather than swung with one — rope with
+  // Climbing, magic paper with Calligraphy — which an attack-only list could
+  // never say.
+  check('[kind] a tool may work as any Skill, not just an attack', () => {
+    itemSheet();
+    ev("invSetAddKind('gear','inventory','weapon')");
+    const weapon = ev("document.querySelectorAll('#inv-as-gear-inventory option').length");
+    ev("invSetAddKind('gear','inventory','tool')");
+    const tool = ev("document.querySelectorAll('#inv-as-gear-inventory option').length");
+    ev("invSetAddKind('gear','inventory','')");
+    return tool > weapon || 'a tool is offered ' + tool + ' Skills and a weapon ' + weapon;
+  });
+
+  check('[kind] what you make remembers what it is', () => {
+    itemSheet();
+    ev("invSetAddKind('gear','inventory','consumable')");
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Goblin Firewater';invAdd('gear','inventory')");
+    const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return /Firewater/.test(x.name)})[0]||null)"));
+    ev("invSetAddKind('gear','inventory','')");
+    return (it && it.kind === 'consumable') || 'it came out as ' + JSON.stringify(it);
+  });
+
+  check('[kind] a kind brings what it always brings', () => {
+    itemSheet();
+    ev("invSetAddKind('gear','inventory','armor')");
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Hubcap Cuirass';invAdd('gear','inventory')");
+    const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return /Hubcap/.test(x.name)})[0]||null)"));
+    ev("invSetAddKind('gear','inventory','')");
+    return (it && it.dr === 1) || 'armour arrived as ' + JSON.stringify(it);
+  });
+
+  // Typing a weapon's name straight into the box has always worked and must
+  // keep working — it is the fastest way to add one.
+  check('[kind] typing a weapon name still makes a weapon', () => {
+    itemSheet();
+    ev("invSetAddKind('gear','inventory','')");
+    ev("var i=document.getElementById('inv-add-gear-inventory');i.value='Club';invAdd('gear','inventory')");
+    const it = JSON.parse(ev("JSON.stringify(S.char.blocks.gear.inventory.filter(function(x){return x.name==='Club'})[0]||null)"));
+    return (it && it.skill === 'Club' && it.kind === 'weapon') || 'it came out as ' + JSON.stringify(it);
+  });
+
+  check('[kind] the editor asks a potion about potion things', () => {
+    itemSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Elixir',kind:'consumable',qty:1}];save();blockRepaint('gear');invDetail('gear','inventory::0')");
+    const labels = ev("JSON.stringify([].slice.call(document.querySelectorAll('#blk-gear .inv-detail label span')).map(function(x){return x.textContent}))");
+    if (/Armour DR|Tome of|Scroll of/.test(labels)) return 'a potion is still asked about armour and Spells: ' + labels;
+    // and there is a way back to everything, because an item can turn out to be
+    // more than it looked
+    ev("invToggleAllFields('gear')");
+    const all = ev("JSON.stringify([].slice.call(document.querySelectorAll('#blk-gear .inv-detail label span')).map(function(x){return x.textContent}))");
+    ev("invToggleAllFields('gear')");
+    return /Armour DR/.test(all) || 'there is no way to see every field: ' + all;
   });
 
   // ── the catalogue tab ───────────────────────────────────────────────────
@@ -3568,8 +3652,52 @@ function boot(entry) {
     ev("_catQty=1;renderCatalog();document.getElementById('cat-target').value='inventory';catalogAdd('rope')");
     const it = JSON.parse(ev("JSON.stringify((S.char.blocks.gear.inventory||[]).filter(function(x){return x.name==='Rope'})[0]||null)"));
     if (!it) return 'the rope never arrived';
-    const leaked = ['id', 'kind', 'tier', 'page', 'effect', 'slot', 'source', 'createdAt', 'updatedAt'].filter(k => k in it);
-    return !leaked.length || 'it carries ' + leaked.join(', ');
+    const leaked = ['id', 'tier', 'page', 'effect', 'slot', 'source', 'createdAt', 'updatedAt'].filter(k => k in it);
+    if (leaked.length) return 'it carries ' + leaked.join(', ');
+    return it.kind === 'tool' || 'the rope forgot it was a tool: ' + JSON.stringify(it.kind);
+  });
+
+  // ── Spells in the catalogue ─────────────────────────────────────────────
+  // They are not items. They are also not something to keep in a different
+  // building: at the table you know the name of the thing, not which list it is
+  // on. So they are a second source in the same browser, and Add means "grant
+  // it" rather than "put it in the bag".
+  check('[cat] Spells are a source in the catalogue', () => {
+    catTab();
+    const ids = ev("JSON.stringify(catalogSources().map(function(b){return b.id}))");
+    return /spells/.test(ids) && /gear/.test(ids) || 'the sources are ' + ids;
+  });
+
+  check('[cat] the whole Spell list is there to look up', () => {
+    catTab();
+    ev("_catBlock='spells';renderCatalog()");
+    const rows = ev("document.querySelectorAll('#items-content .cat-row').length");
+    ev("_catBlock='gear';renderCatalog()");
+    return rows === ev('DCC_SPELLS.length') || 'it lists ' + rows + ' of ' + ev('DCC_SPELLS.length');
+  });
+
+  check('[cat] granting a Spell puts it on the sheet at the Rank you chose', () => {
+    catTab();
+    ev("_catBlock='spells';_catRank=5;renderCatalog();catalogAdd('hole')");
+    const known = JSON.parse(ev("JSON.stringify((S.char.blocks.spells.skills||[]).map(function(x){return x.name+':'+x.rank}))"));
+    ev("_catRank=1;_catBlock='gear';renderCatalog()");
+    return known.indexOf('Hole:5') >= 0 || 'the sheet knows ' + JSON.stringify(known);
+  });
+
+  check('[cat] a Spell you invent is kept with the table, not on one crawler', () => {
+    catTab();
+    ev("_catBlock='spells';renderCatalog();catalogNew();_catEdit.name='Goblin Sight';" +
+       "catalogSetField('mana','4');catalogSetField('effect','You see as a goblin does.');catalogSave()");
+    const stored = JSON.parse(ev("JSON.stringify((currentUniverse().items||[]).filter(function(x){return /Goblin Sight/.test(x.name)})[0]||null)"));
+    if (!stored) return 'it did not reach the universe';
+    if (stored.block !== 'spells') return 'it was filed under ' + JSON.stringify(stored.block);
+    // granting it carries what was written down
+    ev("_catRank=2;renderCatalog();" +
+       "catalogAdd((currentUniverse().items.filter(function(x){return /Goblin Sight/.test(x.name)})[0]||{}).id)");
+    const mine = JSON.parse(ev("JSON.stringify((S.char.blocks.spells.skills||[]).filter(function(x){return /Goblin Sight/.test(x.name)})[0]||null)"));
+    ev("_catRank=1;_catBlock='gear';renderCatalog()");
+    return (mine && mine.rank === 2 && mine.mana === 4)
+      || 'it was granted as ' + JSON.stringify(mine);
   });
 
   // ── the named gear (pp. 216-218, 326, 633-638) ──────────────────────────

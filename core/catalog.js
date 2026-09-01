@@ -22,20 +22,35 @@ function ensureCatalogItems(u) {
   return u;
 }
 
-// The block whose catalogue this is. Named by the view, or the first inventory
-// block that declares one.
+// Every block that declares a catalogue is a SOURCE. Gear is one; Spells are
+// another — they are not items, but they are the other half of what the game
+// hands you, and looking one up belongs in the same place as looking up a
+// potion. What differs is only where "Add" puts it.
+function catalogSources() {
+  const blocks = (SYS && SYS.schema && SYS.schema.blocks) || [];
+  return blocks.filter(function (b) { return b.catalog; });
+}
 function catalogBlock(blockId) {
   const blocks = (SYS && SYS.schema && SYS.schema.blocks) || [];
   if (blockId) return blocks.filter(function (b) { return b.id === blockId; })[0] || null;
-  return blocks.filter(function (b) { return b.type === 'inventory' && b.catalog; })[0] || null;
+  return catalogSources()[0] || null;
 }
 
-function listCatalogItems() {
+// One store for everything the table has made, items and Spells alike, each row
+// saying which catalogue it belongs to. One array means one collaborative
+// subtree: a Spell the GM invents reaches the players exactly the way an item
+// does, with no second sync channel to keep in step with the first.
+function listCatalogItems(blockId) {
   const u = (typeof currentUniverse === 'function') ? currentUniverse() : null;
   if (!u) return [];
   ensureCatalogItems(u);
   u.items.forEach(function (e) { if (typeof ensureId === 'function') ensureId(e); });
-  return u.items;
+  if (!blockId) return u.items;
+  const first = (catalogSources()[0] || {}).id;
+  return u.items.filter(function (e) {
+    // A row saved before there was more than one catalogue belongs to the first.
+    return (e.block || first) === blockId;
+  });
 }
 
 function saveCatalogItem(entry) {
@@ -70,11 +85,13 @@ function deleteCatalogItem(id) {
 // so the order has to be the same every time you open it.
 function catalogRows(blockId) {
   const b = catalogBlock(blockId);
-  const name = b && b.catalog;
+  if (!b) return [];
+  const name = b.catalog;
   const book = (name && SYS && SYS.catalogs && SYS.catalogs[name]) || [];
   const by = function (x, y) { return String(x.name).localeCompare(String(y.name)); };
-  return book.slice().sort(by).map(function (r) { return { row: r, source: 'book' }; })
-    .concat(listCatalogItems().slice().sort(by).map(function (r) { return { row: r, source: 'yours' }; }));
+  return book.slice().sort(by).map(function (r) { return { row: r, source: 'book', block: b.id }; })
+    .concat(listCatalogItems(b.id).slice().sort(by)
+      .map(function (r) { return { row: r, source: 'yours', block: b.id }; }));
 }
 
 function catalogRowById(blockId, id) {
@@ -83,7 +100,9 @@ function catalogRowById(blockId, id) {
 
 // One catalogue row as an item to carry. A book row goes through the pack's own
 // template; one of yours is already in item shape, minus the bookkeeping.
-const CATALOG_META_KEYS = ['id', 'kind', 'tier', 'page', 'effect', 'slot', 'source',
+// `kind` is not here: it says what the thing IS and travels with it. `block` is,
+// because which catalogue a row was filed under is bookkeeping.
+const CATALOG_META_KEYS = ['id', 'tier', 'page', 'effect', 'slot', 'source', 'block',
                            'createdAt', 'updatedAt', 'remoteAt', 'remoteBy'];
 function catalogItemFrom(blockId, entry) {
   const b = catalogBlock(blockId);
@@ -103,11 +122,16 @@ function catalogItemFrom(blockId, entry) {
 
 // ─── state ──────────────────────────────────────────────────────────────────
 let _catQuery = '', _catKind = '', _catSource = '', _catBlock = '', _catHost = '';
-let _catQty = 1, _catEdit = null;
+let _catQty = 1, _catRank = 1, _catEdit = null;
+
+// A skillList entry — a Spell — is granted by copy at a Rank you choose, the
+// way an item is added by copy in a quantity you choose.
+function catalogIsEntries(b) { return !!b && b.type === 'skillList'; }
 
 function renderCatalog(hostId, blockId) {
   if (hostId) _catHost = hostId;
   if (blockId) _catBlock = blockId;
+  if (!_catBlock) _catBlock = (catalogSources()[0] || {}).id || '';
   const el = document.getElementById(_catHost);
   if (!el) return;
   const b = catalogBlock(_catBlock);
@@ -131,11 +155,27 @@ function renderCatalog(hostId, blockId) {
       .filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0;
   });
 
+  // The one this view is for comes first; the rest keep the pack's order. A
+  // player looking for gear should not have to walk past two other lists.
+  const sources = catalogSources().slice().sort(function (x, y) {
+    return (x.id === b.id ? -1 : 0) - (y.id === b.id ? -1 : 0);
+  });
   let h = '<div class="card" style="padding:11px">';
   h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">' +
     '<input id="cat-search" type="search" placeholder="Look something up…" value="' + esc(_catQuery) + '"' +
     ' oninput="_catQuery=this.value;renderCatalog();_refocus(\'cat-search\',this.selectionStart)" style="flex:1;min-width:150px">' +
-    '<button class="btn btn-gold btn-xs" onclick="catalogNew()">+ New item</button></div>';
+    '<button class="btn btn-gold btn-xs" onclick="catalogNew()">+ New ' +
+    esc(String(b.label || 'item').replace(/s$/, '').toLowerCase()) + '</button></div>';
+
+  // Gear or Spells. One search box over whichever you are looking through,
+  // because at the table you know the NAME of the thing, not which list it is on.
+  if (sources.length > 1) {
+    h += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">' +
+      sources.map(function (src) {
+        return catChip('', src.label || src.id, src.id === b.id,
+                       '_catBlock=' + jsArg(src.id) + ";_catKind='';_catSource=''");
+      }).join('') + '</div>';
+  }
 
   h += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">';
   h += catChip('', 'All (' + rows.length + ')', !_catSource && !_catKind, "_catSource='';_catKind=''");
@@ -148,20 +188,31 @@ function renderCatalog(hostId, blockId) {
 
   // How many, and where it goes. One row of controls for the whole list,
   // because a GM stocking a floor sets it once and then taps down the page.
-  const targets = (b.containers || []);
-  h += '<div class="inv-add-opts" style="align-items:center;gap:6px">' +
-    '<span style="font-size:11px;color:var(--muted)">Add</span>' +
-    '<button class="btn btn-secondary btn-xs" onclick="catalogQty(-1)">−</button>' +
-    '<span class="num" style="min-width:26px;text-align:center;font-weight:700">' + _catQty + '</span>' +
-    '<button class="btn btn-secondary btn-xs" onclick="catalogQty(1)">+</button>' +
-    '<span style="font-size:11px;color:var(--muted)">to</span>' +
-    '<select id="cat-target" style="width:auto">' +
-    targets.map(function (c) {
-      return '<option value="' + esc(c.id) + '">' + esc(c.label || c.id) + '</option>';
-    }).join('') + '</select></div>';
+  if (catalogIsEntries(b)) {
+    // A Spell arrives at a Rank. A GM handing out a Rank 5 scroll Spell should
+    // not have to go and fix it on the sheet afterwards.
+    h += '<div class="inv-add-opts" style="align-items:center;gap:6px">' +
+      '<span style="font-size:11px;color:var(--muted)">Grant at Rank</span>' +
+      '<button class="btn btn-secondary btn-xs" onclick="catalogRank(-1)">−</button>' +
+      '<span class="num" style="min-width:26px;text-align:center;font-weight:700">' + _catRank + '</span>' +
+      '<button class="btn btn-secondary btn-xs" onclick="catalogRank(1)">+</button>' +
+      '<span style="font-size:11px;color:var(--muted)">to this ' + esc(lexL('hero')) + '</span></div>';
+  } else {
+    const targets = (b.containers || []);
+    h += '<div class="inv-add-opts" style="align-items:center;gap:6px">' +
+      '<span style="font-size:11px;color:var(--muted)">Add</span>' +
+      '<button class="btn btn-secondary btn-xs" onclick="catalogQty(-1)">−</button>' +
+      '<span class="num" style="min-width:26px;text-align:center;font-weight:700">' + _catQty + '</span>' +
+      '<button class="btn btn-secondary btn-xs" onclick="catalogQty(1)">+</button>' +
+      '<span style="font-size:11px;color:var(--muted)">to</span>' +
+      '<select id="cat-target" style="width:auto">' +
+      targets.map(function (c) {
+        return '<option value="' + esc(c.id) + '">' + esc(c.label || c.id) + '</option>';
+      }).join('') + '</select></div>';
+  }
   h += '<div style="font-size:10px;color:var(--muted);margin-top:4px">' +
     esc(String(shown.length)) + ' of ' + rows.length + ' shown. Adding copies the entry — ' +
-    'editing it later leaves what you already carry alone.</div>';
+    'editing it later leaves what you already have alone.</div>';
   h += '</div>';
 
   if (!shown.length) {
@@ -189,10 +240,14 @@ function catalogRowHTML(b, e) {
   const r = e.row;
   const mine = e.source === 'yours';
   const char = (typeof S !== 'undefined' && S) ? S.char : null;
-  // What it does, said the way the sheet says it — the same readout a carried
-  // item gets, so what you see here is what you will get.
+  // What it does, said the way the sheet says it — the same readout the thing
+  // gets once you have it, so what you see here is what you will get.
   let line = '';
-  try { line = invReadout(b, catalogItemFrom(_catBlock, e) || {}, char) || ''; } catch (err) { line = ''; }
+  try {
+    line = catalogIsEntries(b)
+      ? (skillInfo(b, r, char) || '')
+      : (invReadout(b, catalogItemFrom(_catBlock, e) || {}, char) || '');
+  } catch (err) { line = ''; }
   return '<div class="cat-row">' +
     '<div class="cat-main">' +
       '<div class="cat-name">' + (r.icon ? iconHTML(r.icon, 15) + ' ' : '') + esc(r.name) +
@@ -219,10 +274,49 @@ function catalogQty(d) {
   renderCatalog();
 }
 
+function catalogRank(d) {
+  _catRank = Math.max(1, Math.min(20, _catRank + d));
+  renderCatalog();
+}
+
+// Granting a Spell: a copy on this character's own list, at the Rank asked for.
+// The catalogue keeps the entry; the character keeps what they were given.
+function catalogGrant(e, b) {
+  const ctx = blockCtx(b, S.char);
+  ctx.data.skills = ctx.data.skills || [];
+  const name = e.row.name;
+  const have = ctx.data.skills.filter(function (x) {
+    return String(x.name).toLowerCase() === String(name).toLowerCase();
+  })[0];
+  if (have) {
+    if (typeof flashSaveError === 'function') flashSaveError(voice('alreadyKnown', 'Already known'));
+    return;
+  }
+  const look = sysDerive(b.lookup);
+  let cat = null;
+  try { cat = look ? look(name) : null; } catch (err) { cat = null; }
+  const entry = { name: cat ? cat.name : name, rank: _catRank,
+                  stat: e.row.stat || (cat ? cat.stat : null),
+                  checkType: e.row.checkType || (cat ? cat.checkType : null),
+                  passive: !!(cat && cat.passive), source: 'catalog',
+                  custom: !cat, marked: false };
+  // Anything the entry itself says — a Spell of your own carries its Mana and
+  // its text, and the catalogue is where that was written down.
+  entryFieldsOf(b).forEach(function (f) {
+    if (e.row[f.key] !== undefined && e.row[f.key] !== '') entry[f.key] = e.row[f.key];
+  });
+  ctx.data.skills.push(entry);
+  save();
+  blockSyncAll(b.id, { force: true });
+  renderCatalog();
+  if (typeof flashNote === 'function') flashNote(entry.name + ' — Rank ' + _catRank + ', on your sheet');
+}
+
 function catalogAdd(id) {
   const e = catalogRowById(_catBlock, id);
   const b = catalogBlock(_catBlock);
   if (!e || !b || !S || !S.char) return;
+  if (catalogIsEntries(b)) { catalogGrant(e, b); return; }
   const sel = document.getElementById('cat-target');
   const cid = (sel && sel.value) || (b.containers && b.containers[0] && b.containers[0].id);
   const c = (b.containers || []).filter(function (x) { return x.id === cid; })[0];
@@ -284,7 +378,7 @@ function catalogDuplicate(id) {
 }
 
 function catalogNew() {
-  _catEdit = { name: '', kind: 'item' };
+  _catEdit = { name: '', block: _catBlock };
   renderCatalog();
 }
 
@@ -319,12 +413,28 @@ function catalogSaveItem(blockId, cid, where, i) {
 
 // ─── the editor ─────────────────────────────────────────────────────────────
 function catalogEditorHTML(b) {
-  const fields = (b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : (b.itemFields || []);
   const e = _catEdit;
+  // A Spell is described with the Spell block's own fields; an item with the
+  // fields its KIND needs, which is the first thing the editor asks for.
+  const fields = catalogIsEntries(b)
+    ? entryFieldsOf(b)
+    : (typeof invDetailFields === 'function' ? invDetailFields(b, e) : []);
   let h = '<div class="card">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">' +
     '<div class="pg-title" style="font-size:20px">' + (e.id ? 'Edit item' : 'New item') + '</div>' +
     '<button class="btn btn-secondary btn-xs" onclick="catalogCancel()">Cancel</button></div>';
+  const kinds = (typeof invKinds === 'function') ? invKinds(b) : [];
+  if (kinds.length && !catalogIsEntries(b)) {
+    h += '<div class="form-group"><label>What kind of thing is it?</label>' +
+      '<select onchange="catalogSetKind(this.value)"><option value="">— choose —</option>' +
+      kinds.map(function (k) {
+        return '<option value="' + esc(k.id) + '"' + (k.id === e.kind ? ' selected' : '') + '>' +
+          esc(k.label || k.id) + '</option>';
+      }).join('') + '</select>';
+    const k = kinds.filter(function (x) { return x.id === e.kind; })[0];
+    if (k && k.hint) h += '<div style="font-size:10px;color:var(--muted);margin-top:3px">' + esc(k.hint) + '</div>';
+    h += '</div>';
+  }
   h += '<div class="form-group"><label>Name</label>' +
     '<input id="cat-name" value="' + esc(e.name || '') + '" placeholder="What it is called"' +
     ' oninput="_catEdit.name=this.value"></div>';
@@ -341,10 +451,27 @@ function catalogEditorHTML(b) {
   return h + '</div>';
 }
 
+// Choosing a kind seeds whatever that kind arrives carrying, without treading
+// on anything already filled in.
+function catalogSetKind(kindId) {
+  if (!_catEdit) return;
+  _catEdit.kind = kindId || undefined;
+  const b = catalogBlock(_catBlock);
+  const k = (typeof invKind === 'function') ? invKind(b, kindId) : null;
+  if (k && k.defaults) {
+    Object.keys(k.defaults).forEach(function (key) {
+      if (_catEdit[key] === undefined) _catEdit[key] = k.defaults[key];
+    });
+  }
+  renderCatalog();
+}
+
 function catalogSetField(key, value) {
   if (!_catEdit) return;
   const b = catalogBlock(_catBlock);
-  const fields = (b && b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : [];
+  const fields = catalogIsEntries(b)
+    ? entryFieldsOf(b)
+    : ((b && b.itemFields && sysDerive(b.itemFields)) ? sysDerive(b.itemFields)() : []);
   const f = fields.filter(function (x) { return x.key === key; })[0] || null;
   if (value === '') delete _catEdit[key];
   else _catEdit[key] = (typeof fieldValue === 'function') ? fieldValue(f, value) : value;
@@ -352,6 +479,7 @@ function catalogSetField(key, value) {
 
 function catalogSave() {
   if (!_catEdit) return;
+  if (!_catEdit.block) _catEdit.block = _catBlock;
   const name = String(_catEdit.name || '').trim();
   if (!name) {
     if (typeof flashSaveError === 'function') flashSaveError('An item needs a name');

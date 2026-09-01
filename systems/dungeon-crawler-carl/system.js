@@ -328,6 +328,9 @@ registerSystem({
         // Potion" gets you the potion rather than the words.
         catalog: 'gear',
         itemTemplate: 'derive.gearTemplate',
+        // What kinds of thing a crawler carries. The first question when making
+        // one, and what decides which fields it is then asked for.
+        itemKinds: 'derive.gearItemKinds',
         // Worn armour changes your Damage Resistance, so the defence readout
         // has to be redrawn when gear changes.
         affects: ['defence'],
@@ -395,9 +398,55 @@ registerSystem({
     // A weapon is a weapon because of the Skill you swing it with. Naming a
     // Baseball Bat is not enough — linking it to Club is what makes it a real
     // 1d6 bludgeoning weapon that uses your Club Rank.
-    gearItemOptions: () => DCC_SKILLS
-      .filter(s => s.kind === 'attack')
-      .map(s => ({ value: s.name, label: s.name + ' (' + (s.baseDamage || s.category || '') + ')' })),
+    // Ten kinds, in the order a crawler meets them. `fields` names what the
+    // editor asks for, so a potion is never asked about Armour DR and a rope is
+    // never asked which Spell it casts; `defaults` is what it arrives carrying.
+    // `other` shows everything, because an item can be anything — the sheet has
+    // held "12 googly eyes" since the day it shipped and must keep doing so.
+    gearItemKinds: () => [
+      { id: 'weapon', label: 'Weapon', asLabel: 'Swings with',
+        hint: 'Link it to the Skill you attack with and the sheet does the damage and the to-hit.',
+        fields: ['icon', 'skill', 'grantsStat', 'grantsStatN', 'grantsSkill', 'grantsSkillN', 'notes'] },
+      { id: 'armor', label: 'Armour', defaults: { dr: 1 },
+        hint: 'Only what is in a Gear Slot gives you its Damage Resistance.',
+        fields: ['icon', 'dr', 'resist', 'grantsStat', 'grantsStatN', 'grantsSkill', 'grantsSkillN', 'notes'] },
+      { id: 'clothing', label: 'Clothing',
+        fields: ['icon', 'dr', 'resist', 'grantsStat', 'grantsStatN', 'notes'] },
+      { id: 'accessory', label: 'Accessory',
+        hint: 'Rings, amulets, tattoos, belts, capes — ten of them fit.',
+        fields: ['icon', 'grantsStat', 'grantsStatN', 'grantsSkill', 'grantsSkillN', 'resist', 'dr', 'notes'] },
+      { id: 'consumable', label: 'Consumable',
+        hint: 'Potions, rations, ammunition. One tap on the Hotlist spends one.',
+        fields: ['icon', 'notes'] },
+      { id: 'scroll', label: 'Scroll', defaults: { rank: 1 },
+        hint: 'Casts its Spell once, with no Mana and no Ranks needed.',
+        fields: ['icon', 'casts', 'rank', 'notes'] },
+      { id: 'tome', label: 'Tome', hint: 'Read it once to learn the Spell for good.',
+        fields: ['icon', 'teaches', 'notes'] },
+      { id: 'tool', label: 'Tool', asLabel: 'Used with',
+        hint: 'Rope, lockpicks, a crafting table — anything used with a Skill rather than swung.',
+        fields: ['icon', 'skill', 'notes'] },
+      { id: 'vehicle', label: 'Vehicle', fields: ['icon', 'notes'] },
+      { id: 'other', label: 'Something else',
+        hint: 'A name is enough. Fill in as much or as little as you like.' },
+    ],
+
+    // What an item of this kind can work AS. A weapon swings with an attack
+    // Skill; a tool is used with any Skill there is — a rope with Climbing,
+    // magic paper with Calligraphy — which the attack-only list could never
+    // say. Anything else works as nothing, and is not asked.
+    gearItemOptions: (kind) => {
+      if (kind === 'tool') {
+        return DCC_SKILLS.map(s => ({ value: s.name, label: s.name + (s.category ? ' (' + s.category + ')' : '') }));
+      }
+      // Nothing until you have said what you are making. The whole complaint
+      // about the old add box was that it asked "which weapon is it?" about a
+      // rope, and answering that with an empty kind would keep asking.
+      if (kind !== 'weapon' && kind !== 'other') return [];
+      return DCC_SKILLS
+        .filter(s => s.kind === 'attack')
+        .map(s => ({ value: s.name, label: s.name + ' (' + (s.baseDamage || s.category || '') + ')' }));
+    },
 
     // One line describing what the thing actually does at the table, whichever
     // kind of thing it is.
