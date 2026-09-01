@@ -219,6 +219,7 @@ window.MP = (function(){
     if(callbacks.members)  watch('members', callbacks.members);
     if(callbacks.heroes)   watch('heroes',  callbacks.heroes);
     if(callbacks.roster)   watch('roster',  callbacks.roster);
+    if(callbacks.items)    watch('items',   callbacks.items);
     if(callbacks.lore)     watch('lore',    callbacks.lore);
     if(callbacks.loreGM)   watch('loreGM',  callbacks.loreGM, true);
     if(callbacks.conflict) watch('conflict',callbacks.conflict);
@@ -277,6 +278,20 @@ window.MP = (function(){
     await _ref('roster/'+id+'/deletedBy').remove();
   }
   async function purgeRoster(id){_need();await _ref('roster/'+id).remove();}
+
+  // ---- The item catalogue (collaborative) ---------------------------------
+  // What the table has made, as opposed to what the pack ships. Plain and
+  // public: an item is a thing everyone can hold, so unlike the wiki there is
+  // no GM half to withhold. Deleting tombstones rather than removes, for the
+  // same reason the roster does — anyone can delete, and a GM's afternoon of
+  // statting should not go with one tap.
+  async function writeItem(id,entry){_need();await _ref('items/'+id).set(_stamp(entry));}
+  async function deleteItem(id){
+    _need();
+    await _ref('items/'+id+'/deletedAt').set(firebase.database.ServerValue.TIMESTAMP);
+    await _ref('items/'+id+'/deletedBy').set(displayName());
+  }
+  async function purgeItem(id){_need();await _ref('items/'+id).remove();}
 
   // ---- Wiki, split public / GM-only ---------------------------------------
   // splitLore is the whole security boundary. Everything a player must not see
@@ -389,6 +404,7 @@ window.MP = (function(){
     bind, unbind, isGM, currentUniverse, inUniverse,
     setMyHeroId, writeHero, clearMyHero,
     writeRoster, deleteRoster, restoreRoster, purgeRoster,
+    writeItem, deleteItem, purgeItem,
     splitLore, mergeLore, writeLore, deleteLore, restoreLore, purgeLore, revealLore,
     writeConflict, writeRegions,
     appendRoll, appendNote, updateNote, deleteNote, writeMeta

@@ -196,7 +196,7 @@ function boot(entry) {
   const goldSheet = () => {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
     ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};");
-    ev("S.char.blocks.gold={current:0};renderHero();renderSysTab('items');");
+    ev("S.char.blocks.gold={current:0};renderHero();showSysView('items','bag');");
   };
   check('[gold] it is not a click-per-coin ticker', () => {
     const type = ev("(sysBlock('gold')||{}).type");
@@ -2234,7 +2234,7 @@ function boot(entry) {
   // nothing else, so nothing it did at the table was recorded anywhere.
   const itemSheet = () => {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
-    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();showSysView('items','bag');");
   };
   const invAddAs = (name, works) => {
     ev("var i=document.getElementById('inv-add-gear-inventory');i.value=" + JSON.stringify(name) + ";" +
@@ -2258,7 +2258,7 @@ function boot(entry) {
     return /to hit|untrained/.test(line) || 'nothing about using it: ' + JSON.stringify(line);
   });
   check('[item] the mechanics reach the sheet, not just the data', () => {
-    ev("renderSysTab('items');blockRepaint('gear');");
+    ev("showSysView('items','bag');blockRepaint('gear');");
     const h = ev("document.getElementById('blk-gear').innerHTML");
     return /Bludgeoning/.test(h) || 'the sheet still shows only a name';
   });
@@ -2466,7 +2466,7 @@ function boot(entry) {
   const gearOf = () => JSON.parse(ev("JSON.stringify(S.char.blocks.gear.equipped)"));
   const equipBuild = () => {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');dccSetFloor(1);");
-    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
+    ev("dccFinishCreation(S.char);S.char.creation={step:0,complete:true};renderHero();showSysView('items','bag');");
   };
 
   check('[equip] a weapon put back on from the Hotlist returns to your hands', () => {
@@ -2514,7 +2514,7 @@ function boot(entry) {
     // Reported from a phone: an equipped item was unreadable. The name and the
     // controls are separate groups now so the controls can wrap.
     equipBuild();
-    ev("renderSysTab('items');S.char.blocks.gear.equipped.hands[0].name='Chef Knife of Unwelcome Surprises';blockRepaint('gear');");
+    ev("showSysView('items','bag');S.char.blocks.gear.equipped.hands[0].name='Chef Knife of Unwelcome Surprises';blockRepaint('gear');");
     const row = ev("!!document.querySelector('#blk-gear .inv-row')");
     if (!row) return 'the row is still built from inline styles';
     const name = ev("document.querySelector('#blk-gear .inv-name').textContent.trim()");
@@ -2588,7 +2588,7 @@ function boot(entry) {
     ev("S.char=SYS.newCharacter();dccSetRoute('weapon');dccSetWeapon('Club');");
     ev("dccStoreGear('clothes','jeans and a hoodie');dccStoreGear('item','a bike lock');");
     ev("dccStoreGear('weird','12 googly eyes');dccSetFloor(1);dccFinishCreation(S.char);");
-    ev("renderHero();renderSysTab('items');");
+    ev("renderHero();showSysView('items','bag');");
   };
   const named = expr => JSON.parse(ev("JSON.stringify((" + expr + "||[]).map(function(x){return x.name}))"));
 
@@ -2647,7 +2647,7 @@ function boot(entry) {
   // crawler is carrying is somewhere a player can actually see it.
   check('[gear] it all reaches the Items tab', () => {
     gearBuild();
-    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
+    ev("S.char.name='Fenwick';S.char.creation={step:0,complete:true};renderHero();showSysView('items','bag');");
     const h = ev("document.getElementById('items-content').innerHTML");
     const missing = ['Club', 'jeans and a hoodie', 'a bike lock', '12 googly eyes'].filter(x => h.indexOf(x) < 0);
     return missing.length ? 'not on the sheet: ' + missing.join(', ') : true;
@@ -2919,7 +2919,7 @@ function boot(entry) {
   // Counting the sheet alone stopped being the same question the moment Gear
   // moved to the Items tab.
   const drawnBlocks = () => {
-    ev("(SYS.tabs||[]).forEach(function(t){renderSysTab(t.id)})");
+    ev("(SYS.tabs||[]).forEach(function(t){if(t.views)showSysView(t.id,t.views[0].id);else renderSysTab(t.id)})");
     return ev("SYS.schema.blocks.filter(function(b){return !!document.getElementById('blk-'+b.id)}).length");
   };
   check('[sheet] a null block does not blank the sheet', () => {
@@ -3352,7 +3352,7 @@ function boot(entry) {
   });
 
   check('[gear] the block renders every container', () => {
-    ev("renderHero();S.char.creation={step:0,complete:true};renderHero();renderSysTab('items');");
+    ev("renderHero();S.char.creation={step:0,complete:true};renderHero();showSysView('items','bag');");
     const el = ev("(document.getElementById('blk-gear')||{}).innerHTML||''");
     return (/Gear Slots/.test(el) && /Hotlist/.test(el) && /Inventory/.test(el) && /Misc. Junk/.test(el))
       || 'a container is missing from the rendered block';
@@ -3469,6 +3469,107 @@ function boot(entry) {
     if (scroll.casts || tome.teaches) return 'the catalogue invented a Spell the book did not print';
     return /one shot/i.test(scroll.effect) && /learn/i.test(tome.effect)
       || 'they do not say what they are for';
+  });
+
+  // ── the catalogue tab ───────────────────────────────────────────────────
+  // A second view on the Items tab: everything the game knows about, so a
+  // player can look an item up and a GM can stock a floor without typing each
+  // one onto a sheet.
+  // Items you make belong to a WORLD, so the catalogue needs one to be current
+  // — the suite's own boot leaves the universe unselected.
+  const catTab = () => {
+    itemSheet();
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('T');S.universeId=u.id;save();");
+    ev("showTab('items');showSysView('items','catalog')");
+  };
+
+  check('[cat] the Items tab has a Bag and a Catalogue', () => {
+    itemSheet();
+    ev("showTab('items')");
+    const tabs = ev("JSON.stringify([].slice.call(document.querySelectorAll('#items-content .npc-tab')).map(function(t){return t.textContent}))");
+    return /Bag/.test(tabs) && /Catalogue/.test(tabs) || 'the sub-tabs read ' + tabs;
+  });
+
+  check('[cat] the catalogue lists the whole book', () => {
+    catTab();
+    const rows = ev("document.querySelectorAll('#items-content .cat-row').length");
+    return rows === ev('DCC_GEAR.length') || 'it shows ' + rows + ' of ' + ev('DCC_GEAR.length');
+  });
+
+  check('[cat] you can look something up', () => {
+    catTab();
+    const all = ev("document.querySelectorAll('#items-content .cat-row').length");
+    ev("_catQuery='dynamite';renderCatalog()");
+    const some = ev("document.querySelectorAll('#items-content .cat-row').length");
+    ev("_catQuery='';renderCatalog()");
+    return (some > 0 && some < all) || 'searching gave ' + some + ' of ' + all;
+  });
+
+  // The GM loop: set a quantity and a destination once, then tap down the page.
+  check('[cat] adding puts the item where you said, as many as you asked for', () => {
+    catTab();
+    ev("_catQty=3;renderCatalog();document.getElementById('cat-target').value='hotlist';catalogAdd('torch')");
+    const hot = ev("JSON.stringify(S.char.blocks.gear.hotlist.filter(Boolean).map(function(x){return x.name+' x'+(x.qty||1)}))");
+    ev("_catQty=1");
+    return /Torch x3/.test(hot) || 'the Hotlist reads ' + hot;
+  });
+
+  check('[cat] an item you make is kept on the universe, not on the crawler', () => {
+    catTab();
+    ev("catalogNew();_catEdit.name='Sepsis Draught';_catEdit.effect='Tastes of pennies.';catalogSetField('dr','2');catalogSave()");
+    if (!ev("JSON.stringify((currentUniverse().items||[]).map(function(x){return x.name}))").includes('Sepsis Draught')) {
+      return 'it did not reach the universe';
+    }
+    if (ev("JSON.stringify(S.char.blocks||{})").includes('Sepsis Draught')) return 'it was written onto the character';
+    // and it is still there for the next crawler
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);save();renderHero();" +
+       "showTab('items');showSysView('items','catalog')");
+    return ev("(currentUniverse().items||[]).filter(function(x){return /Sepsis/.test(x.name)}).length") === 1
+      || 'it did not survive switching crawler';
+  });
+
+  check('[cat] a row from the book cannot be edited, only copied', () => {
+    catTab();
+    ev("catalogEdit('torch')");
+    if (ev("_catEdit !== null")) return 'the book row opened for editing';
+    ev("catalogDuplicate('healing-potion');catalogSave()");
+    return ev("JSON.stringify((currentUniverse().items||[]).map(function(x){return x.name}))").includes('Healing Potion (copy)')
+      || 'duplicating a book row produced nothing';
+  });
+
+  // Adding COPIES. A potion you have already drunk should not change because
+  // somebody edited the recipe afterwards.
+  check('[cat] editing an entry leaves what you already carry alone', () => {
+    catTab();
+    ev("catalogNew();_catEdit.name='Brew';_catEdit.effect='As written.';catalogSave()");
+    const id = ev("JSON.stringify((currentUniverse().items.filter(function(x){return x.name==='Brew'})[0]||{}).id)").replace(/"/g, '');
+    ev("_catQty=1;renderCatalog();document.getElementById('cat-target').value='inventory';catalogAdd(" + JSON.stringify(id) + ")");
+    ev("var t=currentUniverse().items.filter(function(x){return x.name==='Brew'})[0];t.effect='CHANGED';saveCatalogItem(t)");
+    const carried = ev("JSON.stringify((S.char.blocks.gear.inventory||[]).filter(function(x){return x.name==='Brew'}).map(function(x){return x.notes}))");
+    return /As written/.test(carried) && !/CHANGED/.test(carried)
+      || 'the carried copy followed the entry: ' + carried;
+  });
+
+  check('[cat] an item you are carrying can be kept for next time', () => {
+    catTab();
+    ev("showSysView('items','bag')");
+    ev("S.char.blocks.gear.inventory=[{name:'Ol Betsy',skill:'Handgun',qty:1}];save();blockRepaint('gear')");
+    const before = ev("(currentUniverse().items||[]).length");
+    ev("catalogSaveItem('gear','inventory','',0)");
+    const after = ev("(currentUniverse().items||[]).length");
+    if (after !== before + 1) return 'the catalogue went from ' + before + ' to ' + after;
+    const kept = JSON.parse(ev("JSON.stringify(currentUniverse().items[currentUniverse().items.length-1])"));
+    return (kept.name === 'Ol Betsy' && kept.skill === 'Handgun' && kept.qty === undefined)
+      || 'it was kept as ' + JSON.stringify(kept);
+  });
+
+  check('[cat] the catalogue leaves no bookkeeping on what you carry', () => {
+    catTab();
+    ev("_catQty=1;renderCatalog();document.getElementById('cat-target').value='inventory';catalogAdd('rope')");
+    const it = JSON.parse(ev("JSON.stringify((S.char.blocks.gear.inventory||[]).filter(function(x){return x.name==='Rope'})[0]||null)"));
+    if (!it) return 'the rope never arrived';
+    const leaked = ['id', 'kind', 'tier', 'page', 'effect', 'slot', 'source', 'createdAt', 'updatedAt'].filter(k => k in it);
+    return !leaked.length || 'it carries ' + leaked.join(', ');
   });
 
   // ── the named gear (pp. 216-218, 326, 633-638) ──────────────────────────
@@ -4008,7 +4109,7 @@ function boot(entry) {
   });
 
   // ── the sheet actually renders ───────────────────────────────────────────
-  ev("renderHero();(SYS.tabs||[]).forEach(function(t){renderSysTab(t.id)})");
+  ev("renderHero();(SYS.tabs||[]).forEach(function(t){if(t.views)showSysView(t.id,t.views[0].id);else renderSysTab(t.id)})");
   check('[sheet] every declared block is drawn on the sheet or on a pack tab', () =>
     ev(`SYS.schema.blocks.every(b=>!!document.getElementById('blk-'+b.id))`)
     || 'missing: ' + ev(`JSON.stringify(SYS.schema.blocks.filter(b=>!document.getElementById('blk-'+b.id)).map(b=>b.id))`));

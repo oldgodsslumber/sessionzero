@@ -90,7 +90,10 @@ function sysTabs() {
 function sysTabBlockIds() {
   const out = [];
   sysTabs().forEach(function (t) {
-    (t.blocks || []).forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); });
+    const lists = [t.blocks || []].concat((t.views || []).map(function (v) { return v.blocks || []; }));
+    lists.forEach(function (list) {
+      list.forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); });
+    });
   });
   return out;
 }
@@ -98,7 +101,9 @@ function sysTabBlocksFor(id) {
   const seen = [];
   let mine = [];
   sysTabs().forEach(function (t) {
-    const take = (t.blocks || []).filter(function (b) { return seen.indexOf(b) < 0; });
+    const declared = (t.blocks || []).concat(
+      (t.views || []).reduce(function (a, v) { return a.concat(v.blocks || []); }, []));
+    const take = declared.filter(function (b) { return seen.indexOf(b) < 0; });
     take.forEach(function (b) { seen.push(b); });
     if (t.id === id) mine = take;
   });
@@ -129,18 +134,59 @@ function buildSysTabs() {
   });
 }
 
+// A tab may hold more than one view, and then it wears a strip of sub-tabs —
+// the same control the NPC roster uses. Which one is open is remembered per tab
+// for the session, so switching away and back lands where you left off.
+const _sysTabView = {};
+function sysTabViews(t) { return (t && Array.isArray(t.views) && t.views.length) ? t.views : null; }
+function sysTabView(t) {
+  const views = sysTabViews(t);
+  if (!views) return null;
+  const want = _sysTabView[t.id];
+  return views.filter(function (v) { return v.id === want; })[0] || views[0];
+}
+function showSysView(tabId, viewId) {
+  _sysTabView[tabId] = viewId;
+  renderSysTab(tabId);
+}
+
 // Draw one. A tab with its own render() supplies the markup; a tab that named
-// blocks gets them, in the order it named them.
+// blocks gets them, in the order it named them; a tab with views draws the one
+// that is open.
 function renderSysTab(id) {
   const t = sysTabs().filter(function (x) { return x.id === id; })[0];
   const el = document.getElementById(id + '-content');
   if (!t || !el) return;
   const char = (typeof S !== 'undefined' && S) ? S.char : null;
   if (typeof t.render === 'function') { el.innerHTML = t.render(char) || ''; return; }
+  const view = sysTabView(t);
+  const src = view || t;
   let h = '';
   if (t.title !== false) {
     h += '<div class="pg-title">' + esc(t.label || t.id) + '</div>';
-    if (t.hint) h += '<div class="pg-sub">' + esc(t.hint) + '</div>';
+    if (src.hint || t.hint) h += '<div class="pg-sub">' + esc(src.hint || t.hint) + '</div>';
+  }
+  if (view) {
+    h += '<div class="npc-tabs">' + sysTabViews(t).map(function (v) {
+      return '<div class="npc-tab' + (v.id === view.id ? ' active' : '') + '"' +
+        // jsArg, not JSON.stringify: this sits inside a double-quoted attribute
+        // and JSON's own quotes would end it early — the mistake that killed
+        // every handler on the custom Race card. See core/system.js.
+        ' onclick="showSysView(' + jsArg(t.id) + ',' + jsArg(v.id) + ')">' +
+        esc(v.label || v.id) + '</div>';
+    }).join('') + '</div>';
+  }
+  // A view that names a catalogue is the shell's item browser; one that names
+  // blocks gets those; one with its own render() supplies markup.
+  if (view && typeof view.render === 'function') {
+    el.innerHTML = h + (view.render(char) || '');
+    if (typeof markRollSurfaces === 'function') markRollSurfaces();
+    return;
+  }
+  if (view && view.catalog) {
+    el.innerHTML = h + '<div id="' + esc(t.id) + '-catalog"></div>';
+    if (typeof renderCatalog === 'function') renderCatalog(t.id + '-catalog', view.catalog);
+    return;
   }
   h += '<div id="' + esc(t.id) + '-blocks"></div>';
   el.innerHTML = h;
@@ -149,7 +195,7 @@ function renderSysTab(id) {
   // keeps working. The HUD is the case that DOES need a prefix — it draws the
   // Health Bar a second time, deliberately.
   if (char && typeof renderBlockSheet === 'function') {
-    renderBlockSheet(char, t.id + '-blocks', '', sysTabBlocksFor(t.id));
+    renderBlockSheet(char, t.id + '-blocks', '', (view && view.blocks) || sysTabBlocksFor(t.id));
   }
   if (typeof markRollSurfaces === 'function') markRollSurfaces();
 }

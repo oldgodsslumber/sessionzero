@@ -1507,6 +1507,15 @@ function invDetailHTML(b, c, item, where, idx, fields) {
     h += '<button class="btn btn-primary btn-xs" onclick="invAct(' + jsArg(b.id) + ',' + jsArg(c.id) +
          ',' + jsArg(where) + ',' + idx + ',' + jsArg(a.id) + ')">' + esc(a.label) + '</button>';
   });
+  // Remember this one. An item you have described — what it works as, what it
+  // resists, what it casts — is worth keeping, and the next one is then one tap
+  // away in the catalogue instead of a retype. Explicit, because a bag is full
+  // of one-offs and a catalogue that fills itself is a junk drawer.
+  if (b.catalog && typeof catalogSaveItem === 'function') {
+    h += '<button class="btn btn-secondary btn-xs" title="Keep this in the catalogue"' +
+      ' onclick="catalogSaveItem(' + jsArg(b.id) + ',' + jsArg(c.id) + ',' + jsArg(where) + ',' + idx +
+      ')">☆ To catalogue</button>';
+  }
   return h + '</div>';
 }
 

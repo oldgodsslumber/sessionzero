@@ -64,7 +64,7 @@ check('systemId is write-once', () => {
   return /!data\.exists\(\)/.test(v) && /data\.val\(\)\s*===\s*newData\.val\(\)/.test(v);
 });
 check('collaborative subtrees are gated on membership', () => {
-  const shared = ['roster', 'lore', 'conflict', 'regions', 'rolls', 'notes'];
+  const shared = ['roster', 'items', 'lore', 'conflict', 'regions', 'rolls', 'notes'];
   const bad = shared.filter(k => !code[k] ||
     !/members'\)\.child\(auth\.uid\)\.exists\(\)/.test(code[k]['.read'] || ''));
   return bad.length ? 'not membership-gated: ' + bad.join(', ') : true;

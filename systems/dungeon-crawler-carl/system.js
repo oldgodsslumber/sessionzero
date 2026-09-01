@@ -360,10 +360,17 @@ registerSystem({
     {
       id: 'items',
       label: 'Items',
-      hint: 'What you are carrying, what you are wearing, and what it is worth.',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
           + '<path d="M6 7h12l1.2 13H4.8z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>',
-      blocks: ['gear', 'gold'],
+      // Two views: what this crawler is carrying, and everything the game knows
+      // about. The catalogue is where you look an item up and where a GM builds
+      // a floor's worth of loot without typing each one onto a sheet.
+      views: [
+        { id: 'bag', label: 'Bag', blocks: ['gear', 'gold'],
+          hint: 'What you are carrying, what you are wearing, and what it is worth.' },
+        { id: 'catalog', label: 'Catalogue', catalog: 'gear',
+          hint: 'Everything in the book, plus what your table has made.' },
+      ],
     },
   ],
 

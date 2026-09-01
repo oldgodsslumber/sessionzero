@@ -177,6 +177,8 @@ players' machines.
                       ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
         "lore":     { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
                       ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
+        "items":    { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
+                      ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
         "conflict": { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",
                       ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()" },
         "regions":  { ".read": "auth != null && data.parent().child('members').child(auth.uid).exists()",

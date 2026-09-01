@@ -592,6 +592,21 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
 /* sticky modal search + subtle backdrop hint */
 .modal-overlay.open{animation:fadeIn .15s ease}
 
+/* THE ITEM CATALOGUE — a reference list, so it reads as rows rather than as
+   cards: one line for the name and its badges, one for what it does. */
+.cat-row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;
+  padding:7px 8px;border-bottom:1px solid var(--border)}
+.cat-row:hover{background:var(--surface2)}
+.cat-main{flex:1 1 260px;min-width:0}
+.cat-name{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.cat-tag{font-family:var(--font-label);font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:5px;
+  white-space:nowrap}
+.cat-tag.is-mine{color:var(--accent);border-color:var(--accent)}
+.cat-list{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-card);box-shadow:var(--comic-shadow);overflow:hidden}
+.cat-list .cat-row:last-child{border-bottom:none}
+
 /* ═══════════════════ DESKTOP: MULTI-COLUMN ═══════════════════
    Everything above this line describes one column of cards, which is the phone
    and is still the truth of the app: a page is a stack. This section takes that
@@ -675,6 +690,11 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
     gap:14px;align-items:start}
   .hud-col{display:block}
   .hud-col>*:last-child{margin-bottom:0}
+
+  /* A hundred rows of reference is a scroll on one column and a shelf on two.
+     Each row is self-contained, so the split costs nothing. */
+  .cat-list{column-count:2;column-gap:0}
+  .cat-row{break-inside:avoid}
 
   /* The journal is prose. Widening the frame must not widen the line. */
   #notes-content{max-width:900px}

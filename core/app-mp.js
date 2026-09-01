@@ -23,8 +23,8 @@
   let _applyingRemote=false;
   // Last value we pushed per entry, so a keystroke in the NPC builder pushes
   // one changed villain rather than the whole roster.
-  const _pushed={roster:{},lore:{}};
-  const _tomb={roster:{},lore:{}};
+  const _pushed={roster:{},lore:{},items:{}};
+  const _tomb={roster:{},lore:{},items:{}};
   let _pushT=null, _heroT=null;
   let wrapsInstalled=false;
 
@@ -227,6 +227,7 @@
     if(name)u.name=name;
     if(!Array.isArray(u.roster))u.roster=[];
     if(!Array.isArray(u.lore))u.lore=[];
+    if(!Array.isArray(u.items))u.items=[];
     U.activeUniverseId=u.id;
     saveUniverses();
     if(typeof S!=='undefined'&&S){S.universeId=u.id;bindUniverse();}
@@ -247,7 +248,7 @@
     // needs it. Calling a write before this point targets universes/null.
     MP.bind(code,{
       meta:_onMeta, members:_onMembers, heroes:_onHeroes,
-      roster:_onRoster, lore:_onLore, loreGM:_onLoreGM,
+      roster:_onRoster, items:_onItems, lore:_onLore, loreGM:_onLoreGM,
       conflict:_onConflict, regions:_onRegions,
       rolls:_onRolls, notes:_onNotes
     });
@@ -265,10 +266,12 @@
     inShared=false;
     Object.keys(_pushed.roster).forEach(function(k){delete _pushed.roster[k];});
     Object.keys(_pushed.lore).forEach(function(k){delete _pushed.lore[k];});
+    Object.keys(_pushed.items).forEach(function(k){delete _pushed.items[k];});
     _refreshBar();_rerenderAll();_openLobby();
   }
   function _rerenderAll(){
-    ['renderHero','renderNPCs','renderWiki','renderNotes','renderConflict','renderDice','renderMap'].forEach(function(fn){
+    ['renderHero','renderNPCs','renderWiki','renderNotes','renderConflict','renderDice','renderMap',
+     'renderCatalogIfOpen'].forEach(function(fn){
       try{if(typeof window[fn]==='function'){
         if(fn==='renderWiki'&&!$('wiki-content'))return;
         if(fn==='renderNPCs'&&!$('npcs-content'))return;
@@ -352,6 +355,31 @@
       saveUniverses();
     });
     if($('npcs-content'))try{renderNPCs();}catch(e){}
+  }
+
+  // The item catalogue. Public and flat — an item is a thing anybody at the
+  // table can hold, so unlike the wiki there is no GM half to keep back.
+  function _onItems(map){
+    const u=_u();if(!u)return;
+    _withRemote(function(){
+      const live=[];
+      Object.keys(map||{}).forEach(function(id){
+        const e=map[id];if(!e)return;
+        e.id=id;
+        _pushed.items[id]=JSON.stringify(_strip(e));
+        if(e.deletedAt){_tomb.items[id]=e;return;}
+        delete _tomb.items[id];
+        live.push(_strip(e));
+      });
+      // Anything of ours the table has not seen yet stays put rather than being
+      // wiped by a snapshot that predates it.
+      (u.items||[]).forEach(function(e){
+        if(e&&e.id&&!(map||{})[e.id])live.push(e);
+      });
+      u.items=live;
+      saveUniverses();
+    });
+    renderCatalogIfOpen();
   }
 
   let _lorePub={}, _loreGM={};
@@ -439,6 +467,18 @@
       if(seenL[id]||_tomb.lore[id])return;
       delete _pushed.lore[id];
       MP.deleteLore(id).catch(function(){});
+    });
+    const seenI={};
+    (u.items||[]).forEach(function(e){
+      if(!e||!e.id)return;
+      seenI[e.id]=1;
+      const j=JSON.stringify(_strip(e));
+      if(force||_pushed.items[e.id]!==j){_pushed.items[e.id]=j;MP.writeItem(e.id,_strip(e)).catch(_err);}
+    });
+    Object.keys(_pushed.items).forEach(function(id){
+      if(seenI[id]||_tomb.items[id])return;
+      delete _pushed.items[id];
+      MP.deleteItem(id).catch(function(){});
     });
   }
   function _pushHero(){
@@ -675,6 +715,15 @@
     if(!inShared||!MP.isGM())return;
     const u=_u(),s=(u&&u.series)||{};
     MP.writeMeta({name:(u&&u.name)||'',packMeta:{tone:s.tone||'',level:s.level||''}}).catch(_err);
+  };
+
+  // The catalogue's two hooks. core/catalog.js calls these after it writes to
+  // the universe, and they do nothing until there is a table to write to.
+  window.mpPushShared=function(){_pushShared();};
+  window.mpDeleteCatalogItem=function(id){
+    if(!inShared)return;
+    delete _pushed.items[id];
+    MP.deleteItem(id).catch(_err);
   };
 
   // Expose a little state for tests and debugging.

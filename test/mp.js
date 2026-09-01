@@ -311,6 +311,31 @@ const CHAR = n => ({
   await settle();
   check('notes sync to the player', () => pl.eval('JSON.stringify(S.notes)').includes('The docks'));
 
+  // ═══ THE ITEM CATALOGUE ═══
+  // What the GM builds, the players can hold. The catalogue lives on the
+  // universe beside the wiki, so it travels the same way.
+  await gm.eval("saveCatalogItem({name:'Sepsis Draught',effect:'Heals 4 and tastes of pennies.',dr:0})");
+  await settle();
+  check('an item the GM makes reaches the player', () =>
+    pl.eval("JSON.stringify((currentUniverse().items||[]).map(function(x){return x.name}))").includes('Sepsis Draught'));
+  check('...with what it does intact', () =>
+    pl.eval("JSON.stringify((currentUniverse().items||[])[0]||{})").includes('tastes of pennies'));
+
+  await pl.eval("saveCatalogItem({name:'Bag of Holding Grudges',effect:'It remembers.'})");
+  await settle();
+  check('a player can add to the catalogue too', () =>
+    gm.eval("JSON.stringify((currentUniverse().items||[]).map(function(x){return x.name}))").includes('Bag of Holding Grudges'));
+
+  const itemId = gm.eval("JSON.stringify((currentUniverse().items.filter(function(x){return /Sepsis/.test(x.name)})[0]||{}).id)").replace(/"/g, '');
+  await gm.eval("deleteCatalogItem(" + JSON.stringify(itemId) + ")");
+  await settle();
+  check('deleting one removes it from the table', () =>
+    !pl.eval("JSON.stringify((currentUniverse().items||[]).map(function(x){return x.name}))").includes('Sepsis Draught'));
+  // Deletion is a tombstone, like the roster: anyone can delete, and a GM's
+  // afternoon of statting should not go with one tap.
+  check('the deleted item is tombstoned, not erased', () =>
+    !!(backend._raw('universes/' + code + '/items/' + itemId) || {}).deletedAt);
+
   // ═══ ECHO SUPPRESSION ═══
   const before = Object.keys(backend._raw('universes/' + code + '/roster') || {}).length;
   const w1 = JSON.stringify(backend._raw('universes/' + code + '/roster'));
