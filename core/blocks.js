@@ -1219,8 +1219,13 @@ function invReadout(b, item, char) {
 }
 
 function invAdder(b, c) {
+  // "Where it goes" first, meaning ask the pack — a weapon belongs in your
+  // hands and a helmet on your head, and it knows which. The list used to open
+  // on whatever slot happened to be first, which is Head, so anything added
+  // without touching this control was worn on the player's head.
   const slotPick = c.kind === 'slots'
     ? `<select id="inv-slot-${esc(b.id)}-${esc(c.id)}" style="flex:0 0 130px">` +
+      `<option value="">— where it goes —</option>` +
       (c.slots || []).map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') + `</select>`
     : '';
   // An input, a slot picker, a "works as" picker and a button never fit one
@@ -1382,7 +1387,24 @@ function invAdd(id, cid) {
     return;
   }
   const item = invNewItem(t.block, name, works, kindId);
-  if (c.kind === 'slots') (t.ctx.data[cid][slotId] = t.ctx.data[cid][slotId] || []).push(item);
+  if (c.kind === 'slots') {
+    // The player's pick, then the pack's rule. If neither says where this is
+    // worn, say so — the first slot with room is not an answer, it is Head.
+    const want = slotId || invSlotFor(t.block, c, item);
+    const slot = (c.slots || []).filter(function (x) { return x.id === want; })[0];
+    if (!slot) {
+      if (typeof flashSaveError === 'function') {
+        flashSaveError('Where does ' + name + ' go? Pick a slot, or put it in ' +
+          ((invDefaultContainer(t.block) || {}).label || 'your bag') + '.');
+      }
+      return;
+    }
+    if (invRoom(t.block, t.ctx.data, cid, slot.id) === 0) {
+      if (typeof flashSaveError === 'function') flashSaveError((slot.name || slot.id) + ' is full');
+      return;
+    }
+    (t.ctx.data[cid][slot.id] = t.ctx.data[cid][slot.id] || []).push(item);
+  }
   else if (c.kind === 'stack') invPlace(t.ctx.data[cid], item, c.size || 10);
   else t.ctx.data[cid].push(item);
   if (inp) inp.value = '';
@@ -1404,6 +1426,22 @@ function invNewItem(block, name, works, kindId) {
                              kindId ? { kind: kindId } : {});
   if (works) item.skill = works;
   return item;
+}
+
+// Where a new thing goes when nobody has said otherwise. NOT the first
+// container: for this pack that is the Gear Slots, so every item made anywhere
+// went straight onto the character — and, having no slot rule of its own, onto
+// their head. A thing you have just made is a thing you are carrying; you put
+// it on afterwards, deliberately.
+function invDefaultContainer(block) {
+  const cs = (block && block.containers) || [];
+  if (block && block.defaultContainer) {
+    const named = cs.filter(function (c) { return c.id === block.defaultContainer; })[0];
+    if (named) return named;
+  }
+  return cs.filter(function (c) { return c.kind === 'list'; })[0]
+      || cs.filter(function (c) { return c.kind === 'stack'; })[0]
+      || cs[0] || null;
 }
 
 // Does the pack's "works as" list offer this name? Used to decide whether a

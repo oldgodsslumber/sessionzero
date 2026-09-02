@@ -3506,12 +3506,12 @@ function boot(entry) {
 
   // slots: one item each, except Accessories
   check('[gear] a Gear Slot holds one item and then refuses another', () => {
-    ev("S.char.blocks.gear.equipped.head=[];");
-    ev("document.body.insertAdjacentHTML('beforeend'," +
-       "'<input id=\"inv-add-gear-equipped\"><select id=\"inv-slot-gear-equipped\">" +
-       "<option value=\"head\">Head</option></select>');");
-    ev("document.getElementById('inv-add-gear-equipped').value='Cunning Hat';invAdd('gear','equipped');");
-    ev("document.getElementById('inv-add-gear-equipped').value='Second Hat';invAdd('gear','equipped');");
+    ev("S.char.blocks.gear.equipped.head=[];showSysView('items','bag')");
+    // The slot has to be CHOSEN. It used to default to Head, which is why
+    // everything anybody made ended up worn on their head.
+    const pick = "var sl=document.getElementById('inv-slot-gear-equipped');if(sl)sl.value='head';";
+    ev(pick + "document.getElementById('inv-add-gear-equipped').value='Cunning Hat';invAdd('gear','equipped');");
+    ev(pick + "document.getElementById('inv-add-gear-equipped').value='Second Hat';invAdd('gear','equipped');");
     const n = ev('S.char.blocks.gear.equipped.head.length');
     return n === 1 || 'Head holds ' + n + ' items';
   });
@@ -4006,6 +4006,50 @@ function boot(entry) {
     // what THIS crawler did with it is not part of the Spell
     return (kept.rank === undefined && kept.marked === undefined && kept.mana === 7)
       || 'it was kept as ' + JSON.stringify(kept);
+  });
+
+  // ── a new thing goes in your bag, not onto your head ────────────────────
+  // Reported from the table: every item created was worn on the crawler's head.
+  // Two causes, and the second one was a bug already fixed once in invMove and
+  // repeated here — "the first slot with room" is Head.
+  check('[head] the catalogue adds to the bag by default', () => {
+    catTab();
+    const target = ev("(document.getElementById('cat-target')||{}).value");
+    if (target !== 'inventory') return 'it opens on ' + JSON.stringify(target);
+    ev("catalogAdd('healing-potion')");
+    // The crawler is holding the weapon creation gave them; what must not be
+    // worn is the thing that was just made.
+    const worn = ev("JSON.stringify(S.char.blocks.gear.equipped)");
+    if (/Healing Potion/.test(worn)) return 'the potion is being worn: ' + worn.slice(0, 120);
+    return ev("/Healing Potion/.test(JSON.stringify(S.char.blocks.gear.inventory||[]))")
+      || 'it did not reach the bag either';
+  });
+
+  check('[head] nothing is worn just because a slot had room', () => {
+    catTab();
+    ev("S.char.blocks.gear.equipped={head:[],torso:[],arms:[],legs:[],feet:[],hands:[],accessories:[]};save()");
+    ev("_catQty=1;renderCatalog();document.getElementById('cat-target').value='equipped';catalogAdd('rope')");
+    const head = ev("JSON.stringify((S.char.blocks.gear.equipped.head||[]).map(function(x){return x.name}))");
+    return head === '[]' || 'a rope is being worn on the head: ' + head;
+  });
+
+  // ...but something the pack DOES have a rule for still goes where it belongs.
+  check('[head] a ring still knows it is an accessory', () => {
+    catTab();
+    ev("_catQty=1;renderCatalog();document.getElementById('cat-target').value='equipped';" +
+       "catalogAdd('silver-ring-stat')");
+    const acc = ev("JSON.stringify((S.char.blocks.gear.equipped.accessories||[]).map(function(x){return x.name}))");
+    ev("document.getElementById('cat-target').value='inventory'");
+    return /Ring/.test(acc) || 'the ring went to ' + acc;
+  });
+
+  check('[head] the bag asks where a thing goes rather than assuming', () => {
+    itemSheet();
+    const first = ev("(document.querySelector('#inv-slot-gear-equipped option')||{}).value");
+    if (first !== '') return 'the slot picker still opens on ' + JSON.stringify(first);
+    ev("var i=document.getElementById('inv-add-gear-equipped');i.value='Bag of Rocks';invAdd('gear','equipped')");
+    const head = ev("JSON.stringify((S.char.blocks.gear.equipped.head||[]).map(function(x){return x.name}))");
+    return !/Bag of Rocks/.test(head) || 'it went on the head anyway: ' + head;
   });
 
   // ── the named gear (pp. 216-218, 326, 633-638) ──────────────────────────

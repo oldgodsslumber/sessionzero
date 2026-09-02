@@ -122,7 +122,7 @@ function catalogItemFrom(blockId, entry) {
 
 // ─── state ──────────────────────────────────────────────────────────────────
 let _catQuery = '', _catKind = '', _catSource = '', _catBlock = '', _catHost = '';
-let _catQty = 1, _catRank = 1, _catEdit = null;
+let _catQty = 1, _catRank = 1, _catEdit = null, _catTarget = '';
 
 // A skillList entry — a Spell — is granted by copy at a Rank you choose, the
 // way an item is added by copy in a quantity you choose.
@@ -199,15 +199,21 @@ function renderCatalog(hostId, blockId) {
       '<span style="font-size:11px;color:var(--muted)">to this ' + esc(lexL('hero')) + '</span></div>';
   } else {
     const targets = (b.containers || []);
+    // Opens on where a new thing actually goes — the bag — rather than on the
+    // first container in the list, which is the Gear Slots and is how a potion
+    // ended up being worn on somebody's head.
+    const fallback = (typeof invDefaultContainer === 'function' && invDefaultContainer(b)) || targets[0] || {};
+    if (!_catTarget || !targets.some(function (c) { return c.id === _catTarget; })) _catTarget = fallback.id || '';
     h += '<div class="inv-add-opts" style="align-items:center;gap:6px">' +
       '<span style="font-size:11px;color:var(--muted)">Add</span>' +
       '<button class="btn btn-secondary btn-xs" onclick="catalogQty(-1)">−</button>' +
       '<span class="num" style="min-width:26px;text-align:center;font-weight:700">' + _catQty + '</span>' +
       '<button class="btn btn-secondary btn-xs" onclick="catalogQty(1)">+</button>' +
       '<span style="font-size:11px;color:var(--muted)">to</span>' +
-      '<select id="cat-target" style="width:auto">' +
+      '<select id="cat-target" style="width:auto" onchange="_catTarget=this.value">' +
       targets.map(function (c) {
-        return '<option value="' + esc(c.id) + '">' + esc(c.label || c.id) + '</option>';
+        return '<option value="' + esc(c.id) + '"' + (c.id === _catTarget ? ' selected' : '') + '>' +
+          esc(c.label || c.id) + '</option>';
       }).join('') + '</select></div>';
   }
   h += '<div style="font-size:10px;color:var(--muted);margin-top:4px">' +
@@ -369,7 +375,8 @@ function catalogAdd(id) {
   if (!e || !b || !S || !S.char) return;
   if (catalogIsEntries(b)) { catalogGrant(e, b); return; }
   const sel = document.getElementById('cat-target');
-  const cid = (sel && sel.value) || (b.containers && b.containers[0] && b.containers[0].id);
+  const cid = (sel && sel.value) || _catTarget ||
+    ((invDefaultContainer(b) || (b.containers || [])[0] || {}).id);
   const c = (b.containers || []).filter(function (x) { return x.id === cid; })[0];
   if (!c) return;
   const ctx = blockCtx(b, S.char);
@@ -392,11 +399,17 @@ function catalogAdd(id) {
         invPlace(arr, item, c.size || 10);
       }
     } else if (c.kind === 'slots') {
-      // Where it is worn is the pack's business; the shell asks and refuses if
-      // that slot is full rather than putting a weapon on somebody's head.
+      // Where it is worn is the pack's business, and if the pack has no rule
+      // for this thing the answer is not "the first slot with room" — that is
+      // Head, and it is how every potion, rope and coupon ended up being worn.
       const want = invSlotFor(b, c, item);
+      if (!want) {
+        refused = 'The book does not say where ' + item.name + ' is worn. ' +
+          'Add it to ' + ((invDefaultContainer(b) || {}).label || 'your bag') + ' instead.';
+        break;
+      }
       const slot = (c.slots || []).filter(function (x) {
-        return (!want || x.id === want) && invRoom(b, ctx.data, cid, x.id) > 0;
+        return x.id === want && invRoom(b, ctx.data, cid, x.id) > 0;
       })[0];
       if (!slot) { refused = (c.label || c.id) + ' has no room for that'; break; }
       (ctx.data[cid][slot.id] = ctx.data[cid][slot.id] || []).push(item);
