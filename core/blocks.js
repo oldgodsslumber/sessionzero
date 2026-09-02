@@ -1053,7 +1053,8 @@ function invItemRow(b, c, item, where, idx, extra) {
   // controls and an item called "Chef's Knife of Unwelcome Surprises" do not
   // share 360px.
   return `<div class="inv-row">
-    <div class="inv-name">${item.icon ? iconHTML(item.icon, 16) + ' ' : ''}${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}
+    <div class="inv-name">${(() => { const ic = invIcon(b, item, (typeof S !== 'undefined' && S) ? S.char : null);
+      return ic ? iconHTML(ic, 16) + ' ' : ''; })()}${esc(item.name)}${item.qty > 1 ? ` <span style="color:var(--muted)">×${item.qty}</span>` : ''}
       ${(() => { const r = invReadout(b, item, (typeof S !== 'undefined' && S) ? S.char : null);
                  return r ? `<span class="inv-stat">${esc(r)}</span>` : ''; })()}</div>
     <div class="inv-ctl">${extra || ''}${detail}${slotPick}${moves}
@@ -1104,7 +1105,8 @@ function invStack(b, c, d) {
     const fields = invDetailFields(b, it);
     const rowKey = c.id + ':' + '' + ':' + i;
     const openDetail = _invDetailItem ? _invDetailItem === it : _invDetailOpen === rowKey;
-    h += `<div class="inv-name">${it.icon ? iconHTML(it.icon, 15) + ' ' : ''}${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
+    const ico = invIcon(b, it, char);
+    h += `<div class="inv-name">${ico ? iconHTML(ico, 15) + ' ' : ''}${esc(it.name)}${line ? `<span class="inv-stat">${esc(line)}</span>` : ''}</div>
       <div class="inv-ctl">
       <button class="btn btn-secondary btn-xs" onclick="invQty('${esc(b.id)}','${esc(c.id)}',${i},-1)">−</button>
       <div class="num" style="min-width:28px;text-align:center;font-weight:700">${it.qty || 1}</div>
@@ -1212,6 +1214,20 @@ function invKindPick(b, c) {
 }
 
 // The mechanical line under an item's name: what it does at the table.
+// The icon a row draws. The item's own icon wins; failing that the pack is
+// asked, because one thing can sit in two places under two shapes: the Heal in
+// your Hotlist is an item named "Heal", and the Heal you gave an icon to on the
+// sheet is a Spell entry. Giving the Spell a picture and finding the keypad
+// still showing a letter "H" is the same complaint as the Hotlist tap that did
+// not cast — the two surfaces have to agree about what they are looking at.
+function invIcon(b, item, char) {
+  if (!item) return '';
+  if (item.icon) return item.icon;
+  const fn = sysDerive(b && b.itemIcon);
+  if (!fn) return '';
+  try { return fn(item, char) || ''; } catch (e) { return ''; }
+}
+
 function invReadout(b, item, char) {
   const fn = sysDerive(b.itemReadout);
   if (!fn || !item) return '';

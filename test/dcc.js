@@ -5413,6 +5413,54 @@ function boot(entry) {
     return /Both hands/.test(row || '') || 'the catalogue row reads ' + JSON.stringify(row);
   });
 
+  // -- the icon follows the thing, not the row ------------------------------
+  // Reported from the app: "I added the game icon I wanted to Heal on the hero
+  // tab, and it did not appear in the HUD tab." The Heal in your Hotlist is an
+  // item named "Heal"; the Heal you gave a picture to is a Spell entry. Both
+  // rows read item.icon, so the choice landed on one surface and not the other
+  // -- the same disagreement as the Hotlist tap that would not cast.
+  const healSheet = () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('Icons');S.universeId=u.id;" +
+       "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "(S.char.blocks.spells.skills||[]).forEach(function(s){if(s.name==='Heal')s.icon='healing'});" +
+       "save();renderHero();");
+  };
+  const hasIcon = html => /iconify[^"']*healing/.test(String(html || ''));
+
+  check('[icon] the Spell you gave a picture to wears it on the HUD keypad', () => {
+    healSheet();
+    ev("showTab('hud');renderHUD()");
+    const slot = ev("(function(){var s=document.querySelector('.hot-slot');return s?s.innerHTML:null})()");
+    if (slot === null) return 'no keypad slot rendered';
+    if (!/Heal/.test(slot)) return 'slot 1 is not the Heal: ' + JSON.stringify(String(slot).slice(0, 80));
+    return hasIcon(slot) || 'still drawing the letter: ' + JSON.stringify(String(slot).slice(0, 120));
+  });
+
+  check('[icon] and on its own row on the sheet', () => {
+    healSheet();
+    ev("showTab('items');showSysView('items','bag')");
+    const row = ev("(function(){var r=[].slice.call(document.querySelectorAll('#blk-gear .inv-row'))" +
+      ".filter(function(x){var n=x.querySelector('.inv-name');return n&&/Heal/.test(n.textContent)})[0];" +
+      "var n=r&&r.querySelector('.inv-name');return n?n.innerHTML:null})()");
+    return hasIcon(row) || 'the row draws ' + JSON.stringify(String(row).slice(0, 120));
+  });
+
+  check('[icon] an icon put on the item itself still wins', () => {
+    healSheet();
+    // The nearest answer first: if you set a picture on this copy, that is the
+    // picture, even when the Spell it names carries a different one.
+    ev("S.char.blocks.gear.hotlist[0].icon='fire-spell-cast';save();showTab('hud');renderHUD()");
+    const slot = ev("(function(){var s=document.querySelector('.hot-slot');return s?s.innerHTML:null})()");
+    return /fire-spell-cast/.test(String(slot)) || 'the keypad drew ' + JSON.stringify(String(slot).slice(0, 120));
+  });
+
+  check('[icon] a thing nobody has given a picture to still gets its letter', () => {
+    healSheet();
+    ev("S.char.blocks.gear.hotlist=[{name:'Zzyzx dust',qty:1}];save();showTab('hud');renderHUD()");
+    const slot = ev("(function(){var s=document.querySelector('.hot-slot');return s?s.innerHTML:null})()");
+    return /hot-letter">Z</.test(String(slot)) || 'the keypad drew ' + JSON.stringify(String(slot).slice(0, 120));
+  });
+
   console.log('\nPASS ' + ok.length);
   if (fails.length) { console.log('FAIL ' + fails.length); fails.forEach(f => console.log('  x ' + f)); process.exit(1); }
   console.log('All Dungeon Crawler Carl checks passed.');

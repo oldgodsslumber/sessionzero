@@ -383,6 +383,7 @@ registerSystem({
         // What an item can BE, and what it does once it is that.
         itemOptions: 'derive.gearItemOptions',
         itemReadout: 'derive.gearItemReadout',
+        itemIcon: 'derive.gearItemIcon',
         itemLines: 'derive.gearItemLines',
         itemFields: 'derive.gearItemFields',
         itemActions: 'derive.gearItemActions',
@@ -777,6 +778,29 @@ registerSystem({
     // the slot is not tappable and the keypad says so rather than guessing.
     //   roll  — a Skill or Spell name to roll
     //   spend — take one off the stack (and empty the slot at the last one)
+    // The picture for a thing that has not been given one. A crawler parks a
+    // Spell, a Skill or a weapon in the Hotlist as a bare name, and the icon
+    // that belongs to it is already recorded somewhere else: on the entry in
+    // your Spell list, or on the book's own row. Both are asked, nearest first,
+    // so choosing an icon once is enough for every surface that draws it.
+    gearItemIcon: (item, char) => {
+      if (!item) return '';
+      const names = [item.name, item.skill, item.casts, item.teaches,
+        (typeof dccItemSkillName === 'function') ? dccItemSkillName(item) : ''];
+      const want = names.filter(Boolean).map(n => String(n).toLowerCase());
+      // What YOU know beats the book: an entry's icon is one you chose.
+      const blocks = (char && char.blocks) || {};
+      let hit = '';
+      ['spells', 'skills'].forEach(id => {
+        ((blocks[id] && blocks[id].skills) || []).forEach(s => {
+          if (!hit && s && s.icon && want.indexOf(String(s.name).toLowerCase()) >= 0) hit = s.icon;
+        });
+      });
+      if (hit) return hit;
+      const row = (typeof dccGearByName === 'function') ? dccGearByName(item.name) : null;
+      return (row && row.icon) || '';
+    },
+
     gearItemTap: (item, char) => {
       if (!item) return null;
       // A scroll casts the Spell written on it and is consumed doing so.

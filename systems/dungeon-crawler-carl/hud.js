@@ -111,8 +111,13 @@ function dccHudSlot(b, char, it, i) {
   // The icon is the point of the button: at arm's length on a phone you read the
   // picture, not the label. Falls back to the first letter so an item with no
   // icon chosen is still distinguishable from its neighbours.
-  const ico = it.icon
-    ? iconHTML(it.icon, 34)
+  // Through invIcon, so a Spell you gave a picture to on the sheet arrives here
+  // wearing it. Reading it off the item alone meant the icon you had just
+  // chosen stayed on the Hero tab and the key you actually press in a fight
+  // still said "H".
+  const chosen = (typeof invIcon === 'function') ? invIcon(b, it, char) : it.icon;
+  const ico = chosen
+    ? iconHTML(chosen, 34)
     : '<span class="hot-letter">' + esc(String(it.name || '?').charAt(0).toUpperCase()) + '</span>';
   const attrs = tap
     ? ' onclick="dccHudTap(' + i + ')" title="' + esc(tap.label || it.name) + '"'
