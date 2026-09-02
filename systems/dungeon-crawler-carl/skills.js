@@ -18,12 +18,25 @@
 // checkType: 'evade' (all Attack Skills roll against the target's Evade),
 // 'passive' (never rolled), 'opposed' or 'unopposed' for Utility Skills.
 
+// A picture for every Skill in a category, so a whole shelf of them is legible
+// at arm's length without anyone choosing icons one at a time. A row's own
+// `icon` beats this — Choke Out is a grab, not a generic punch — and a Skill you
+// have given an icon to on your own sheet beats both.
+const DCC_SKILL_CATEGORY_ICONS = {
+  'Bashing Weapon': 'heavy-fall',
+  'Edged Weapon': 'crossed-sabres',
+  'Reach Weapon': 'wizard-staff',
+  'Ranged Weapon': 'arrow-scope',
+  'Hand-To-Hand': 'punch',
+  'Damage Effect': 'punch-blast',
+};
+
 const DCC_SKILLS = [
   { id: 'axe', name: 'Axe', kind: 'attack', category: 'Edged Weapon', stat: 'STR', passive: false, checkType: 'evade', baseDamage: '1d6 + STR Slashing', traits: ['Melee Attack'],
     upgrades: { 5: '+1d6 base damage', 10: '+1d6 base damage, and you may make an extra free Attack with Disadvantage against another foe adjacent to both you and the original target.', 15: '+1d6 base damage, and on an Amazing Success or better, sever an arm (or similar) of your foe (which disarms anyone with a two-handed weapon).' } },
   { id: 'back-claw', name: 'Back Claw', kind: 'attack', category: 'Animal Crawler & Pet', stat: 'STR', passive: false, checkType: 'evade', baseDamage: '1d6 + STR Slashing', traits: ['Melee Attack'],
     upgrades: { 5: '+1d6 base damage', 10: '+1d6 base damage', 15: '+1d6 base damage, and the target gains the Blood Trail Debuff.' } },
-  { id: 'bite', name: 'Bite', kind: 'attack', category: 'Animal Crawler & Pet', stat: 'STR', passive: false, checkType: 'evade', baseDamage: '1d8 + STR Piercing', limitations: 'The target must have an appendage you can clamp down onto. You taste your victim\'s blood. Better hope they\'re not poisonous.', traits: ['Melee Attack'],
+  { id: 'bite', name: 'Bite', icon: 'saber-tooth', kind: 'attack', category: 'Animal Crawler & Pet', stat: 'STR', passive: false, checkType: 'evade', baseDamage: '1d8 + STR Piercing', limitations: 'The target must have an appendage you can clamp down onto. You taste your victim\'s blood. Better hope they\'re not poisonous.', traits: ['Melee Attack'],
     upgrades: { 5: '+1d8 base damage', 10: '+1d8 base damage. You may latch on to move when the foe moves during their next Action (then you let go).', 15: '+1d8 base damage, and the target gains the Woozy Debuff.' } },
   { id: 'bow', name: 'Bow', kind: 'attack', category: 'Ranged Weapon', stat: 'DEX', passive: false, checkType: 'evade', baseDamage: '1d6 + STR Piercing', limitations: 'Requires two hands to wield. Each Attack requires proper ammunition.', range: '100 feet', traits: ['Ranged Attack'],
     upgrades: { 5: '+1d6 base damage', 10: '+1d6 base damage, and add 1 Rank damage die.', 15: '+1d6 base damage, and the target gains the Blood Trail Debuff. “Ranged weapons. | didn\'t like ranged weapons.”' } },
@@ -61,7 +74,7 @@ const DCC_SKILLS = [
     upgrades: { 5: '+1d10 base damage', 10: '+1d10 base damage', 15: '+1d10 base damage, +5ft Splash' } },
   { id: 'shuriken', name: 'Shuriken', kind: 'attack', category: 'Ranged Weapon', stat: 'DEX', passive: false, checkType: 'evade', baseDamage: '1d4 + STR Piercing', aiFavor: '1', range: '30 feet', traits: ['Ranged Attack'],
     upgrades: { 5: '+1d4 base damage, and the range is 40 feet.', 10: '+1d4 base damage, and you may make an extra free attack with Disadvantage.', 15: '+1d4 base damage, and you may make an extra free attack with Disadvantage.' } },
-  { id: 'slice-attack', name: 'Slice Attack', kind: 'attack', category: 'Animal Crawler & Pet', stat: 'DEX', passive: false, checkType: 'evade', baseDamage: '1d4 + STR Slashing', aiFavor: '1', traits: ['Melee Attack'],
+  { id: 'slice-attack', name: 'Slice Attack', icon: 'paw', kind: 'attack', category: 'Animal Crawler & Pet', stat: 'DEX', passive: false, checkType: 'evade', baseDamage: '1d4 + STR Slashing', aiFavor: '1', traits: ['Melee Attack'],
     upgrades: { 5: '+1d4 base damage', 10: '+1d4 base damage', 15: '+2d4 base damage' } },
   { id: 'slingshot', name: 'Slingshot', kind: 'attack', category: 'Ranged Weapon', stat: 'DEX', passive: false, checkType: 'evade', baseDamage: '1d2 + STR Bludgeoning', limitations: 'Requires two hands to wield.', aiFavor: '2', range: '30 feet', traits: ['Ranged Attack'],
     upgrades: { 5: '+1d2 base damage, and its range increases by your Strength score in feet.', 10: '+1d2 base damage, and add 1 Rank damage die.', 15: '+1d2 base damage, and add 1 Rank damage die. Reach weapons allow you to make melee attacks against foes up to 10 feet away but not through occu- pied spaces. You may attack diagonally through the junction of two spaces as long as at least one of those spaces is unoccupied.' } },
@@ -71,7 +84,7 @@ const DCC_SKILLS = [
     upgrades: { 5: '+1d10 base damage', 10: '+1d10 base damage', 15: '+1d10 base damage, and the target (of your size or smaller) is pushed 15 feet.' } },
   { id: 'wrasslin', name: 'Wrasslin\'', kind: 'attack', category: 'Hand-To-Hand', stat: 'STR', passive: false, checkType: 'evade', baseDamage: '1d4 + STR Bludgeoning', limitations: 'Requires two hands to wield. Choose the Choke Out, Dirty Fighting, or Toss Damage Effect (if you wish) before rolling to hit. On Success, the target gains the Held Debuff. Held foes continue to be Held until they spend an Action to attempt escape (Mobs may use their Move Action). To prevent such an escape, you must use an Action as an Interrupt and succeed in a Wrasslin\' STR-Opposed Skill Check.', aiFavor: '1 (only if no Damage Effect is used)', traits: ['Melee Attack'],
     upgrades: { 5: 'You may maintain the Held Debuff at no Action cost if you wish, but your Skill Check to prevent escape is made with Disadvantage.', 10: '+1d4 base damage', 15: '+1d4 base damage Hand-to-hand Damage Effects are a special kind of Passive Skill that can be added to certain hand-to-hand Skills to enhance or modify the attack. If the attack succeeds, the chosen Damage Effect applies as well. If the attack Fails, the Damage Effect does nothing but still goes on cooldown (if there is one). When you make an Attack that adds a Damage Effect, place a mark for later Skill Advancement (p. 169) in either the Attack Skill or the Damage Effect, not both.' } },
-  { id: 'choke-out', name: 'Choke Out', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', traits: ['Wrasslin\' Damage Effect', 'Passive'],
+  { id: 'choke-out', name: 'Choke Out', icon: 'grab', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', traits: ['Wrasslin\' Damage Effect', 'Passive'],
     upgrades: { 5: 'Choke Out activates at 20% Health Bar or less.', 10: 'Choke Out activates at 40% Health Bar or less, and deals ×4 the total damage.', 15: 'Choke Out activates at 80% Health Bar or less, and deals ×8 the total damage.' } },
   { id: 'dirty-fighting', name: 'Dirty Fighting', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', traits: ['Pugilism or Wrasslin\' Damage Effect', 'Passive'],
     upgrades: { 5: 'Also apply The Taint Debuff to the target.', 10: 'Also apply the Blinded Debuff to the target. You no longer lose Popularity on Critical Fails.', 15: 'Also apply an immediate Minor Injury Debuff to the target.' } },
@@ -81,31 +94,31 @@ const DCC_SKILLS = [
     upgrades: { 5: 'The cooldown is 10 hours.', 10: 'The cooldown is 5 hours.', 15: 'The cooldown is 2 hours.' } },
   { id: 'skullcracker', name: 'Skullcracker', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', traits: ['Noggin Nocker Damage Effect', 'Passive'],
     upgrades: { 5: '+1d4 base damage if target is the same size as you.', 10: 'If the target is the same size as you, add 1 Rank damage die, and the target gains the Stunned Debuff.', 15: 'If the target is the same size as you, add 1 Rank damage die, and the target gains the Blood Trail Debuff.' } },
-  { id: 'smush', name: 'Smush', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', limitations: 'You can only apply this Damage Effect to targets with 20% Health Bar or less.', cooldown: 'Once per round. You deal ×2 the total damage.', traits: ['Foot Soldier Damage Effect', 'Passive'],
+  { id: 'smush', name: 'Smush', icon: 'footprint', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', limitations: 'You can only apply this Damage Effect to targets with 20% Health Bar or less.', cooldown: 'Once per round. You deal ×2 the total damage.', traits: ['Foot Soldier Damage Effect', 'Passive'],
     upgrades: { 5: 'Smush activates at 30% Health Bar or less and deals ×3 the total damage.', 10: 'This skill has no cooldown.', 15: 'Smush activates at 40% Health Bar or less and deals ×4 the total damage.' } },
   { id: 'toss', name: 'Toss', kind: 'damage_effect', category: 'Damage Effect', passive: true, checkType: 'passive', traits: ['Wrasslin\' Damage Effect', 'Passive'],
     upgrades: { 5: 'You can Toss foes up to your own size or smaller.', 10: 'You can Toss foes one size larger than you or smaller.', 15: '+1d8 base damage, and you can throw foes two sizes larger than you or smaller. Ranged Skills allow you to strike targets from a distance, hopefully before they can get into range to attack you— you filthy camper. All ranged weapons use your DEX to hit, and some add your STR to the damage.' } },
-  { id: 'acute-ears', name: 'Acute Ears', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
+  { id: 'acute-ears', name: 'Acute Ears', icon: 'human-ear', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'Information on the Mob\'s size and whether you have encountered them before are added to the red dot indicator.', 10: 'Mobs of a lower level than you cannot Am- bush your party.', 15: 'Mobs cannot Ambush your party.' } },
-  { id: 'aiming', name: 'Aiming', kind: 'utility', passive: true, checkType: 'passive', limitations: 'This Skill is used only in conjunction with Ranged Attacks. Mark this Skill for Advancement only when applying its Ranks to such an Attack. You are skilled at targeting vital body parts to deal additional damage. When making a Ranged Attack, you can add your Ranks in this Skill to your Attack Skill Check if you choose to make the Check with Disadvantage. On Success, add 1d4 to the damage.', traits: ['Passive'],
+  { id: 'aiming', name: 'Aiming', icon: 'bullseye', kind: 'utility', passive: true, checkType: 'passive', limitations: 'This Skill is used only in conjunction with Ranged Attacks. Mark this Skill for Advancement only when applying its Ranks to such an Attack. You are skilled at targeting vital body parts to deal additional damage. When making a Ranged Attack, you can add your Ranks in this Skill to your Attack Skill Check if you choose to make the Check with Disadvantage. On Success, add 1d4 to the damage.', traits: ['Passive'],
     upgrades: { 5: '+1d4 damage', 10: '+1d4 base damage', 15: '+1d4 base damage' } },
-  { id: 'alchemy', name: 'Alchemy', kind: 'utility', stat: 'INT', passive: false, checkType: 'opposed',
+  { id: 'alchemy', name: 'Alchemy', icon: 'fizzing-flask', kind: 'utility', stat: 'INT', passive: false, checkType: 'opposed',
     upgrades: { 5: 'You may craft potions up to a +10 bonus level.', 10: 'You may create additional potions of the same kind without spending extra time.', 15: 'You can write the recipe for any potion you find.' } },
-  { id: 'ambush', name: 'Ambush', kind: 'utility', stat: 'INT', passive: false, checkType: 'opposed',
+  { id: 'ambush', name: 'Ambush', icon: 'ninja-mask', kind: 'utility', stat: 'INT', passive: false, checkType: 'opposed',
     upgrades: { 5: 'If you Attack with your Surprise Action, add an Ambush Rank damage die to your Surprise Attack damage.', 10: 'When other crawlers in your party roll this skill untrained, they roll as normal (not with Disadvantage). “That is the equivalent of dropping a grenade down your pants and shouting, \'Yolo!\'”', 15: 'You gain a second bonus Action as a sur- prise Action. This bonus Action can\'t be an Attack.' } },
-  { id: 'animal-handling', name: 'Animal Handling', kind: 'utility', stat: 'CHA', passive: false, checkType: 'unopposed',
+  { id: 'animal-handling', name: 'Animal Handling', icon: 'sitting-dog', kind: 'utility', stat: 'CHA', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'Choose an animal type to specialize in. You have Advantage on your Animal Handling Skill Checks against that animal type. You gain a second bonus Action as a surprise Action. This bonus Action can\'t be an attack.', 10: 'Forming each level of bonding with a poten- tial pet takes half the normal time.', 15: 'You can have up to two pets.' } },
-  { id: 'arcane', name: 'Arcane', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
+  { id: 'arcane', name: 'Arcane', icon: 'magic-palm', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'You are able to determine details such as the specific Rank and bonus levels of magical items.', 10: 'You can imbue items with inherent spells using an Arcanist Table. See Crafting on p. 221.', 15: 'The default cooldown of your imbued spells is 3 hours.' } },
-  { id: 'attack-of-opportunity', name: 'Attack of Opportunity', kind: 'utility', passive: true, checkType: 'passive', limitations: 'Requires a single-handed melee weapon with a range no greater than 5 feet. When a foe moves out of a space adjacent to you (ex- cept via a Step), you may spend an Action to make an Attack Action as an Interrupt against that foe. On Success, roll damage and apply any other effects from the Attack!', traits: ['Passive', 'Interrupt'],
+  { id: 'attack-of-opportunity', name: 'Attack of Opportunity', icon: 'riposte', kind: 'utility', passive: true, checkType: 'passive', limitations: 'Requires a single-handed melee weapon with a range no greater than 5 feet. When a foe moves out of a space adjacent to you (ex- cept via a Step), you may spend an Action to make an Attack Action as an Interrupt against that foe. On Success, roll damage and apply any other effects from the Attack!', traits: ['Passive', 'Interrupt'],
     upgrades: { 5: 'If the foe moves into another space adjacent to you, they must stop.', 10: 'A foe using their Step no longer prevents this ability.', 15: 'Roll the Attack Skill Check with Advantage.' } },
-  { id: 'backfire', name: 'Backfire', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed', limitations: 'Compensated Anarchist Class Only You are skilled at neutralizing and deconstructing traps without the use of a Sapper\'s Table. Triggering mecha- nisms are quite valuable. Time required to neutralize a trap is 10 minutes. Time required to deconstruct it is 1 hour. Make an Unopposed Skill Check. On Success, you successfully take apart the trap and can repurpose it.',
+  { id: 'backfire', name: 'Backfire', icon: 'surprised-skull', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed', limitations: 'Compensated Anarchist Class Only You are skilled at neutralizing and deconstructing traps without the use of a Sapper\'s Table. Triggering mecha- nisms are quite valuable. Time required to neutralize a trap is 10 minutes. Time required to deconstruct it is 1 hour. Make an Unopposed Skill Check. On Success, you successfully take apart the trap and can repurpose it.',
     upgrades: { 5: 'You can identify when the trap was placed. Time required to neutralize a trap is 5 minutes.', 10: 'You can identify when the trap was created. Time required to deconstruct a trap is 30 minutes.', 15: 'You can identify the designer of the trap. Time required to deconstruct a trap is 15 minutes.' } },
-  { id: 'balance', name: 'Balance', kind: 'utility', stat: 'DEX', passive: false, checkType: 'unopposed',
+  { id: 'balance', name: 'Balance', icon: 'yin-yang', kind: 'utility', stat: 'DEX', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'You may perform Move Actions in difficult terrain without penalty.', 10: 'When subject to a Take Down or involuntary Move effects, you may use this skill as a free Interrupt Action to avoid the effect.', 15: 'You may perform your Step on vertical surfaces (yes, like in The Matrix), but must end it on a flat(ish) surface.' } },
-  { id: 'basic-science', name: 'Basic Science', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
+  { id: 'basic-science', name: 'Basic Science', icon: 'materials-science', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'Experiments take 1 hour to perform.', 10: 'Choose a specialty (physics, biology, chemis- try, Earth science, etc.), and roll with Advantage when dealing with that.', 15: 'Experiments take 30 minutes to perform.' } },
-  { id: 'bomb-surgeon', name: 'Bomb Surgeon', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
+  { id: 'bomb-surgeon', name: 'Bomb Surgeon', icon: 'cluster-bomb', kind: 'utility', stat: 'INT', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'Time required is 30 minutes.', 10: 'You never have to make an Explosives Han- dling Skill Check when using this skill.', 15: 'When cutting dynamite in half to make small- er bombs, round dice up. Time required is 15 minutes.' } },
   { id: 'calligraphy', name: 'Calligraphy', kind: 'utility', stat: 'DEX', passive: false, checkType: 'unopposed',
     upgrades: { 5: 'Roll with Advantage on your next Charisma Skill Check vs. the recipient of your beautiful paper.', 10: 'You are able to craft scrolls as if this were a crafting skill. See Crafting, p. 221.', 15: 'Once per floor, you may craft a scroll for a spell you have only seen cast within the last 2 hours.' } },
@@ -273,4 +286,13 @@ function dccSkill(id) { return DCC_SKILLS.find(s => s.id === id) || null; }
 function dccSkillByName(name) {
   const n = String(name || '').toLowerCase();
   return DCC_SKILLS.find(s => s.name.toLowerCase() === n) || null;
+}
+
+// The icon for a Skill by name: what the row says, else what its category says.
+// Nothing for a Skill nobody has drawn yet, which is how a row keeps its letter
+// instead of borrowing somebody else's picture.
+function dccSkillIcon(name) {
+  const row = (typeof dccSkillByName === 'function') ? dccSkillByName(name) : null;
+  if (!row) return '';
+  return row.icon || DCC_SKILL_CATEGORY_ICONS[row.category] || '';
 }

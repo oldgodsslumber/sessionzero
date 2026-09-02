@@ -129,3 +129,11 @@ function dccSpellByName(name) {
   return DCC_SPELLS.find(s => s.name.toLowerCase() === n
     || (s.aka || []).some(a => a.toLowerCase() === n)) || null;
 }
+
+// The icon for a Spell by name. Spells have no categories to fall back on, so
+// this is what the row says and nothing else — a Spell nobody has drawn yet
+// keeps its letter rather than borrowing a Skill's picture.
+function dccSpellIcon(name) {
+  const row = (typeof dccSpellByName === 'function') ? dccSpellByName(name) : null;
+  return (row && row.icon) || '';
+}

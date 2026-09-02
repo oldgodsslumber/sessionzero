@@ -329,6 +329,7 @@ registerSystem({
         statMod: 'derive.skillStatMod',
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.skillLookup',
+        entryIcon: 'derive.entryIcon',
         extra: 'derive.wornBonus',
         // Skills your gear lends you, which you have no Ranks of your own in.
         lent: 'derive.wornSkills',
@@ -348,6 +349,7 @@ registerSystem({
         statMod: 'derive.spellStatMod',
         advanceRoll: 'derive.advanceSkill',
         lookup: 'derive.spellLookup',
+        entryIcon: 'derive.entryIcon',
         upgrades: 'derive.activeUpgrades',
         granted: 'derive.grantedSpells',
         catalog: 'spells',
@@ -389,6 +391,7 @@ registerSystem({
         itemActions: 'derive.gearItemActions',
         itemAct: 'derive.gearItemAct',
         lookup: 'derive.skillLookup',
+        entryIcon: 'derive.entryIcon',
         // The book's own items. `catalog` puts their names on the add box; the
         // template is what one of them arrives carrying, so typing "Healing
         // Potion" gets you the potion rather than the words.
@@ -783,6 +786,14 @@ registerSystem({
     // that belongs to it is already recorded somewhere else: on the entry in
     // your Spell list, or on the book's own row. Both are asked, nearest first,
     // so choosing an icon once is enough for every surface that draws it.
+    // The picture for a Skill or a Spell by name. Asked by the sheet's own rows
+    // and, through gearItemIcon, by anything in the Hotlist that works as one.
+    entryIcon: (name) => {
+      const sk = (typeof dccSkillIcon === 'function') ? dccSkillIcon(name) : '';
+      if (sk) return sk;
+      return (typeof dccSpellIcon === 'function') ? dccSpellIcon(name) : '';
+    },
+
     gearItemIcon: (item, char) => {
       if (!item) return '';
       const names = [item.name, item.skill, item.casts, item.teaches,
@@ -798,7 +809,12 @@ registerSystem({
       });
       if (hit) return hit;
       const row = (typeof dccGearByName === 'function') ? dccGearByName(item.name) : null;
-      return (row && row.icon) || '';
+      if (row && row.icon) return row.icon;
+      // Failing all that, what it WORKS AS: a Club in your Hotlist is a Bashing
+      // Weapon and the book has a picture for those.
+      let out = '';
+      want.forEach(n => { if (!out) out = SYS.derive.entryIcon(n) || ''; });
+      return out;
     },
 
     gearItemTap: (item, char) => {

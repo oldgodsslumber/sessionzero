@@ -615,12 +615,30 @@ function skillSetField(id, i, key, value) {
   blockSyncAll(null);
 }
 
+// The icon a Skill or Spell row draws. Your own choice first, then the pack's:
+// the book knows a Longsword is an Edged Weapon and what an Edged Weapon looks
+// like, so a fresh sheet arrives legible instead of as a wall of identical rows
+// waiting for somebody to pick 113 icons by hand.
+function skillIcon(b, s) {
+  if (!s) return '';
+  if (s.icon) return s.icon;
+  const fn = sysDerive(b && b.entryIcon);
+  if (!fn) return '';
+  try { return fn(s.name) || ''; } catch (e) { return ''; }
+}
+
 function skillIconBtn(b, s, i) {
   if (typeof iconField !== 'function') return '';
   return '<button class="btn btn-secondary btn-xs ic-btn" title="' +
     (s.icon ? 'Change the icon' : 'Choose an icon') + '"' +
     ' onclick="skillIconOpen(' + jsArg(b.id) + ',' + i + ',this)">' +
-    (s.icon ? iconHTML(s.icon, 14) : '<span class="ic-btn-empty">◌</span>') + '</button>';
+    (function () {
+      // The button shows what the row is showing, so it is a picture of this
+      // Skill rather than an empty ring beside one. The picker still opens on
+      // YOUR choice, which is what "Change the icon" would change.
+      const ic = skillIcon(b, s);
+      return ic ? iconHTML(ic, 14) : '<span class="ic-btn-empty">◌</span>';
+    })() + '</button>';
 }
 
 function skillIconOpen(blockId, i, anchor) {
@@ -696,13 +714,14 @@ registerBlockType('skillList', {
       const i = list.indexOf(s);
       const mod = (modOf && s.stat) ? modOf(ctx.char, s.stat) : 0;
       const total = (s.rank || 0) + mod + blockExtra(b, 'skill', s.name, ctx.char);
-      h += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      h += `<div class="sk-row" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
         <div title="Mark when you use this Skill" onclick="skillMark('${esc(b.id)}',${i})"
           style="width:20px;height:20px;flex-shrink:0;border:2px solid ${s.marked ? 'var(--green)' : 'var(--border)'};
           border-radius:4px;cursor:pointer;background:${s.marked ? 'var(--green)' : 'transparent'};
           display:flex;align-items:center;justify-content:center;font-size:12px;color:#08140b">${s.marked ? '✓' : ''}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${s.icon ? iconHTML(s.icon, 15) + ' ' : ''}${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
+          <div class="sk-name" style="font-size:13px;font-weight:600">${(() => { const ic = skillIcon(b, s);
+            return ic ? iconHTML(ic, 15) + ' ' : ''; })()}${esc(s.name)}${s.passive ? ' <span style="font-size:9px;color:var(--muted)">PASSIVE</span>' : ''}${s.custom ? ' <span style="font-size:9px;color:var(--accent)">CUSTOM</span>' : ''}</div>
           <div style="font-size:10px;color:var(--muted)">${esc(s.stat || '—')}${mod ? ' +' + mod : ''}${s.checkType ? ' · ' + esc(s.checkType) : ''}</div>
           ${(() => {
             // What it actually does. A Spell called "Heal" tells you nothing on

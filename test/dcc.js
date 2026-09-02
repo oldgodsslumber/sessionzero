@@ -2009,11 +2009,15 @@ function boot(entry) {
     // row's text, which broke every time the row gained a control — first the
     // roll button, then the icon button. What the check means is "the Bow row
     // shows a total", and .sk-total says that directly.
-    const total = ev("(function(){var b=document.getElementById('blk-skills');" +
-      "var d=[].slice.call(b.querySelectorAll('div'));" +
-      "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length){" +
-      "var row=d[i].parentElement.parentElement;var t=row.querySelector('.sk-total');" +
-      "return t?t.textContent.trim():'(no .sk-total on the row)'}}return '(no Bow row)'})()");
+    // Found by class, not by shape. Identifying the name as "the div with no
+    // children" meant "the div before anyone puts an icon in it", which is a
+    // fact about the markup rather than about the Bow.
+    const total = ev("(function(){var rows=[].slice.call(" +
+      "document.querySelectorAll('#blk-skills .sk-row'));" +
+      "for(var i=0;i<rows.length;i++){var n=rows[i].querySelector('.sk-name');" +
+      "if(!n||n.textContent.trim()!=='Bow')continue;" +
+      "var t=rows[i].querySelector('.sk-total');" +
+      "return t?t.textContent.trim():'(no .sk-total on the row)'}return '(no Bow row)'})()");
     return /^[+-]?\d+$/.test(total) || 'no total on the Bow row: ' + JSON.stringify(total);
   });
 
@@ -2042,10 +2046,11 @@ function boot(entry) {
   });
   check('[sync] a Skill granted by gear reaches that Skill total', () => {
     bowSheet();
-    const row = () => ev("(function(){var b=document.getElementById('blk-skills');" +
-      "var d=[].slice.call(b.querySelectorAll('div'));" +
-      "for(var i=0;i<d.length;i++){if(/^Bow/.test(d[i].textContent.trim())&&!d[i].children.length)" +
-      "return d[i].parentElement.parentElement.textContent.replace(/\\s+/g,' ').trim()}return ''})()");
+    const row = () => ev("(function(){var rows=[].slice.call(" +
+      "document.querySelectorAll('#blk-skills .sk-row'));" +
+      "for(var i=0;i<rows.length;i++){var n=rows[i].querySelector('.sk-name');" +
+      "if(n&&n.textContent.trim()==='Bow')return rows[i].textContent.trim()}" +
+      "return ''})()");
     const before = row();
     ev("S.char.blocks.gear.equipped.hands[0].grantsSkill='Bow';");
     ev("invSetField('gear','equipped','hands',0,'grantsSkillN',2);");
@@ -5459,6 +5464,77 @@ function boot(entry) {
     ev("S.char.blocks.gear.hotlist=[{name:'Zzyzx dust',qty:1}];save();showTab('hud');renderHUD()");
     const slot = ev("(function(){var s=document.querySelector('.hot-slot');return s?s.innerHTML:null})()");
     return /hot-letter">Z</.test(String(slot)) || 'the keypad drew ' + JSON.stringify(String(slot).slice(0, 120));
+  });
+
+  // -- the book's own pictures ----------------------------------------------
+  // A category is a picture: every Bashing Weapon is a heavy-fall, every Edged
+  // Weapon a crossed sabre. A row's own icon beats its category -- Choke Out is
+  // a grab, not a generic punch -- and what YOU chose on your sheet beats both.
+  check('[skillicon] a weapon category gives every Skill in it a picture', () => {
+    const want = {
+      Club: 'heavy-fall', 'Improvised Weapons': 'heavy-fall', Warhammer: 'heavy-fall',
+      Axe: 'crossed-sabres', Dagger: 'crossed-sabres', Longsword: 'crossed-sabres', Rapier: 'crossed-sabres',
+      'Herding Weapons': 'wizard-staff', Lance: 'wizard-staff', Polearm: 'wizard-staff', Quarterstaff: 'wizard-staff',
+      Bow: 'arrow-scope', Crossbow: 'arrow-scope', Handgun: 'arrow-scope', Javelin: 'arrow-scope',
+      Shotgun: 'arrow-scope', Shuriken: 'arrow-scope', Slingshot: 'arrow-scope',
+      'Foot Soldier': 'punch', 'Noggin Nocker': 'punch', Pugilism: 'punch',
+      'Unarmed Combat': 'punch', "Wrasslin'": 'punch',
+      'Dirty Fighting': 'punch-blast', 'Iron Punch': 'punch-blast',
+      'Powerful Strike': 'punch-blast', Skullcracker: 'punch-blast', Toss: 'punch-blast',
+    };
+    const bad = Object.keys(want).filter(n => ev("dccSkillIcon(" + JSON.stringify(n) + ")") !== want[n]);
+    return bad.length === 0
+      || bad.map(n => n + ' -> ' + JSON.stringify(ev("dccSkillIcon(" + JSON.stringify(n) + ")"))).join('; ');
+  });
+
+  check('[skillicon] a Skill with its own picture keeps it', () => {
+    const want = { 'Choke Out': 'grab', Smush: 'footprint', Bite: 'saber-tooth',
+      'Slice Attack': 'paw', 'Acute Ears': 'human-ear', Aiming: 'bullseye',
+      Alchemy: 'fizzing-flask', Ambush: 'ninja-mask', 'Animal Handling': 'sitting-dog',
+      Arcane: 'magic-palm', 'Attack of Opportunity': 'riposte', Backfire: 'surprised-skull',
+      Balance: 'yin-yang', 'Basic Science': 'materials-science', 'Bomb Surgeon': 'cluster-bomb' };
+    const bad = Object.keys(want).filter(n => ev("dccSkillIcon(" + JSON.stringify(n) + ")") !== want[n]);
+    return bad.length === 0
+      || bad.map(n => n + ' -> ' + JSON.stringify(ev("dccSkillIcon(" + JSON.stringify(n) + ")"))).join('; ');
+  });
+
+  check('[skillicon] a Skill nobody has drawn yet has no picture', () => {
+    // Not a borrowed one. Back Claw and Calligraphy are still waiting, and a
+    // wrong picture is worse than a letter.
+    const bad = ['Back Claw', 'Calligraphy', 'Cooking']
+      .filter(n => ev("dccSkillIcon(" + JSON.stringify(n) + ")") !== '');
+    return bad.length === 0 || bad.join(', ') + ' borrowed one';
+  });
+
+  check('[skillicon] every slug written down is a real game-icons name', () => {
+    // A typo is invisible in the app -- a masked icon that does not exist just
+    // renders nothing -- so it is caught here instead. Shape, not spelling:
+    // lower-case words joined by single hyphens, which is the whole naming
+    // scheme, and nothing that looks like an emoji or a stray space.
+    const slugs = ev("(function(){var out=[];" +
+      "for(var k in DCC_SKILL_CATEGORY_ICONS)out.push(DCC_SKILL_CATEGORY_ICONS[k]);" +
+      "DCC_SKILLS.forEach(function(s){if(s.icon)out.push(s.icon)});" +
+      "DCC_SPELLS.forEach(function(s){if(s.icon)out.push(s.icon)});return out})()");
+    const bad = slugs.filter(x => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(x));
+    return bad.length === 0 || 'not slugs: ' + JSON.stringify(bad);
+  });
+
+  check('[skillicon] the sheet draws it on the Skill row', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.blocks.skills.skills=[{name:'Club',rank:1,stat:'STR'}];save();renderHero();");
+    const row = ev("(function(){var r=[].slice.call(document.querySelectorAll('#blk-skills .sk-row'))" +
+      ".filter(function(x){var n=x.querySelector('.sk-name');return n&&n.textContent.trim()==='Club'})[0];" +
+      "var n=r&&r.querySelector('.sk-name');return n?n.innerHTML:null})()");
+    return /iconify[^"']*heavy-fall/.test(String(row)) || 'the row drew ' + JSON.stringify(String(row).slice(0, 120));
+  });
+
+  check('[skillicon] and the keypad draws it for a weapon that works as one', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.blocks.gear.hotlist=[{name:'Tire Iron',skill:'Club',qty:1}];save();" +
+       "showTab('hud');renderHUD();");
+    const slot = ev("(function(){var s=document.querySelector('.hot-slot');return s?s.innerHTML:null})()");
+    return /iconify[^"']*heavy-fall/.test(String(slot))
+      || 'the keypad drew ' + JSON.stringify(String(slot).slice(0, 140));
   });
 
   console.log('\nPASS ' + ok.length);
