@@ -575,6 +575,9 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
 @keyframes popIn{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 .fate-die{animation:popIn .3s cubic-bezier(.34,1.56,.64,1)}
 /* power icons (game-icons.net via mask, inherits theme color) */
+/* A value that is shown rather than offered. Reads as the number it is, with
+   none of an input's affordance to type into it. */
+.id-val{padding:6px 2px;font-weight:600;font-size:14px;color:var(--text);min-height:20px}
 .pw-icon{display:inline-block;vertical-align:-3px;background:currentColor;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain}
 .ic-btn{padding:3px 6px;min-width:26px}
 .ic-btn-empty{color:var(--muted);font-size:13px;line-height:1}

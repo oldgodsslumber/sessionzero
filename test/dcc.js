@@ -4432,6 +4432,63 @@ function boot(entry) {
     return bits === '[]' || bits;
   });
 
+  // ── who you are is not a text box ────────────────────────────────────────
+  // Name, Crawler Number, Race, Class and the Unenhanced Stats are set once and
+  // then stand. Nine inputs sitting open on the page you read every round is
+  // nine chances to change a Stat with a thumb and never notice it happened.
+  const sheetAt = editing => ev(
+    "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+    "if(sysEditing()!==" + (editing ? 'true' : 'false') + ")sysToggleEdit();renderHero();");
+
+  check('[locked] the identity header is read-only until you say otherwise', () => {
+    sheetAt(false);
+    const inputs = ev("document.querySelectorAll('#hero-sheet .id-grid input').length");
+    if (inputs !== 0) return inputs + ' text boxes are open on the identity header';
+    const vals = ev("document.querySelectorAll('#hero-sheet .id-val').length");
+    return vals >= 5 || 'only ' + vals + ' identity values are shown';
+  });
+
+  check('[locked] an Unenhanced Stat is shown, not offered', () => {
+    sheetAt(false);
+    const inputs = ev("document.querySelectorAll('#blk-stats input').length");
+    if (inputs !== 0) return inputs + ' Stat inputs are open';
+    return ev("document.querySelectorAll('#blk-stats .id-val').length") === 5
+      || 'the five Stats did not print as values';
+  });
+
+  check('[locked] Edit opens them, and Done closes them again', () => {
+    sheetAt(true);
+    const open = ev("document.querySelectorAll('#blk-stats input').length");
+    if (open !== 5) return 'Edit gave ' + open + ' of five Stat inputs';
+    if (!ev("document.querySelectorAll('#hero-sheet .id-grid input').length"))
+      return 'Edit did not open the identity fields';
+    sheetAt(false);
+    return ev("document.querySelectorAll('#blk-stats input').length") === 0
+      || 'Done left the Stats open';
+  });
+
+  check('[locked] the switch says which state it is in', () => {
+    sheetAt(false);
+    const off = ev("(function(){var b=[].slice.call(document.querySelectorAll('#hero-sheet button'))" +
+      ".filter(function(x){return /sysToggleEdit/.test(x.getAttribute('onclick')||'')})[0];" +
+      "return b?b.textContent.trim():null})()");
+    sheetAt(true);
+    const on = ev("(function(){var b=[].slice.call(document.querySelectorAll('#hero-sheet button'))" +
+      ".filter(function(x){return /sysToggleEdit/.test(x.getAttribute('onclick')||'')})[0];" +
+      "return b?b.textContent.trim():null})()");
+    sheetAt(false);
+    return (off === 'Edit' && on === 'Done') || 'the switch reads ' + JSON.stringify([off, on]);
+  });
+
+  check('[locked] locking changes what you can touch, not what is stored', () => {
+    sheetAt(false);
+    ev("S.char.crawlerNumber=12345;S.char.blocks.stats.STR.base=7;save();renderHero();");
+    const text = ev("document.getElementById('hero-sheet').textContent");
+    if (text.indexOf('12345') < 0) return 'the Crawler Number is not on the page at all';
+    return /\b7\b/.test(ev("document.getElementById('blk-stats').textContent"))
+      || 'the Unenhanced STR is not shown';
+  });
+
   // ── review pass: focus, dead handlers, and custom options ────────────────
   // Three classes of bug that a passing suite had been missing.
 
@@ -4440,7 +4497,10 @@ function boot(entry) {
   // still live in traitGrid: editing a Stat on the sheet lost the caret after
   // one keystroke.
   check('[focus] typing in a Stat does not replace the input', () => {
-    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};renderHero();");
+    // Open the sheet's Edit switch first: an Unenhanced Stat is not a text box
+    // until you say so. The focus rule still has to hold once it is one.
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};" +
+       "if(sysEditing())sysToggleEdit();sysToggleEdit();renderHero();");
     const el = "document.querySelector('#blk-stats input')";
     if (!ev('!!' + el)) return 'no Stat input on the sheet';
     ev(el + ".setAttribute('data-probe','1')");

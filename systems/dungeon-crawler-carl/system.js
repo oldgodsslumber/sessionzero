@@ -290,7 +290,10 @@ registerSystem({
     // Everything without a span is one column, which is the phone unchanged.
     blocks: [
       {
-        id: 'stats', type: 'traitGrid', label: 'The Five Core Stats', span: 'full',
+        // Set at creation and raised when you level. Not a text box you can
+        // knock with a thumb halfway down the page: the sheet's Edit switch
+        // opens it, the way the Crawler Number is opened.
+        id: 'stats', type: 'traitGrid', label: 'The Five Core Stats', span: 'full', locked: true,
         hint: 'Unenhanced is you. Enhanced adds gear, Spells and Buffs. Everything rolls off the Mod.',
         layers: ['Unenhanced', 'Enhanced'],
         mod: 'derive.statMod',

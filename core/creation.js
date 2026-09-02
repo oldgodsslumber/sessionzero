@@ -78,12 +78,18 @@ function renderSysSheet(){
   // block pack's sheet had no way to see or switch the world it belongs to.
   const LABELS={name:'Name',crawlerNumber:'Crawler Number',race:'Race',class:'Class',level:'Level'};
   let h=universeBarHTML();
-  h+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
+  // Wrapping, because the row is a title and five buttons and a phone is 360px
+  // wide: unwrapped, the last one ran off the edge of the card.
+  h+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;
+    gap:6px;flex-wrap:wrap;margin-bottom:8px">`;
   h+=`<div class="pg-title">${esc(lexU('sheet'))}</div>`;
   // The sheet used to be a one-way door: once creation finished there was no
   // control anywhere to export, start another character, or fix a choice —
   // wizReopen() existed and nothing called it.
-  h+=`<div style="display:flex;gap:4px;align-items:center">`;
+  h+=`<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">`;
+  h+=`<button class="btn ${_sysEdit?'btn-gold':'btn-secondary'} btn-xs" onclick="sysToggleEdit()"
+    title="${_sysEdit?'Stop editing who you are':'Change your name, number, Race, Class or Unenhanced Stats'}"
+    >${_sysEdit?'Done':'Edit'}</button>`;
   if((SYS.creation||[]).length){
     h+=`<button class="btn btn-secondary btn-xs" onclick="sysReopenCreation()" title="Go back and change your creation choices">Edit creation</button>`;
   }
@@ -98,10 +104,14 @@ function renderSysSheet(){
   // truthful answer and it follows the party down.
   const shownFloor=(S&&S.floor)||((ch&&ch.floor!==undefined&&ch.floor!==null)?ch.floor:3);
   h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${esc(String(shownFloor))}</div>`;
-  h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
+  h+=`<div class="id-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
   ids.forEach(f=>{
     h+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;
-    h+=`<input value="${esc(String(ch[f]===undefined?'':ch[f]))}" oninput="sysIdentitySet('${esc(f)}',this.value)"></div>`;
+    const v=String(ch[f]===undefined||ch[f]===null?'':ch[f]);
+    h+=_sysEdit
+      ? `<input value="${esc(v)}" oninput="sysIdentitySet('${esc(f)}',this.value)">`
+      : `<div class="id-val">${esc(v||'—')}</div>`;
+    h+=`</div>`;
   });
   h+=`</div></div>`;
   // A pack may have prose that no block type covers.
@@ -117,6 +127,15 @@ function renderSysSheet(){
   renderBlockSheet(ch,'sys-blocks');
   renderRollSidebar();
 }
+// Who you are is not something you edit by brushing against it. Your name,
+// your Crawler Number, your Race, your Class and your Unenhanced Stats are set
+// once and then stand — so the sheet SHOWS them, and the Edit switch is what
+// makes them typeable. Nine text boxes sitting open on the page you read every
+// round is nine chances to change a stat with a thumb and never notice.
+let _sysEdit=false;
+function sysEditing(){return _sysEdit;}
+function sysToggleEdit(){_sysEdit=!_sysEdit;renderHero();}
+
 function sysIdentitySet(field,v){
   if(!S.char)return;
   // Only coerce the fields the pack says are numbers. Coercing anything that

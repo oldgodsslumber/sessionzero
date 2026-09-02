@@ -175,10 +175,16 @@ registerBlockType('traitGrid', {
         const worn = blockExtra(b, 'trait', id, ctx.char);
         const enhanced = (cell.base || 0) + (cell.bonus || 0) + worn;
         const mod = modOf ? modOf(enhanced) : 0;
+        // A locked block shows its base rather than offering it: an Unenhanced
+        // Stat is set at creation and changes when you level, not when a finger
+        // lands on the page you read every round. The Edit switch opens it.
+        const open = !b.locked || (typeof sysEditing === 'function' && sysEditing());
         h += `<div style="font-size:13px;font-weight:600" title="${esc(t.desc || '')}">${esc(t.name || id)}</div>
-              <input type="number" value="${cell.base || 0}" style="width:64px;text-align:center;padding:5px"
-                oninput="traitSet('${esc(b.id)}','${esc(id)}','base',this.value)"
-                onchange="traitCommit('${esc(b.id)}')">
+              ${open
+                ? `<input type="number" value="${cell.base || 0}" style="width:64px;text-align:center;padding:5px"
+                    oninput="traitSet('${esc(b.id)}','${esc(id)}','base',this.value)"
+                    onchange="traitCommit('${esc(b.id)}')">`
+                : `<div class="id-val" style="width:64px;text-align:center">${cell.base || 0}</div>`}
               <div id="tg-${esc(b.id)}-${esc(id)}-tot" style="width:64px;text-align:center;font-weight:700">${enhanced}</div>
               <div id="tg-${esc(b.id)}-${esc(id)}-mod" style="width:52px;text-align:center;color:var(--accent);font-weight:700">${mod >= 0 ? '+' : ''}${mod}</div>
               ${roll ? traitRollBtn(b.id, id, t.name || id) : ''}`;
