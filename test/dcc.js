@@ -2317,11 +2317,50 @@ function boot(entry) {
     const page = pageWith(printed(), 'WORN AND HELD');
     return /\+3 STR/.test(page) || 'the ring printed as a bare name';
   });
-  check('[print] the Hotlist page has a numbered row per slot', () => {
+  check('[print] the Hotlist page is a keypad, one square per slot', () => {
     const page = pageWith(printed(), 'HOTLIST');
-    // Ten slots, including the empty ones — it is a sheet you write on.
-    const rows = (page.match(/<tr>/g) || []).length;
-    return rows >= 10 || 'only ' + rows + ' rows for a ten-slot Hotlist';
+    // Ten slots including the empty ones -- it is a sheet you write on -- and
+    // the grid is three across, so twelve squares come out of ten.
+    const keys = (page.match(/class="pr-key/g) || []).length;
+    if (keys < 12) return 'only ' + keys + ' squares for a ten-slot Hotlist';
+    return /pr-pad/.test(page) || 'the keypad grid is missing';
+  });
+
+  check('[print] a square carries the picture, the name and one line', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    const text = page.replace(/<[^>]*>/g, ' ').replace(/[ ]+/g, ' ');
+    if (!/pr-key-nm/.test(page)) return 'no name in the squares';
+    if (!/pr-key-sub/.test(page)) return 'no mechanical line in the squares';
+    return /Fireball/.test(text) || 'the scroll is not on the keypad';
+  });
+
+  check('[print] a square does not tell paper to tap it', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    const text = page.replace(/<[^>]*>/g, ' ');
+    if (/tap to cast/i.test(text)) return 'the printed keypad says "tap to cast"';
+    // ...but the rest of the line survives: only the instruction is cut.
+    return /pr-key-sub/.test(page) || 'every square lost its line, not just the tap';
+  });
+
+  check('[print] icons print as images, never as the app masked span', () => {
+    // .pw-icon is a CSS mask over a background colour, and a browser leaves
+    // backgrounds out of a printout unless the reader has ticked a box in the
+    // print dialog. The page would look right and come out with holes in it.
+    const doc = printed();
+    if (/pw-icon/.test(doc)) return 'a masked span reached the printed sheet';
+    return /<img class="pr-ico"/.test(doc) || 'no printed icon at all';
+  });
+
+  check('[print] a Skill prints the picture its category gives it', () => {
+    const doc = printed();
+    return /pr-ico[^>]*game-icons%3A(heavy-fall|crossed-sabres|arrow-scope|punch)/.test(doc)
+      || 'no weapon-category icon anywhere on the sheet';
+  });
+
+  check('[print] a square with no picture still shows its letter', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    return /pr-letter/.test(page)
+      || 'nothing falls back, so a sheet printed offline is a page of blank boxes';
   });
   check('[print] a scroll on the Hotlist says what it casts', () => {
     const page = pageWith(printed(), 'HOTLIST');

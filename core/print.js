@@ -75,6 +75,30 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .pr-tot{display:flex;gap:14pt;flex-wrap:wrap;align-items:baseline}
 .pr-sub{font-size:7.5pt;color:#4a5a4c;line-height:1.35;margin-top:1pt}
 .pr-q{color:#4a5a4c}
+/* An <img>, not the app's masked span: a mask sits on a background, and a
+   browser drops backgrounds when it prints unless the reader has ticked
+   "Background graphics". The screen would have looked perfect and the paper
+   would have come out with holes where the pictures were. */
+.pr-ico{display:inline-block;vertical-align:-1.5pt;margin-right:3pt}
+.pr-letter{display:inline-block;font-family:'Oswald',sans-serif;font-weight:600;
+  color:#68786a;text-align:center}
+/* The Hotlist prints as the keypad it is on the phone: things you reach for
+   mid-fight, found by their picture rather than by reading ten rows of a table.
+   Twelve squares for ten slots — the two spare are for what you pick up. */
+.pr-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:7pt;margin-top:5pt}
+.pr-key{border:1pt solid #101410;border-radius:4pt;padding:5pt 6pt 4pt;min-height:1.72in;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  break-inside:avoid;page-break-inside:avoid;position:relative}
+.pr-key.is-spare{border-style:dashed;border-color:#b9c3ba}
+.pr-key-n{position:absolute;top:3pt;left:5pt;font-family:'Oswald',sans-serif;font-size:7.5pt;
+  letter-spacing:.8px;color:#68786a}
+.pr-key-q{position:absolute;top:3pt;right:5pt;font-family:'Oswald',sans-serif;font-size:8.5pt;
+  font-weight:600;color:#101410}
+.pr-key-ico{height:56pt;display:flex;align-items:center;justify-content:center;margin-top:9pt}
+.pr-key-ico .pr-letter{font-size:34pt;line-height:1}
+.pr-key-nm{font-weight:600;font-size:9.5pt;line-height:1.15;margin-top:3pt}
+.pr-key-sub{font-size:7.2pt;color:#4a5a4c;line-height:1.25;margin-top:2pt}
+.pr-key-rule{margin-top:auto;width:100%;border-bottom:.5pt solid #b9c3ba;height:9pt}
 .pr-tot{margin-top:7pt;font-family:'Oswald',sans-serif;font-size:9pt;letter-spacing:.6px;
   text-transform:uppercase;border-top:1.5pt solid #101410;padding-top:4pt}
 .pr-tot strong{font-size:12pt}
@@ -492,7 +516,11 @@ function prBlockRows(block, ctx) {
     (d.skills || []).slice().sort(function (a, b) { return (b.rank || 0) - (a.rank || 0); })
       .forEach(function (sk) {
         const info = (typeof skillInfo === 'function') ? skillInfo(block, sk) : '';
-        rows.push([sk.name, 'Rank ' + (sk.rank || 0), sk.stat || '', info]);
+        // A fifth cell is the picture. Resolved by the same skillIcon the sheet
+        // uses, so paper inherits the whole order — your own choice, then the
+        // row, then its category — instead of knowing a second set of rules.
+        const ic = (typeof skillIcon === 'function') ? skillIcon(block, sk) : (sk.icon || '');
+        rows.push([sk.name, 'Rank ' + (sk.rank || 0), sk.stat || '', info, ic]);
       });
   } else if (block.type === 'inventory') {
     (block.containers || []).forEach(function (cn) {
@@ -536,6 +564,28 @@ function prBlockRows(block, ctx) {
 // One item as a labelled stack rather than a run-on sentence, so a reader can
 // find "to hit" without reading the rest. Only the lines an item actually has
 // are printed: most items are one line, a magic weapon is three or four.
+// One icon, as an image, black on white. Not iconHTML: that draws a CSS mask
+// over a background colour, and a printer given a background it was not told to
+// print simply leaves it out.
+function prIcon(value, pt) {
+  if (!value) return '';
+  if (typeof iconIsSlug === 'function' && !iconIsSlug(value)) return prE(String(value));
+  const u = (typeof pdIconUrl === 'function' ? pdIconUrl(iconId(value)) : '') + '?color=%23101410';
+  const n = pt || 11;
+  return '<img class="pr-ico" src="' + prE(u) + '" alt="" ' +
+    'style="width:' + n + 'pt;height:' + n + 'pt">';
+}
+
+// What a square shows when there is no picture — or when the sheet is printed
+// with no network, since the art is fetched. The keypad on the phone falls back
+// to the first letter for exactly the same reason.
+function prIconOrLetter(value, pt, name) {
+  const ic = prIcon(value, pt);
+  if (ic) return ic;
+  const ch = String(name || '?').charAt(0).toUpperCase();
+  return '<span class="pr-letter" style="width:' + (pt || 11) + 'pt">' + prE(ch) + '</span>';
+}
+
 function prCarriedLines(item) {
   const fn = sysDerive((sysBlock('gear') || {}).itemLines);
   if (fn) {
@@ -550,14 +600,47 @@ function prCarriedLines(item) {
 
 function prCarriedRow(item, extra) {
   const lines = prCarriedLines(item);
+  const ic = (typeof invIcon === 'function')
+    ? invIcon(sysBlock('gear') || {}, item, S.char) : (item && item.icon);
   return '<tr><td class="pr-w">' + prE(extra || '') + '</td>' +
-    '<td><span class="pr-nm">' + prE(item && item.name ? item.name : '—') + '</span>' +
+    '<td>' + prIcon(ic, 10) + '<span class="pr-nm">' + prE(item && item.name ? item.name : '—') + '</span>' +
     (item && item.qty > 1 ? ' <span class="pr-q">×' + item.qty + '</span>' : '') +
     lines.map(function (l) {
       return '<div class="pr-sub' + (l.kind ? ' is-' + l.kind : '') + '">' +
         (l.label ? '<b>' + prE(l.label) + '</b>' : '') + prE(l.text) + '</div>';
     }).join('') +
     '</td><td class="pr-box"></td></tr>';
+}
+
+// One key of the printed keypad. An empty slot is still a square, because the
+// empty half of this page is where you write down what you just picked up.
+function prKeyHTML(item, i, spare) {
+  const n = '<span class="pr-key-n">' + (spare ? '' : (i + 1)) + '</span>';
+  if (!item) {
+    return '<div class="pr-key' + (spare ? ' is-spare' : '') + '">' + n +
+      '<div class="pr-key-ico"></div><div class="pr-key-rule"></div></div>';
+  }
+  const ic = (typeof invIcon === 'function')
+    ? invIcon(sysBlock('gear') || {}, item, S.char) : item.icon;
+  // One line, not four: the square is read in a second, and the rest of what an
+  // item does is on the Worn and Held page, which is the page you study. Where
+  // a thing is worn is NOT that line -- you are holding it already -- so the
+  // first line that says something else wins, and a Spell parked here falls
+  // back to the readout, which is what tells you it costs 2 Mana.
+  const lines = prCarriedLines(item);
+  const use = lines.filter(function (l) { return !/^worn$/i.test(l.label || ''); })[0] || lines[0];
+  let sub = use ? ((use.label ? use.label + ' ' : '') + use.text) : '';
+  if (!sub && typeof invReadout === 'function') {
+    sub = invReadout(sysBlock('gear') || {}, item, S.char) || '';
+  }
+  // "-- tap to cast" is an instruction to a thumb. Paper has no thumbs.
+  sub = sub.replace(/\s*[—-]\s*tap to [^·]*$/i, '');
+  return '<div class="pr-key">' + n +
+    (item.qty > 1 ? '<span class="pr-key-q">x' + prE(String(item.qty)) + '</span>' : '') +
+    '<div class="pr-key-ico">' + prIconOrLetter(ic, 46, item.name) + '</div>' +
+    '<div class="pr-key-nm">' + prE(item.name || '') + '</div>' +
+    (sub ? '<div class="pr-key-sub">' + prE(sub) + '</div>' : '') +
+    '<div class="pr-key-rule"></div></div>';
 }
 
 function prCarriedPages(char, name, kick) {
@@ -618,14 +701,25 @@ function prCarriedPages(char, name, kick) {
     const size = c.kind === 'stack' ? (c.size || 10) : Math.max(items.length + 6, 12);
     let h = '';
     if (c.note) h += '<div class="pr-note">' + prE(c.note) + '</div>';
-    h += '<table class="pr-t pr-gear"><thead><tr><th class="pr-w">#</th><th>Item</th><th class="pr-box">Used</th></tr></thead><tbody>';
-    for (let i = 0; i < size; i++) {
-      const it = items[i];
-      // Empty rows are deliberate: this is a sheet you write on.
-      h += it ? prCarriedRow(it, String(i + 1))
-              : '<tr><td class="pr-w">' + (i + 1) + '</td><td class="pr-empty"></td><td class="pr-box"></td></tr>';
+    if (c.kind === 'stack') {
+      // A fixed set of numbered slots is a keypad, not a list, and it is the one
+      // page you read at arm's length with something trying to kill you. It
+      // prints the way it looks on the phone: big squares, big pictures, the
+      // name under each and one line of what it actually does.
+      h += '<div class="pr-pad">';
+      const cells = Math.max(size, Math.ceil(size / 3) * 3);
+      for (let i = 0; i < cells; i++) h += prKeyHTML(items[i], i, i >= size);
+      h += '</div>';
+    } else {
+      h += '<table class="pr-t pr-gear"><thead><tr><th class="pr-w">#</th><th>Item</th><th class="pr-box">Used</th></tr></thead><tbody>';
+      for (let i = 0; i < size; i++) {
+        const it = items[i];
+        // Empty rows are deliberate: this is a sheet you write on.
+        h += it ? prCarriedRow(it, String(i + 1))
+                : '<tr><td class="pr-w">' + (i + 1) + '</td><td class="pr-empty"></td><td class="pr-box"></td></tr>';
+      }
+      h += '</tbody></table>';
     }
-    h += '</tbody></table>';
     if ((block.counters || []).length && c.kind !== 'stack') {
       h += '<div class="pr-tot">' + block.counters.map(function (ct) {
         return prE(ct.label || ct.id) + ' <strong>' + prE(String((d.counters || {})[ct.id] || 0)) + '</strong>';
@@ -677,7 +771,7 @@ function prBlockSheetHTML(char, opts) {
     h += '<div class="pr-blk' + (wide ? ' pr-wide' : '') + '"><div class="pr-blk-t">' +
          prE(heading) + '</div><table class="pr-t">';
     rows.forEach(function (r) {
-      h += '<tr><td>' + prE(r[0]) +
+      h += '<tr><td>' + prIcon(r[4], 10) + prE(r[0]) +
         (r[3] ? '<div class="pr-sub">' + prE(r[3]) + '</div>' : '') +
         '</td><td class="pr-n">' + prE(r[1]) + '</td><td class="pr-n">' + prE(r[2]) + '</td></tr>';
     });
