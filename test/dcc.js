@@ -5088,11 +5088,15 @@ function boot(entry) {
   function hotRow(name) {
     ev("S.char.blocks.gear.hotlist=[{name:" + JSON.stringify(name) + ",qty:1}];" +
        "save();blockRepaint('gear');");
+    // Matched on the name's own text, with the readout taken out of it. This
+    // used to read firstChild, which meant "before anyone puts an icon in
+    // front of the name" -- and an icon is exactly what went in front of it.
     return ev("(function(){var rows=[].slice.call(" +
       "document.querySelectorAll('#blk-gear .inv-row'));" +
       "for(var i=0;i<rows.length;i++){var n=rows[i].querySelector('.inv-name');" +
-      "if(!n||!n.firstChild)continue;" +
-      "if(n.firstChild.textContent.trim()!==" + JSON.stringify(name) + ")continue;" +
+      "if(!n)continue;var c=n.cloneNode(true);" +
+      "var st=c.querySelector('.inv-stat');if(st)st.remove();" +
+      "if(c.textContent.trim()!==" + JSON.stringify(name) + ")continue;" +
       "var s=rows[i].querySelector('.inv-stat');return s?s.textContent.trim():''}" +
       "return null})()");
   }
@@ -5496,6 +5500,13 @@ function boot(entry) {
     const bad = Object.keys(want).filter(n => ev("dccSkillIcon(" + JSON.stringify(n) + ")") !== want[n]);
     return bad.length === 0
       || bad.map(n => n + ' -> ' + JSON.stringify(ev("dccSkillIcon(" + JSON.stringify(n) + ")"))).join('; ');
+  });
+
+  check('[skillicon] the Heal everybody starts with has its own picture', () => {
+    // Creation grants it, so it is on every sheet in the game and the one icon
+    // no crawler should have to choose.
+    return ev("dccSpellIcon('Heal')") === 'healing'
+      || 'Heal draws ' + JSON.stringify(ev("dccSpellIcon('Heal')"));
   });
 
   check('[skillicon] a Skill nobody has drawn yet has no picture', () => {
