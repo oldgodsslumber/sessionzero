@@ -305,7 +305,9 @@ const DCC_GEAR = [
     effect: 'Adds Anti-Piercing to all worn armour. Nightgaunts will not be pleased.',
     page: 634 },
   { id: 'repeating-crossbow-scavenger', name: 'Enchanted Repeating Crossbow of the Scavenger Mother of Mothers',
-    kind: 'magic', slot: 'hands', skill: 'Crossbow', grantsStat: 'DEX', grantsStatN: 15,
+    // "Gear Slot: Hand/Holding (requires two hands)" — the book says it on this
+    // one item as well as on the Crossbow Skill.
+    kind: 'magic', slot: 'hands', hands: 2, skill: 'Crossbow', grantsStat: 'DEX', grantsStatN: 15,
     effect: 'Two hands, and only a female may wield it. Never runs out of basic ammunition. +10 Strength. Spend 1 AI Favor for an extra Attack each round. Add your STR to damage, plus 1 for every female in your party to a maximum of +30. On Success the target gains the Birth Defect Debuff.',
     page: 635 },
   { id: 'never-ending-duct-tape', name: 'Enchanted Roll of Never-Ending Duct Tape', kind: 'magic',

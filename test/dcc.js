@@ -5342,6 +5342,77 @@ function boot(entry) {
       || 'onclick was ' + JSON.stringify(btn) + ', rolled ' + JSON.stringify(ev('S.dice&&S.dice.skill'));
   });
 
+  // -- where a thing goes, said out loud ------------------------------------
+  // The book prints a Gear Slot on every piece of named gear, and the app knew
+  // it -- gearSlotFor has always resolved one -- but never said it, so the only
+  // way to find out where a new sword went was to equip it and look. Two hands
+  // is asked of both the Skill ("Requires two hands to wield", carried by nine
+  // of them) and of the item, because either can be the reason: the Repeating
+  // Crossbow prints "requires two hands" on itself as well.
+  const slotSays = obj => ev("SYS.derive.itemSlotLine(" + JSON.stringify(obj) + ")");
+
+  check('[slot] a one-handed weapon says one hand', () => {
+    kindSheet();
+    const line = slotSays({ name: 'Tire iron', skill: 'Club' });
+    return line === 'One hand' || 'it says ' + JSON.stringify(line);
+  });
+
+  check('[slot] a two-handed Skill makes anything wielding it both hands', () => {
+    kindSheet();
+    const bad = ["Bow", "Crossbow", "Herding Weapons", "Polearm", "Quarterstaff",
+                 "Shotgun", "Slingshot", "Warhammer", "Wrasslin'"]
+      .filter(sk => slotSays({ name: 'Improvised ' + sk, skill: sk }) !== 'Both hands');
+    return bad.length === 0 || 'these did not: ' + JSON.stringify(bad);
+  });
+
+  check('[slot] an item can say two hands itself, Skill or no Skill', () => {
+    kindSheet();
+    const named = 'Enchanted Repeating Crossbow of the Scavenger Mother of Mothers';
+    if (slotSays({ name: named }) !== 'Both hands') {
+      return 'the book row says ' + JSON.stringify(slotSays({ name: named }));
+    }
+    const home = slotSays({ name: 'Ballista arm', slot: 'hands', hands: 2 });
+    return home === 'Both hands' || 'a hand-made two-hander says ' + JSON.stringify(home);
+  });
+
+  check('[slot] worn gear names the slot it is worn in', () => {
+    kindSheet();
+    const want = { 'Silver Ring of +2 to a Stat': 'Accessories', 'Random Piece of Armor': 'Torso' };
+    const bad = Object.keys(want).filter(n => slotSays({ name: n }) !== want[n]);
+    return bad.length === 0
+      || bad.map(n => n + ' says ' + JSON.stringify(slotSays({ name: n }))).join('; ');
+  });
+
+  check('[slot] a thing the book gives no slot for says nothing at all', () => {
+    kindSheet();
+    // Not a guess and not "Bag": the book prints no Gear Slot on a potion or a
+    // coil of rope, and inventing one is how everything ended up worn on a head.
+    const bad = ['Healing Potion', 'Rope', 'Duct Tape'].filter(n => slotSays({ name: n }) !== '');
+    return bad.length === 0
+      || bad.map(n => n + ' says ' + JSON.stringify(slotSays({ name: n }))).join('; ');
+  });
+
+  check('[slot] the bag row says it, without pushing the stats off', () => {
+    kindSheet();
+    ev("S.char.blocks.gear.inventory=[{name:'Ol Betsy',skill:'Shotgun',qty:1}];" +
+       "save();blockRepaint('gear');");
+    const line = ev("(function(){var r=[].slice.call(document.querySelectorAll('#blk-gear .inv-row'))" +
+      ".filter(function(x){var n=x.querySelector('.inv-name');return n&&/Ol Betsy/.test(n.textContent)})[0];" +
+      "var s=r&&r.querySelector('.inv-stat');return s?s.textContent.trim():null})()");
+    if (!/Both hands/.test(line || '')) return 'the row reads ' + JSON.stringify(line);
+    return /Shotgun/.test(line) || 'it lost the Skill: ' + JSON.stringify(line);
+  });
+
+  check('[slot] the catalogue says it too, before you add anything', () => {
+    catTab();
+    // A Canoe and Paddle is a Quarterstaff, and a Quarterstaff needs both hands.
+    ev("_catQuery='Canoe';renderCatalog()");
+    const row = ev("(function(){var r=document.querySelector('#items-content .cat-row');" +
+      "return r?r.textContent:null})()");
+    ev("_catQuery='';renderCatalog()");
+    return /Both hands/.test(row || '') || 'the catalogue row reads ' + JSON.stringify(row);
+  });
+
   console.log('\nPASS ' + ok.length);
   if (fails.length) { console.log('FAIL ' + fails.length); fails.forEach(f => console.log('  x ' + f)); process.exit(1); }
   console.log('All Dungeon Crawler Carl checks passed.');

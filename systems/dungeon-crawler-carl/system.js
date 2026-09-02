@@ -547,6 +547,8 @@ registerSystem({
     gearItemLines: (item, char) => {
       if (!item) return [];
       const out = [];
+      const where = SYS.derive.itemSlotLine(item);
+      if (where) out.push({ label: 'Worn', text: where });
       if (item.skill) {
         const cat = dccSkillByName(item.skill);
         if (cat) {
@@ -592,6 +594,11 @@ registerSystem({
     gearItemReadout: (item, char) => {
       if (!item) return '';
       const out = [];
+      // Where it goes, first: it is the thing you want to know about a piece of
+      // gear you have just picked up, and until now the only way to find out
+      // was to try to equip it and see where it landed.
+      const where = SYS.derive.itemSlotLine(item);
+      if (where) out.push(where);
       // Only when it is a number: a DR typed as "abc" printed "+abc DR", which
       // reads as armour and contributes nothing.
       if (Number(item.dr)) out.push((Number(item.dr) > 0 ? '+' : '') + Number(item.dr) + ' DR');
@@ -883,7 +890,45 @@ registerSystem({
 
     gearTemplate: (name) => dccGearTemplate(name),
 
+    // How many hands this takes. The rule lives on the WEAPON: "If a weapon has
+    // 'Limitation: Two-Handed', you cannot hold anything else" (p. 89), and the
+    // Skill catalogue carries that limitation on nine of them — Bow, Crossbow,
+    // Herding Weapons, Polearm, Quarterstaff, Shotgun, Slingshot, Warhammer,
+    // Wrasslin'. An individual item may also say so itself: the Repeating
+    // Crossbow of the Scavenger Mother of Mothers is printed "Hand/Holding
+    // (requires two hands)". Both are asked, because either can be the reason.
+    itemHands: (item) => {
+      if (!item) return 0;
+      if (Number(item.hands) === 2) return 2;
+      const row = (typeof dccGearByName === 'function') ? dccGearByName(item.name) : null;
+      if (row && Number(row.hands) === 2) return 2;
+      const name = (typeof dccItemSkillName === 'function') ? dccItemSkillName(item) : item.skill;
+      const cat = name ? dccSkillByName(name) : null;
+      if (cat && /two hands/i.test(cat.limitations || '')) return 2;
+      // Only a thing you HOLD has a number of hands at all.
+      const slot = SYS.derive.gearSlotFor(item);
+      return slot === 'hands' ? 1 : 0;
+    },
+
+    // Where this is worn, in words, for a row that has to say it in three of
+    // them. The book prints a Gear Slot on every piece of named gear and prints
+    // none on a potion, so an item with no rule says nothing rather than
+    // guessing — which is the same answer the app gives when you try to wear it.
+    itemSlotLine: (item) => {
+      const slot = SYS.derive.gearSlotFor(item);
+      if (!slot) return '';
+      if (slot === 'hands') {
+        return SYS.derive.itemHands(item) === 2 ? 'Both hands' : 'One hand';
+      }
+      const s = DCC_GEAR_SLOTS.filter(x => x.id === slot)[0];
+      return s ? s.name : '';
+    },
+
     gearSlotFor: (item) => {
+      // What the item itself says, if anything does. A thing built at the table
+      // can carry its own Gear Slot, and it outranks a name lookup: that is the
+      // whole point of writing one down.
+      if (item && item.slot) return item.slot;
       // The catalogue knows where its own things are worn: a ring is an
       // Accessory, a random piece of armour goes on your Torso.
       const row = (typeof dccGearByName === 'function') ? dccGearByName(item && item.name) : null;
