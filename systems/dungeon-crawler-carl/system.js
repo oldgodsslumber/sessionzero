@@ -300,14 +300,17 @@ registerSystem({
         extra: 'derive.wornBonus',
       },
       {
-        id: 'health', type: 'track', label: 'Health Bar', span: 'full',
+        // Printed on the keypad page as well as the sheet: these four change
+        // every round, and the page you keep in front of you is the one they
+        // belong on. See prVitalsHTML.
+        id: 'health', type: 'track', label: 'Health Bar', span: 'full', vital: true,
         slots: DCC_HB_SLOTS,
         slotValue: 'derive.hbSlotValue',      // = CON Mod
         fill: 'rtl', percent: true, damageInput: true,
         emptyWarning: 'Dying — you have CON Mod rounds. Heal to at least 10% or you are off the show.',
       },
       {
-        id: 'mana', type: 'pool', label: 'Mana',
+        id: 'mana', type: 'pool', label: 'Mana', vital: true,
         hint: 'Max Mana equals your Enhanced Intelligence — the score, not the Mod.',
         max: 'derive.maxMana',
       },
@@ -411,8 +414,14 @@ registerSystem({
         kinds: DCC_COMPANION_KINDS,
         readout: 'derive.companionReadout',
       },
-      { id: 'aiFavor',    type: 'pool', label: 'AI Favor',   hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
-      { id: 'popularity', type: 'pool', label: 'Popularity', hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
+      { id: 'aiFavor',    type: 'pool', label: 'AI Favor', vital: true,
+        hint: 'Reroll a d20 (never a Nat 1), or gain an extra non-Attack Action.' },
+      { id: 'popularity', type: 'pool', label: 'Popularity', vital: true,
+        // The book hands out a Fan Box at 25, 50 and 100, which is what makes
+        // this a meter rather than a number: what you want to know is how far
+        // off the next one is.
+        milestones: [25, 50, 100], milestoneNote: 'Fan Boxes',
+        hint: 'Fan Boxes at 25, 50, 100. Viewers are fickle.' },
       // Not a pool. The book prices a Sapper's Table at 3,000 gold and hands out
       // a 250,000 reward; two buttons that step by one do not reach those
       // numbers. See the `tally` block type.

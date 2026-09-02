@@ -2334,6 +2334,72 @@ function boot(entry) {
     return /Fireball/.test(text) || 'the scroll is not on the keypad';
   });
 
+  // -- the vitals, on the page you keep in front of you ---------------------
+  // Health, Mana, Popularity and AI Favor change every round, so they belong on
+  // the keypad page rather than only on the sheet you study. What is true at
+  // the moment of printing prints LIGHT: it is a starting point, not a fact,
+  // and a pen has to be able to beat it.
+  check('[print] the keypad page carries the four vitals', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    const text = page.replace(/<[^>]*>/g, ' ').replace(/[ ]+/g, ' ');
+    const missing = ['Health Bar', 'Mana', 'Popularity', 'AI Favor']
+      .filter(n => text.indexOf(n) < 0);
+    if (missing.length) return 'missing from the page: ' + missing.join(', ');
+    // Above the squares, not below them.
+    return page.indexOf('pr-vit') < page.indexOf('pr-pad') || 'the vitals print under the keypad';
+  });
+
+  check('[print] only the blocks that ask for it are there', () => {
+    // `vital: true` is the whole contract. Gold is on the sheet and does not
+    // change round to round, so it stays there.
+    const page = pageWith(printed(), 'HOTLIST');
+    const strip = page.slice(page.indexOf('pr-vit'), page.indexOf('pr-pad'));
+    return strip.indexOf('Gold') < 0 || 'Gold turned up on the keypad page';
+  });
+
+  check('[print] the Health Bar prints a box per slot, marked at the percent', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    const strip = page.slice(page.indexOf('pr-vit'), page.indexOf('pr-pad'));
+    const boxes = (strip.match(/class="sb/g) || []).length;
+    if (boxes < 10) return 'only ' + boxes + ' boxes for a ten-slot bar';
+    return /class="sb[^"]*">100</.test(strip) || 'the boxes are not labelled by percent';
+  });
+
+  check('[print] slots already lost are shaded, not crossed out', () => {
+    ev("S.char.blocks.health.marked=3;save();");
+    const page = pageWith(ev("prBlockSheetHTML(S.char)"), 'HOTLIST');
+    const shaded = (page.match(/class="sb is-now"/g) || []).length;
+    ev("S.char.blocks.health.marked=0;save();");
+    return shaded === 3 || 'three slots are gone and ' + shaded + ' printed shaded';
+  });
+
+  check('[print] Popularity prints a meter with a mark per Fan Box', () => {
+    ev("S.char.blocks.popularity.current=42;save();");
+    const page = pageWith(ev("prBlockSheetHTML(S.char)"), 'HOTLIST');
+    const marks = (page.match(/class="pr-meter-m"/g) || []).length;
+    if (marks !== 3) return marks + ' marks for three Fan Boxes';
+    if (!/pr-meter-f/.test(page)) return 'the meter has no fill';
+    const text = page.replace(/<[^>]*>/g, ' ');
+    return /\b42\b/.test(text) || 'the figure is not inside the meter';
+  });
+
+  check('[print] what is true right now prints light', () => {
+    ev("S.char.blocks.aiFavor.current=2;save();");
+    const page = pageWith(ev("prBlockSheetHTML(S.char)"), 'HOTLIST');
+    const strip = page.slice(page.indexOf('pr-vit'), page.indexOf('pr-pad'));
+    if (!/pr-now/.test(strip)) return 'nothing on the strip is marked as a current figure';
+    // The frame is not: labels and boxes are the sheet itself.
+    return /class="pr-vit-t"/.test(strip) && !/pr-vit-t pr-now/.test(strip)
+      || 'the labels went light as well';
+  });
+
+  check('[print] every vital has somewhere to write the new one', () => {
+    const page = pageWith(printed(), 'HOTLIST');
+    const strip = page.slice(page.indexOf('pr-vit'), page.indexOf('pr-pad'));
+    const lines = (strip.match(/class="pr-vit-line"/g) || []).length;
+    return lines >= 4 || 'only ' + lines + ' write-in lines for four vitals';
+  });
+
   check('[print] a square does not tell paper to tap it', () => {
     const page = pageWith(printed(), 'HOTLIST');
     const text = page.replace(/<[^>]*>/g, ' ');

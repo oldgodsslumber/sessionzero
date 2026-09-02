@@ -85,6 +85,37 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 /* The Hotlist prints as the keypad it is on the phone: things you reach for
    mid-fight, found by their picture rather than by reading ten rows of a table.
    Twelve squares for ten slots — the two spare are for what you pick up. */
+/* The vitals, above the keypad, on the page you keep in front of you. All four
+   change constantly, so each one prints what it is now AND somewhere to write
+   what it becomes: boxes to cross off and a ruled line for the running figure. */
+.pr-vit{display:grid;grid-template-columns:1fr 1fr;gap:6pt 12pt;margin-bottom:8pt}
+.pr-vit-b{border:.75pt solid #101410;border-radius:3pt;padding:4pt 6pt 5pt}
+.pr-vit-b.is-wide{grid-column:1 / -1}
+.pr-vit-h{display:flex;justify-content:space-between;align-items:baseline;gap:6pt}
+.pr-vit-t{font-family:'Oswald',sans-serif;font-size:8pt;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.1px;color:#101410}
+.pr-vit-n{font-family:'Oswald',sans-serif;font-size:13pt;font-weight:600;line-height:1}
+/* Whatever is true at the moment of printing is printed LIGHT -- it is a
+   starting point, not a fact. The frame, the labels and the boxes are the sheet
+   and stay black; the numbers inside them are the first thing to be crossed out.
+   Less ink, and a pen beats the print instead of fighting it. */
+.pr-now{color:#9aa79c;font-weight:500}
+.pr-vit-s{font-size:7pt;color:#68786a}
+.pr-vit-boxes{margin-top:3pt;line-height:1.9}
+.pr-vit-boxes .sb{width:15pt;height:15pt;line-height:15pt;font-size:7pt;color:#68786a}
+.pr-vit-boxes .sb.is-now{background:#f0f3f0;color:#b9c3ba}
+.pr-vit-line{display:block;border-bottom:.5pt solid #b9c3ba;height:12pt;margin-top:3pt}
+.pr-vit-lbl{font-size:6.5pt;color:#68786a;font-family:'Oswald',sans-serif;letter-spacing:.7px;
+  text-transform:uppercase}
+/* Popularity is a meter because the book makes it one: Fan Boxes at 25, 50 and
+   100. A bare number does not tell you how close the next one is. */
+.pr-meter{position:relative;height:20pt;border:.75pt solid #101410;border-radius:2pt;margin-top:4pt;
+  overflow:hidden;background:#fff}
+.pr-meter-f{position:absolute;left:0;top:0;bottom:0;background:#f0f3f0}
+.pr-meter-m{position:absolute;top:0;bottom:0;width:.75pt;background:#101410}
+.pr-meter-v{position:absolute;top:0;bottom:0;display:flex;align-items:center;padding:0 4pt;
+  font-family:'Oswald',sans-serif;font-size:12pt;font-weight:600;background:#fff}
+.pr-meter-s{display:flex;justify-content:space-between;font-size:6.5pt;color:#68786a;margin-top:1pt}
 .pr-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:7pt;margin-top:5pt}
 .pr-key{border:1pt solid #101410;border-radius:4pt;padding:5pt 6pt 4pt;min-height:1.72in;
   display:flex;flex-direction:column;align-items:center;text-align:center;
@@ -612,6 +643,77 @@ function prCarriedRow(item, extra) {
     '</td><td class="pr-box"></td></tr>';
 }
 
+// The four things that change every round, printed above the keypad. Which
+// four is the pack's business: a block says `vital: true` and it lands here, in
+// schema order. A pack that flags none gets the page it had before.
+function prVitalsHTML(char) {
+  const blocks = ((SYS.schema && SYS.schema.blocks) || []).filter(function (b) { return b.vital; });
+  if (!blocks.length) return '';
+  let h = '<div class="pr-vit">';
+  blocks.forEach(function (b) {
+    const ctx = blockCtx(b, char);
+    const d = ctx.data || {};
+    const val = function (spec) { return blockValue(spec, ctx, null); };
+    const wide = b.type === 'track' || (b.milestones || []).length;
+    h += '<div class="pr-vit-b' + (wide ? ' is-wide' : '') + '">';
+    if (b.type === 'track') {
+      // Ten slots, each worth CON Mod, filled right to left: the boxes ARE the
+      // bar, numbered so "10%" on the app and "slot 1" on paper are one thing.
+      const slots = val(b.slots) || 0;
+      const each = val(b.slotValue);
+      const marked = d.marked || 0;
+      h += '<div class="pr-vit-h"><span class="pr-vit-t">' + prE(b.label || b.id) + '</span>' +
+        '<span class="pr-vit-s">' + prE(String(slots)) + ' slots' +
+        (each ? ' x ' + prE(String(each)) + ' each' : '') +
+        ' &middot; <span class="pr-now">' + prE(String(slots - marked)) + ' left now</span></span></div>';
+      h += '<div class="pr-vit-boxes">';
+      for (let i = 0; i < slots; i++) {
+        // The bar empties right to left, so the slots already gone are the top
+        // ones. Shaded, not crossed: a pen still has to be able to change it.
+        const gone = (b.fill === 'rtl') ? (i >= slots - marked) : (i < marked);
+        h += '<span class="sb' + (gone ? ' is-now' : '') + '">' +
+          Math.round(((i + 1) / slots) * 100) + '</span>';
+      }
+      h += '</div><span class="pr-vit-lbl">Damage taken</span><span class="pr-vit-line"></span>';
+    } else if ((b.milestones || []).length) {
+      const cur = Number(d.current || 0);
+      const ms = b.milestones.slice().sort(function (x, y) { return x - y; });
+      const top = Math.max(ms[ms.length - 1], cur);
+      const pct = top ? Math.min(100, (cur / top) * 100) : 0;
+      h += '<div class="pr-vit-h"><span class="pr-vit-t">' + prE(b.label || b.id) + '</span>' +
+        (b.milestoneNote ? '<span class="pr-vit-s">' + prE(b.milestoneNote) + '</span>' : '') + '</div>';
+      h += '<div class="pr-meter"><div class="pr-meter-f" style="width:' + pct.toFixed(1) + '%"></div>';
+      ms.forEach(function (m) {
+        h += '<div class="pr-meter-m" style="left:' + ((m / top) * 100).toFixed(1) + '%"></div>';
+      });
+      // Rides the end of the fill. Pinned left while the fill is too short to
+      // hold it, so a crawler nobody has heard of still prints a readable 0.
+      const near = pct < 14;
+      h += '<div class="pr-meter-v pr-now" style="left:' + (near ? 0 : pct.toFixed(1)) + '%' +
+        (near ? '' : ';transform:translateX(-100%)') + '">' + prE(String(cur)) + '</div></div>';
+      h += '<div class="pr-meter-s">' + ms.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>';
+      h += '<span class="pr-vit-lbl">Now</span><span class="pr-vit-line"></span>';
+    } else {
+      // A plain pool: the figure, boxes to cross off while it is small enough
+      // for boxes to mean anything, and a line for when it is not.
+      const max = b.max === undefined ? null : val(b.max);
+      const cur = Number(d.current || 0);
+      h += '<div class="pr-vit-h"><span class="pr-vit-t">' + prE(b.label || b.id) + '</span>' +
+        '<span class="pr-vit-n"><span class="pr-now">' + prE(String(cur)) + '</span>' +
+        (max === null ? '' : ' / ' + prE(String(max))) + '</span></div>';
+      const boxes = (max === null) ? 5 : max;
+      if (boxes > 0 && boxes <= 20) {
+        h += '<div class="pr-vit-boxes">';
+        for (let i = 0; i < boxes; i++) h += '<span class="sb">' + (i + 1) + '</span>';
+        h += '</div>';
+      }
+      h += '<span class="pr-vit-lbl">Now</span><span class="pr-vit-line"></span>';
+    }
+    h += '</div>';
+  });
+  return h + '</div>';
+}
+
 // One key of the printed keypad. An empty slot is still a square, because the
 // empty half of this page is where you write down what you just picked up.
 function prKeyHTML(item, i, spare) {
@@ -636,7 +738,7 @@ function prKeyHTML(item, i, spare) {
   // "-- tap to cast" is an instruction to a thumb. Paper has no thumbs.
   sub = sub.replace(/\s*[—-]\s*tap to [^·]*$/i, '');
   return '<div class="pr-key">' + n +
-    (item.qty > 1 ? '<span class="pr-key-q">x' + prE(String(item.qty)) + '</span>' : '') +
+    (item.qty > 1 ? '<span class="pr-key-q pr-now">x' + prE(String(item.qty)) + '</span>' : '') +
     '<div class="pr-key-ico">' + prIconOrLetter(ic, 46, item.name) + '</div>' +
     '<div class="pr-key-nm">' + prE(item.name || '') + '</div>' +
     (sub ? '<div class="pr-key-sub">' + prE(sub) + '</div>' : '') +
@@ -702,6 +804,9 @@ function prCarriedPages(char, name, kick) {
     let h = '';
     if (c.note) h += '<div class="pr-note">' + prE(c.note) + '</div>';
     if (c.kind === 'stack') {
+      // The vitals live on this page, not on the sheet you study: this is the
+      // one you keep in front of you while something is trying to kill you.
+      h = prVitalsHTML(char) + h;
       // A fixed set of numbered slots is a keypad, not a list, and it is the one
       // page you read at arm's length with something trying to kill you. It
       // prints the way it looks on the phone: big squares, big pictures, the
