@@ -577,10 +577,15 @@ function sysFloorStep(delta){
 }
 function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New ${esc(lex('hero'))}s join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
 function closeUniverseModal(){const m=document.getElementById('universe-modal');if(m)m.classList.remove('open','locked');}
-function openUniverseSetup(required,editId){
+function openUniverseSetup(required,editId,repaint){
   _uniRequired=!!required;
   const ed=editId?getUniverse(editId):null;
-  const cur=(ed&&ed.series)||{};
+  // A new universe's picks live on the draft until it is created — highlight
+  // from there, or a picked box shows no selection (only the hover outline on
+  // the box last tapped, so one box looked lit across both sections). A fresh
+  // open resets it, so a cancelled setup's picks don't carry over.
+  if(!ed&&!repaint)_uniDraft={tone:'',level:''};
+  const cur=ed?(ed.series||{}):_uniDraft;
   // Tone and level are Daring Comics' world settings, not the shell's. A pack
   // that has no series model (Dungeon Crawler Carl) supplies neither list, and
   // rendering the empty grids anyway left the first-run gate with nothing to
@@ -616,7 +621,7 @@ function _uniPick(field,val,editId){
   if(editId){const u=getUniverse(editId);if(u){u.series=u.series||{};u.series[field]=val;saveUniverses();}}
   else _uniDraft[field]=val;
   const nm=(document.getElementById('uni-name')||{}).value||'';
-  openUniverseSetup(_uniRequired,editId);
+  openUniverseSetup(_uniRequired,editId,true);
   const i=document.getElementById('uni-name');if(i)i.value=nm;
 }
 function submitUniverseSetup(editId){

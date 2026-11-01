@@ -2419,7 +2419,7 @@ function boot(entry) {
 
   check('[print] a Skill prints the picture its category gives it', () => {
     const doc = printed();
-    return /pr-ico[^>]*game-icons%3A(heavy-fall|crossed-sabres|arrow-scope|punch)/.test(doc)
+    return /pr-ico[^>]*game-icons\/(heavy-fall|crossed-sabres|arrow-scope|punch)/.test(doc)
       || 'no weapon-category icon anywhere on the sheet';
   });
 
@@ -4978,9 +4978,9 @@ function boot(entry) {
       "var n=x.querySelector('.hud-act-name');" +
       "return n&&n.firstChild&&n.firstChild.textContent.trim()===" + JSON.stringify(name) + "});" +
       "if(!c)return null;var i=c.querySelector('.hud-act-ico .pw-icon');" +
-      // iconUrl() encodes the id but not the path separator, so the mask reads
-      // .../game-icons%3Awood-club.svg — decode it back to the stored value.
-      "if(!i)return '';var m=(i.getAttribute('style')||'').match(/design\\/([^.']+)\\.svg/);" +
+      // With no network the mask is the loading placeholder, tagged with the
+      // encoded id: ...#gi=game-icons%3Awood-club — decode it back to the stored value.
+      "if(!i)return '';var m=(i.getAttribute('style')||'').match(/#gi=([^'\")]+)/);" +
       "return m?decodeURIComponent(m[1]):'(unreadable)'})()");
   }
 
@@ -5170,7 +5170,7 @@ function boot(entry) {
   // a suite that depends on api.iconify.design being up is a suite that fails
   // on a train.
   function stubIcons(list) {
-    ev("window.fetch=function(){return Promise.resolve({json:function(){" +
+    ev("window.fetch=function(){return Promise.resolve({ok:true,json:function(){" +
        "return Promise.resolve({icons:" + JSON.stringify(list || ['game-icons:broadsword']) +
        "})}})}");
   }
@@ -5192,6 +5192,39 @@ function boot(entry) {
     ev("document.getElementById('probe-icon-results').remove()");
     return /connection/i.test(t) || 'the results panel reads ' + JSON.stringify(t);
   });
+
+  // Iconify 404s the old game-icons:name.svg form and 429s a burst of per-icon
+  // requests, so icons load in bulk and print with the prefix/name.svg form.
+  check('[icons] a printed icon uses the prefix/name.svg URL Iconify still serves', () => {
+    const u = ev("pdIconUrl('game-icons:broadsword',true)");
+    return u === 'https://api.iconify.design/game-icons/broadsword.svg' || 'the URL is ' + u;
+  });
+
+  await (async () => {
+    ev("window._icReqs=[];window.fetch=function(u){_icReqs.push(u);return Promise.resolve({ok:true," +
+       "json:function(){return Promise.resolve({width:512,height:512,icons:{" +
+       "'barbed-arrow':{body:'<path d=\"M0 0h1\"/>'},'battle-axe':{body:'<path d=\"M0 0h2\"/>'}}})}})};");
+    ev("document.body.insertAdjacentHTML('beforeend','<div id=\"icprobe\">'+" +
+       "iconHTML('game-icons:barbed-arrow',20)+iconHTML('game-icons:battle-axe',20)+" +
+       "iconHTML('game-icons:barbed-arrow',20)+'</div>')");
+    await settle();
+    check('[icons] a page of icons is one request, not one per icon', () => {
+      const reqs = ev("_icReqs");
+      if (reqs.length !== 1) return reqs.length + ' requests: ' + JSON.stringify(reqs);
+      // Icons earlier checks drew with no network were released, not lost, so
+      // they ride along in this batch too. Each id still appears once.
+      const ids = (reqs[0].split('game-icons.json?icons=')[1] || '').split(',');
+      const once = n => ids.filter(x => x === n).length === 1;
+      return (once('barbed-arrow') && once('battle-axe')) || 'requested ' + reqs[0];
+    });
+    check('[icons] the placeholders fill in when the batch lands', () => {
+      const html = ev("document.getElementById('icprobe').innerHTML");
+      if (/#gi=/.test(html)) return 'still a placeholder: ' + html.slice(0, 160);
+      return (html.match(/viewBox%3D%220%200%20512%20512%22/g) || []).length === 6
+        || 'the masks read ' + html.slice(0, 200);
+    });
+    ev("document.getElementById('icprobe').remove()");
+  })();
 
   await (async () => {
     stubIcons(['game-icons:health-potion', 'game-icons:broadsword']);
@@ -5599,7 +5632,8 @@ function boot(entry) {
        "(S.char.blocks.spells.skills||[]).forEach(function(s){if(s.name==='Heal')s.icon='healing'});" +
        "save();renderHero();");
   };
-  const hasIcon = html => /iconify[^"']*healing/.test(String(html || ''));
+  // A loading placeholder (#gi=) or the per-icon URL once a load gave up on it.
+  const hasIcon = html => /(#gi=|iconify)[^"']*healing/.test(String(html || ''));
 
   check('[icon] the Spell you gave a picture to wears it on the HUD keypad', () => {
     healSheet();
@@ -5701,7 +5735,7 @@ function boot(entry) {
     const row = ev("(function(){var r=[].slice.call(document.querySelectorAll('#blk-skills .sk-row'))" +
       ".filter(function(x){var n=x.querySelector('.sk-name');return n&&n.textContent.trim()==='Club'})[0];" +
       "var n=r&&r.querySelector('.sk-name');return n?n.innerHTML:null})()");
-    return /iconify[^"']*heavy-fall/.test(String(row)) || 'the row drew ' + JSON.stringify(String(row).slice(0, 120));
+    return /(#gi=|iconify)[^"']*heavy-fall/.test(String(row)) || 'the row drew ' + JSON.stringify(String(row).slice(0, 120));
   });
 
   check('[skillicon] and the keypad draws it for a weapon that works as one', () => {
@@ -5709,7 +5743,7 @@ function boot(entry) {
        "S.char.blocks.gear.hotlist=[{name:'Tire Iron',skill:'Club',qty:1}];save();" +
        "showTab('hud');renderHUD();");
     const slot = ev("(function(){var s=document.querySelector('.hot-slot');return s?s.innerHTML:null})()");
-    return /iconify[^"']*heavy-fall/.test(String(slot))
+    return /(#gi=|iconify)[^"']*heavy-fall/.test(String(slot))
       || 'the keypad drew ' + JSON.stringify(String(slot).slice(0, 140));
   });
 

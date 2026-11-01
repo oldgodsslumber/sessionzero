@@ -248,7 +248,7 @@ function sheetBodyHTML(ch,opts){
     if(_printForms.length>1)powHtml+=`<div class="form-hdr">◆ ${e(form.name||'Form')}</div>`;
     (form.powerSets||[]).forEach(ps=>{
       powHtml+=`<div class="ps-card"><div class="ps-name">${e(ps.name||'Power Set')}</div><div class="ps-asp">${e(ps.aspect)}</div>`;
-      (ps.powers||[]).forEach(pw=>{const pd=POWERS.find(p=>p.id===pw.powerId);powHtml+=`<div class="pw-item">${pw.icon?'<img src="https://api.iconify.design/'+encodeURIComponent(pw.icon)+'.svg" width="24" height="24" style="vertical-align:middle;margin-right:5px">':''}<span class="pw-n">${e(pw.customName||pd?.name||pw.powerId)}</span>${pw.level>1?' <span class="pw-lv">Lv'+pw.level+'</span>':''} <span class="pw-c">(${pw.totalCost} HP)</span>${pd?.desc?`<div class="pw-desc">${e(pd.desc)}</div>`:''}${pd?.levelDesc&&pd.levelDesc[pw.level]?`<div class="pw-lvd">${e(pd.levelDesc[pw.level])}</div>`:''}${pw.selectedSE.length?'<div class="pw-tags">'+pw.selectedSE.map(s=>{const def=[...(pd?.se||[]),...GENERAL_SE].find(x=>x.name===s);return'<span class="tg tg-se">'+e(s)+'</span>'+(def?' <span class="tg-desc">'+e(def.desc)+'</span>':'');}).join('<br>')+'</div>':''}${pw.selectedLim.length?'<div class="pw-tags">'+pw.selectedLim.map(l=>{const def=[...(pd?.lim||[]),...GENERAL_LIMITS].find(x=>x.name===l);return'<span class="tg tg-lm">'+e(l)+'</span>'+(def?' <span class="tg-desc">'+e(def.desc)+'</span>':'');}).join('<br>')+'</div>':''}${pw.flavor?'<div class="pw-flavor">'+e(pw.flavor)+'</div>':''}</div>`;});
+      (ps.powers||[]).forEach(pw=>{const pd=POWERS.find(p=>p.id===pw.powerId);powHtml+=`<div class="pw-item">${pw.icon?'<img src="'+pdIconUrl(iconId(pw.icon),true)+'" width="24" height="24" style="vertical-align:middle;margin-right:5px">':''}<span class="pw-n">${e(pw.customName||pd?.name||pw.powerId)}</span>${pw.level>1?' <span class="pw-lv">Lv'+pw.level+'</span>':''} <span class="pw-c">(${pw.totalCost} HP)</span>${pd?.desc?`<div class="pw-desc">${e(pd.desc)}</div>`:''}${pd?.levelDesc&&pd.levelDesc[pw.level]?`<div class="pw-lvd">${e(pd.levelDesc[pw.level])}</div>`:''}${pw.selectedSE.length?'<div class="pw-tags">'+pw.selectedSE.map(s=>{const def=[...(pd?.se||[]),...GENERAL_SE].find(x=>x.name===s);return'<span class="tg tg-se">'+e(s)+'</span>'+(def?' <span class="tg-desc">'+e(def.desc)+'</span>':'');}).join('<br>')+'</div>':''}${pw.selectedLim.length?'<div class="pw-tags">'+pw.selectedLim.map(l=>{const def=[...(pd?.lim||[]),...GENERAL_LIMITS].find(x=>x.name===l);return'<span class="tg tg-lm">'+e(l)+'</span>'+(def?' <span class="tg-desc">'+e(def.desc)+'</span>':'');}).join('<br>')+'</div>':''}${pw.flavor?'<div class="pw-flavor">'+e(pw.flavor)+'</div>':''}</div>`;});
       powHtml+='</div>';
     });
     if(form.gear&&form.gear.length){
@@ -601,7 +601,7 @@ function prBlockRows(block, ctx) {
 function prIcon(value, pt) {
   if (!value) return '';
   if (typeof iconIsSlug === 'function' && !iconIsSlug(value)) return prE(String(value));
-  const u = (typeof pdIconUrl === 'function' ? pdIconUrl(iconId(value)) : '') + '?color=%23101410';
+  const u = (typeof pdIconUrl === 'function' ? pdIconUrl(iconId(value), true) : '') + '?color=%23101410';
   const n = pt || 11;
   return '<img class="pr-ico" src="' + prE(u) + '" alt="" ' +
     'style="width:' + n + 'pt;height:' + n + 'pt">';
@@ -995,7 +995,7 @@ function prMapHTML(id,half){
     let cls='mc';if(c.isVoid)cls+=' mc-void';else if(i===cur)cls+=' mc-cur';
     let ico='';
     if(c.icon)ico=isGiSlug(c.icon)
-      ?`<img class="mc-i" src="${pdIconUrl(c.icon.indexOf(':')>=0?c.icon:'game-icons:'+c.icon)}">`
+      ?`<img class="mc-i" src="${pdIconUrl(c.icon.indexOf(':')>=0?c.icon:'game-icons:'+c.icon,true)}">`
       :`<span style="font-size:19pt;line-height:1">${prE(c.icon)}</span>`;
     g+=`<div class="${cls}">${ico}${c.name?`<span class="mc-n">${prE(c.name)}</span>`:''}</div>`;}
   g+='</div>';

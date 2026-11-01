@@ -47,6 +47,9 @@ const CH = { costumedName: 'Ironclad', civilianName: 'M W', heroId: 'h1',
     check('gate still offers creating one locally', 'return document.getElementById("universe-modal-body").innerHTML.indexOf("Create Universe")>=0');
     check('gate asks for tone and level', 'var h=document.getElementById("universe-modal-body").innerHTML;return h.indexOf("Series Tone")>=0&&h.indexOf("Series Level")>=0');
     check('gate offers no experience PICKER (only mentions it in copy)', 'var h=document.getElementById("universe-modal-body").innerHTML;return h.indexOf("S.series.experience")<0&&h.indexOf("EXP_LEVELS")<0');
+    check('new universe highlights the picked tone AND level', '_uniPick("tone",SERIES_TONES[1].id,"");_uniPick("level",SERIES_LEVELS[2].id,"");var s=document.querySelectorAll("#universe-modal-body .game-opt.selected");return s.length===2&&s[0].getAttribute("onclick").indexOf("tone")>=0&&s[1].getAttribute("onclick").indexOf("level")>=0');
+    check('re-picking a tone keeps the level highlighted', '_uniPick("tone",SERIES_TONES[0].id,"");return document.querySelectorAll("#universe-modal-body .game-opt.selected").length===2');
+    check('a fresh open starts with nothing picked', 'openUniverseSetup(true);return document.querySelectorAll("#universe-modal-body .game-opt.selected").length===0&&!_uniDraft.tone&&!_uniDraft.level');
     check('creating without a tone is refused', 'document.getElementById("uni-name").value="No Tone";submitUniverseSetup();return loadUniverses().universes.length===0');
     check('creating with tone+level succeeds', '_uniPick("tone",SERIES_TONES[2].id,"");_uniPick("level",SERIES_LEVELS[3].id,"");document.getElementById("uni-name").value="Earth-77";submitUniverseSetup();return loadUniverses().universes.length===1');
     check('universe stores the series', 'var u=U.universes[0];return u.series.tone===SERIES_TONES[2].id&&u.series.level===SERIES_LEVELS[3].id');
