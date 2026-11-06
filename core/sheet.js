@@ -208,12 +208,15 @@ function npcToCharacter(npc){
 function characterToNpc(char, existingId){
   const asp=[char.aspects&&char.aspects.concept,char.aspects&&char.aspects.motivation].concat(((char.aspects&&char.aspects.contingent)||[]).map(c=>c&&c.text)).filter(Boolean);
   const _hid=existingId||uid();
-  return {id:_hid,heroId:_hid,type:'main',fromHero:true,sourceSaveId:currentSaveId,
-    name:char.costumedName||'Unnamed Hero',desc:char.civilianName||'',
+  const ent={id:_hid,heroId:_hid,type:'main',fromHero:true,sourceSaveId:currentSaveId,
+    name:char.costumedName||sysCharName(char)||'Unnamed Hero',desc:char.civilianName||'',
     aspects:asp,skills:JSON.parse(JSON.stringify(char.skills||{})),
     forms:JSON.parse(JSON.stringify(char.forms||[])),activeForm:char.activeForm||0,
     stunts:JSON.parse(JSON.stringify(char.stunts||[])),stress:[],
     consequences:JSON.parse(JSON.stringify(char.consequences||{mild:'',moderate:'',severe:''})),gear:char.gear||''};
+  // What a pack's roster card reads is the pack's to fill in.
+  const extra=(SYS&&SYS.npc&&SYS.npc.fromHero)?SYS.npc.fromHero(char):null;
+  return extra?Object.assign(ent,extra):ent;
 }
 function syncHeroToRoster(){
   if(!S||!S.char)return;const u=currentUniverse();if(!u)return;

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Marvel Multiverse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../core/shell.css">
+</head>
+<body>
+<!-- Marvel Multiverse — the official characters so far. See systems/marvel-multiverse/PLAN.md. -->
+<!--
+     Same shape as dcc/index.html: the nav, page containers and modal shells are
+     built by core/chrome.js at boot, so the only per-game part is the script list.
+
+     Load order is execution order and must not be reordered. The pack
+     registers itself at load; core/mp-boot.js boots the app and stays last.
+-->
+<script src="../core/system.js"></script>
+<script src="../core/chrome.js"></script>
+<script src="../core/icons.js"></script>
+<script src="../core/blocks.js"></script>
+<script src="../core/catalog.js"></script>
+<script src="../core/wizard.js"></script>
+<script src="../systems/marvel-multiverse/profiles.js"></script>
+<script src="../systems/marvel-multiverse/roster.js"></script>
+<script src="../systems/marvel-multiverse/system.js"></script>
+<script src="../core/state.js"></script>
+<script src="../core/creation.js"></script>
+<script src="../core/sheet.js"></script>
+<script src="../core/print.js"></script>
+<script src="../core/team.js"></script>
+<script src="../core/npcs.js"></script>
+<script src="../core/dice.js"></script>
+<script src="../core/conflict.js"></script>
+<script src="../core/log.js"></script>
+<script src="../core/map.js"></script>
+<script src="../core/util.js"></script>
+<script src="../core/llm.js"></script>
+<script src="../core/wiki.js"></script>
+<script src="../core/mp-boot.js"></script>
+</body>
+</html>

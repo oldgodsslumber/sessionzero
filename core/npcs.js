@@ -17,13 +17,14 @@ function npcKindLabel(id){
   const k=npcKinds().filter(function(x){return x.id===id;})[0];
   return (k&&(k.one||k.label))||NPC_TYPE_LABELS_DEFAULT[id]||id;
 }
-function npcFirstKind(){return (npcKinds()[0]||{}).id||'supporting';}
+// Where an entry gets filed. A kind that draws its own panel holds no entries.
+function npcFirstKind(){return (npcKinds().filter(function(k){return !k.render;})[0]||{}).id||'supporting';}
 
 // Which tab is open. It cannot be a constant any more: 'supporting' is not a
 // kind of thing in every game.
 function npcTab(){
   const ids=npcKinds().map(function(k){return k.id;});
-  if(ids.indexOf(_npcTab)<0)_npcTab=npcFirstKind();
+  if(ids.indexOf(_npcTab)<0)_npcTab=ids[0];
   return _npcTab;
 }
 
@@ -69,6 +70,8 @@ function npcPackBody(npc){
       group=f.group;
       h+=`<div class="label mb-1" style="margin-top:6px">${esc(group||'')}</div>`;
     }
+    // A long field is something to read, not a number to find.
+    if(f.long){h+=`<div class="npc-derived"><span>${esc(f.label)}</span><div style="flex:1 1 100%;font-size:13px;line-height:1.5;white-space:pre-wrap">${esc(String(v))}</div></div>`;return;}
     h+=`<div class="npc-derived"><span>${esc(f.label)}</span><strong>${esc(String(v))}</strong></div>`;
   });
   return h;
@@ -172,12 +175,18 @@ function renderNPCs(){
   const el=document.getElementById('npcs-content');
   if(_npcFullMode){renderFullNPCEditor();return;}
   let h=universeBarHTML()+`<div class="${_npcEditMode?'':'no-edit'}">`;
-  h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">${esc(npcPanelTitle())}</div><div class="pg-sub">${esc(npcPanelHint())}</div></div>${editToggleBtn(_npcEditMode,'toggleNPCEdit')}</div>`;
-  if(!_npcEditMode)h+=noEditBanner();
   const _tab=npcTab();
+  // A kind may draw its own panel instead of listing S.npcs: a pack's built-in
+  // characters are shared by every table, so they are not rows in anyone's roster,
+  // and with nothing there to edit the lock would only be noise.
+  const _kindDef=npcKinds().filter(function(t){return t.id===_tab;})[0]||{};
+  const _selfDrawn=typeof _kindDef.render==='function';
+  h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap;margin-bottom:4px"><div><div class="pg-title">${esc(npcPanelTitle())}</div><div class="pg-sub">${esc(npcPanelHint())}</div></div>${_selfDrawn?'':editToggleBtn(_npcEditMode,'toggleNPCEdit')}</div>`;
+  if(!_npcEditMode&&!_selfDrawn)h+=noEditBanner();
   h+=`<div class="npc-tabs">${npcKinds().map(t=>`<div class="npc-tab ${_tab===t.id?'active':''}" onclick="_npcTab='${esc(t.id)}';renderNPCs()">${esc(t.label)}</div>`).join('')}</div>`;
   if(_tab==='team'){let teamH='';renderTeamInner({set innerHTML(v){teamH=v;}});h+=teamH+'</div>';el.innerHTML=h;return;}
-  const _kindHint=(npcKinds().filter(function(t){return t.id===_tab;})[0]||{}).hint||'';
+  if(_selfDrawn){h+=_kindDef.render()+'</div>';el.innerHTML=h;return;}
+  const _kindHint=_kindDef.hint||'';
   if(_kindHint)h+=`<div style="font-size:11px;color:var(--muted);margin:-6px 0 8px">${esc(_kindHint)}</div>`;
   const _list=S.npcs.filter(n=>npcKindOf(n)===_tab && !(n.fromHero&&S.char&&n.heroId===S.char.heroId));
   h+=`<div class="npc-grid">`;
@@ -350,7 +359,7 @@ function renderSysNPCEditor() {
   }
   // Which kind of thing this is. Without it a Boss built here was filed under
   // whichever tab happened to be open, and there was no way to say otherwise.
-  const kinds = npcKinds().filter(function (k) { return k.id !== 'team'; });
+  const kinds = npcKinds().filter(function (k) { return k.id !== 'team' && !k.render; });
   if (kinds.length > 1) {
     h += `<div class="form-group"><label>Type</label>` +
       `<select onchange="sysNpcSet('type',this.value)">` +

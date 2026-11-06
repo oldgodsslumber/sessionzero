@@ -1,0 +1,43 @@
+{
+  "keep": [
+    "extradimensional",
+    "crimefighter",
+    "crimefighting",
+    "rockslide",
+    "bloodthirst",
+    "homeworld",
+    "psionic",
+    "megalomaniacal",
+    "mutantkind",
+    "cybernetically",
+    "webswinging",
+    "starship",
+    "superhumans"
+  ],
+  "fixes": [
+    ["hand—to-hand", "hand-to-hand"],
+    ["day—to-day", "day-to-day"],
+    ["hands—on", "hands-on"],
+    ["green—and-yellow", "green-and-yellow"],
+    ["bat—like", "bat-like"],
+    ["K'un—Lun", "K'un-Lun"],
+    ["scientific community-intelligent", "scientific community—intelligent"],
+    ["good man-was", "good man—was"],
+    ["Shang-Chi-who", "Shang-Chi—who"],
+    ["dark elves-during", "dark elves—during"],
+    ["galaxy-first", "galaxy—first"],
+    ["invaders-conquering", "invaders—conquering"],
+    ["professional-soft-spoken", "professional—soft-spoken"],
+    ["andM.O.D.O.K.", "and M.O.D.O.K."],
+    ["parents'house", "parents' house"],
+    ["performinga", "performing a"],
+    ["succesfully", "successfully"],
+    ["NYc", "NYC"],
+    ["Earth7528", "Earth-7528"],
+    ["Earth616", "Earth-616"],
+    ["TChalla", "T'Challa"],
+    ["Harkness'long", "Harkness' long"],
+    ["so long..", "so long."],
+    ["separate personalities each", "separate personalities, each"]
+  ]
+}

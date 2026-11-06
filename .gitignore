@@ -18,3 +18,8 @@ node_modules/
 .rc*
 .spells*
 .vocab*
+
+# The Marvel rulebook scan and its OCR. Reference for building the pack, not part
+# of it: 145 MB of someone else's book in a public repo.
+systems/marvel-multiverse/Marvel-Multiverse-RPG-Core-Rulebook.*
+systems/marvel-multiverse/.book/
