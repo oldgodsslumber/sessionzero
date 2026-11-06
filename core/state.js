@@ -4,7 +4,7 @@ function toggleNPCEdit(){_npcEditMode=!_npcEditMode;if(_npcFullMode)renderFullNP
 function editToggleBtn(on,handler){return `<button class="edit-toggle ${on?'on':''}" onclick="${handler}()" title="${on?'Sheet unlocked \u2014 tap to lock (view only)':'Sheet locked \u2014 tap to edit'}">${on?'\u{1F513} Editing \u2014 tap to lock':'\u{1F512} Locked \u2014 tap to edit'}</button>`;}
 function noEditBanner(){return `<div class="no-edit-banner">View only — click <strong style="color:var(--accent)">Locked</strong> at the top to enable edits.</div>`;}
 const LOG_TYPES=[
-  {key:'main',label:'Issue Log',emoji:'\ud83d\udcd6',placeholder:'Issue log entry...',desc:'The primary session record \u2014 scene, stakes, and status.'},
+  {key:'main',get label(){return lexU('logBreak')+' Log';},emoji:'\ud83d\udcd6',get placeholder(){return lexU('logBreak')+' log entry...';},desc:'The primary session record \u2014 scene, stakes, and status.'},
   {key:'supplemental',label:'Supplemental',emoji:'\ud83d\udcdd',placeholder:'Additional details...',desc:'An update or addendum. What has changed?'},
   {key:'battle',label:'Battle Report',emoji:'\ud83d\udca5',placeholder:'Combat broke out...',desc:'Combat, crisis, or immediate threat.'},
   {key:'investigation',label:'Investigation',emoji:'\ud83d\udd0d',placeholder:'Clues point to...',desc:'Clues, evidence, detective work.'},
@@ -126,6 +126,10 @@ function saveSummary(id,state,prev){
   const p=packSummary(state)||{};
   return{
     id:id,universeId:state.universeId||null,
+    // Carried so a reader can tell this save's hero from the mirror of it in
+    // the universe roster without parsing the whole save: Print listed the one
+    // character twice because it could not.
+    heroId:(ch&&ch.heroId)||null,
     name:(p.name||'').trim(),
     civilianName:(p.sub||'').trim(),
     lines:p.lines||[],progress:p.progress||'',
@@ -183,9 +187,10 @@ function deleteSave(id){
 function duplicateSave(id){
   const d=getSaveData(id);if(!d)return null;
   const copy=JSON.parse(JSON.stringify(d));
-  const base=(copy.char?.costumedName||copy.creation?.costumedName||'').trim();
-  if(copy.char){copy.char.costumedName=(base||'Hero')+' (copy)';copy.char.heroId=uid();}
-  else if(copy.creation)copy.creation.costumedName=base?base+' (copy)':'';
+  const f=sysCharNameField();
+  const base=((copy.char&&(sysCharName(copy.char)||copy.char[f]))||copy.creation?.[f]||copy.creation?.costumedName||'').trim();
+  if(copy.char){copy.char[f]=(base||lexU('hero'))+' (copy)';copy.char.heroId=uid();}
+  else if(copy.creation)copy.creation[f]=base?base+' (copy)':'';
   copy.createdAt=Date.now();
   return createSave(copy);
 }
@@ -194,8 +199,9 @@ function renameSave(id){
   const n=prompt('Rename this save:',s.name||'');
   if(n===null)return;
   const d=getSaveData(id);if(!d)return;
-  if(d.char)d.char.costumedName=n.trim();
-  else{d.creation=d.creation||{};d.creation.costumedName=n.trim();}
+  const f=sysCharNameField();
+  if(d.char)d.char[f]=n.trim();
+  else{d.creation=d.creation||{};d.creation[f]=n.trim();}
   writeSave(id,d);
   if(id===currentSaveId){S=d;bindUniverse();renderAll();}
   renderSaveModal();
@@ -329,7 +335,11 @@ function loadSave(id){
   currentSaveId=id;
   loadSaves();SV.activeId=id;persistSaves();
   const d=getSaveData(id);
-  S=d||defaultState();
+  // A blob that parses to a string or a number is truthy, so it used to become
+  // S — and because S was then a primitive, every assignment to it silently did
+  // nothing and the sheet rendered from undefined. The page came up as a bare
+  // nav strip. Only a plain object is a state.
+  S=(d&&typeof d==='object'&&!Array.isArray(d))?d:defaultState();
   bindUniverse();
 }
 
@@ -339,8 +349,50 @@ function loadSave(id){
 function uid(p){return (p||'e')+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function ensureId(e){if(e&&!e.id)e.id=uid();return e;}
 let U=null;
-function loadUniverses(){if(U)return U;try{U=JSON.parse(localStorage.getItem(storeKey('universes')))||null;}catch(e){U=null;}if(!U)U={version:2,activeUniverseId:null,universes:[]};return U;}
+// The same shape check loadSaves() has always done. Without it a universes key
+// of the wrong shape — universes not an array, or a null entry in it — threw in
+// migrateUniverseSeries() during boot, which killed every render after it: the
+// app came up as a bare nav strip with no gate and no way back in, and a reload
+// hit the same throw again. Anything unusable is dropped rather than trusted.
+function _validUniverses(o){
+  if(!o||typeof o!=='object'||Array.isArray(o))return null;
+  if(!Array.isArray(o.universes))return null;
+  o.universes=o.universes.filter(function(u){return u&&typeof u==='object'&&u.id;});
+  o.universes.forEach(function(u){
+    if(!Array.isArray(u.roster))u.roster=[];
+    if(!Array.isArray(u.lore))u.lore=[];
+    if(!u.series||typeof u.series!=='object')u.series={tone:'',level:''};
+    if(u.table&&typeof u.table!=='object')u.table={};
+  });
+  if(typeof o.version!=='number')o.version=2;
+  if(o.activeUniverseId===undefined)o.activeUniverseId=null;
+  return o;
+}
+function loadUniverses(){
+  if(U)return U;
+  let raw=null;
+  try{raw=JSON.parse(localStorage.getItem(storeKey('universes')));}catch(e){raw=null;}
+  U=_validUniverses(raw)||{version:2,activeUniverseId:null,universes:[]};
+  return U;
+}
 function saveUniverses(){try{localStorage.setItem(storeKey('universes'),JSON.stringify(U));}catch(e){}}
+// Another tab of the same game, writing the world both tabs share. U was cached
+// for the life of the page, so this tab held a stale copy and its very next
+// save() wrote that whole copy back — silently deleting whatever the other tab
+// had added to the roster, the codex, the map or the journal, with no warning
+// and no way to get it back. The event fires only in the tabs that did not
+// write, which is exactly the set that needs to catch up.
+if(typeof window!=='undefined'&&window.addEventListener){
+  window.addEventListener('storage',function(ev){
+    if(typeof SYS==='undefined'||!SYS)return;
+    // key is null when another tab calls localStorage.clear().
+    if(ev&&ev.key&&ev.key!==storeKey('universes'))return;
+    U=null;loadUniverses();
+    if(typeof S!=='undefined'&&S&&typeof bindUniverse==='function')bindUniverse();
+    if(typeof renderAll==='function')renderAll();
+    if(typeof renderFloorStrip==='function')renderFloorStrip();
+  });
+}
 function getUniverse(id){loadUniverses();return U.universes.find(u=>u.id===id)||null;}
 function currentUniverse(){return (typeof S!=='undefined'&&S)?getUniverse(S.universeId):null;}
 // Tone and level belong to the world, not the hero — every hero in a universe
@@ -487,23 +539,28 @@ function renderSaveModal(){
   const others=listSaves().filter(s=>s.universeId!==uid_);
   const active=mine.find(s=>s.id===currentSaveId);
 
-  let h='<div class="pg-title" style="font-size:22px">Save Files</div>'+universeChooserHTML();
-  h+=`<div style="font-size:11px;color:var(--muted);margin:4px 0 10px">${mine.length} character${mine.length===1?'':'s'} in this universe. Add as many as you like.</div>`;
+  // This modal was half translated: the header above it used the lexicon while
+  // the title, the counts and the New button still said "Save Files" and
+  // "character" — so a game that calls them Crawler Files and Crawlers said
+  // both, inches apart.
+  const _one=lex('hero'),_many=lex('heroes');
+  let h=`<div class="pg-title" style="font-size:22px">${esc(lexU('saves'))}</div>`+universeChooserHTML();
+  h+=`<div style="font-size:11px;color:var(--muted);margin:4px 0 10px">${mine.length} ${esc(mine.length===1?_one:_many)} in this ${esc(lex('universe'))}. Add as many as you like.</div>`;
 
   if(active){
     h+=`<div class="label mb-1" style="color:var(--accent)">▶ Continue</div>`;
     h+=saveCardHTML(active,true);
     const rest=mine.filter(s=>s.id!==currentSaveId);
-    if(rest.length){h+=`<div class="label mb-1" style="margin-top:12px">Other Characters</div>`;rest.forEach(s=>{h+=saveCardHTML(s,false);});}
+    if(rest.length){h+=`<div class="label mb-1" style="margin-top:12px">Other ${esc(lexU('heroes'))}</div>`;rest.forEach(s=>{h+=saveCardHTML(s,false);});}
   }else if(mine.length){
     mine.forEach(s=>{h+=saveCardHTML(s,false);});
   }else{
-    h+=`<div class="card tac"><div class="fw-700" style="margin-bottom:4px">No characters yet</div><div style="font-size:12px;color:var(--muted)">Start one below — you can keep as many as you want in this universe.</div></div>`;
+    h+=`<div class="card tac"><div class="fw-700" style="margin-bottom:4px">No ${esc(_many)} yet</div><div style="font-size:12px;color:var(--muted)">Start one below — you can keep as many as you want in this ${esc(lex('universe'))}.</div></div>`;
   }
 
-  h+=`<button class="btn btn-primary btn-full" style="margin-top:10px" onclick="newSavePrompt()">+ New Character</button>`;
+  h+=`<button class="btn btn-primary btn-full" style="margin-top:10px" onclick="newSavePrompt()">+ New ${esc(lexU('hero'))}</button>`;
 
-  if(others.length)h+=`<div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">${others.length} more character${others.length===1?'':'s'} in other universes — switch universe above to see ${others.length===1?'it':'them'}.</div>`;
+  if(others.length)h+=`<div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">${others.length} more ${esc(others.length===1?_one:_many)} in other ${esc(lex('universes'))} — switch ${esc(lex('universe'))} above to see ${others.length===1?'it':'them'}.</div>`;
 
   h+=`<div class="divider"></div><div style="display:flex;gap:8px"><button class="btn btn-gold btn-sm" style="flex:1" onclick="exportJSON()">Export Current</button><button class="btn btn-secondary btn-sm" style="flex:1" onclick="importJSON()">Import JSON</button></div>`;
 
@@ -551,7 +608,7 @@ function repairSaveIndex(){const n=rebuildSaveIndex();alert('Save list rebuilt f
 // ═══════════════════════════════════════════════════════════
 let _uniRequired=false;
 function refreshUniverseUI(){try{renderHero();}catch(e){}try{if(document.getElementById('npcs-content'))renderNPCs();}catch(e){}try{if(document.getElementById('wiki-content'))renderWiki();}catch(e){}}
-function universeBarHTML(){const u=currentUniverse();const nm=u?u.name:'No universe';return `<div class="uni-bar" onclick="openUniverseManager()" title="Your game world — tap to manage universes"><span class="uni-ico">\u{1F30C}</span><span class="uni-name">${esc(nm)}</span>${_uniFloorHTML()}<span class="uni-caret">▾</span></div>`;}
+function universeBarHTML(){const u=currentUniverse();const nm=u?u.name:('No '+lex('universe'));return `<div class="uni-bar" onclick="openUniverseManager()" title="Your game world — tap to manage ${esc(lex('universes'))}"><span class="uni-ico">\u{1F30C}</span><span class="uni-name">${esc(nm)}</span>${_uniFloorHTML()}<span class="uni-caret">▾</span></div>`;}
 // A pack whose lexicon renames the log break to something the table tracks —
 // Dungeon Crawler Carl's Floor — shows it here, because that is the clock.
 // The floor lives in the strip above the pages, where it is visible on every
@@ -575,7 +632,7 @@ function sysFloorStep(delta){
     if(typeof renderNPCs==='function'&&document.getElementById('npcs-content'))try{renderNPCs();}catch(e){}
   }
 }
-function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New ${esc(lex('hero'))}s join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
+function universeChooserHTML(){loadUniverses();const act=U.activeUniverseId;return `<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--muted);white-space:nowrap">New ${esc(lex('heroes'))} join</span><select style="flex:1" onchange="U.activeUniverseId=this.value;saveUniverses();renderSaveModal()">${U.universes.map(u=>`<option value="${u.id}" ${u.id===act?'selected':''}>${esc(u.name)}</option>`).join('')}<\/select><button class="btn btn-secondary btn-xs" onclick="openUniverseManager()">Manage<\/button><\/div>`;}
 function closeUniverseModal(){const m=document.getElementById('universe-modal');if(m)m.classList.remove('open','locked');}
 function openUniverseSetup(required,editId,repaint){
   _uniRequired=!!required;
@@ -590,10 +647,13 @@ function openUniverseSetup(required,editId,repaint){
   // that has no series model (Dungeon Crawler Carl) supplies neither list, and
   // rendering the empty grids anyway left the first-run gate with nothing to
   // click and no way to satisfy it — the app could not be started at all.
+  // `worldNext` is the pack's "what happens next" line, so it belongs on the
+  // first run only: on Settings for a world you already play in it was telling
+  // you to go and pick a character you picked hours ago.
   const tones=sysList('SERIES_TONES'),levels=sysList('SERIES_LEVELS');
   const hasSeries=tones.length>0&&levels.length>0;
   let h=`<div class="card"><div class="pg-title" style="font-size:22px">${ed?(lexU('universe')+' Settings'):(required?esc(lexOpt('registerWorld')||('Name Your '+lexU('universe'))):('New '+lexU('universe')))}</div>`;
-  h+=`<div style="font-size:12px;color:var(--muted);margin:6px 0 12px">A ${lex('universe')} is your shared game world. Every ${lex('hero')}, ${lex('npc')} and wiki entry in it is shared.${hasSeries?' Its tone and power level apply to every '+lex('hero')+' here.':''}</div>`;
+  h+=`<div style="font-size:12px;color:var(--muted);margin:6px 0 12px">A ${lex('universe')} is your shared game world. Every ${lex('hero')}, ${lex('npc')} and wiki entry in it is shared.${hasSeries?' Its tone and power level apply to every '+lex('hero')+' here.':''}${(required&&lexOpt('worldNext'))?' '+esc(lexOpt('worldNext')):''}</div>`;
   h+=`<div class="form-group"><label>${esc(lexU('universe'))} Name</label><input id="uni-name" value="${esc(ed?ed.name:'')}" placeholder="${esc(lexOpt('universeHint')||'e.g. Marvel, My City, Earth-27')}" onkeydown="if(event.key==='Enter')submitUniverseSetup('${editId||''}')"><\/div>`;
   if(hasSeries){
   h+=`<div class="label">Series Tone</div><div class="grid-3 mb-3">`;
@@ -626,7 +686,7 @@ function _uniPick(field,val,editId){
 }
 function submitUniverseSetup(editId){
   const name=(document.getElementById('uni-name').value||'').trim();
-  if(!name)return alert('Please enter a universe name.');
+  if(!name)return alert('Please enter a '+lex('universe')+' name.');
   if(editId){
     const u=getUniverse(editId);if(!u)return;
     u.name=name;u.series=u.series||{};
@@ -670,7 +730,7 @@ function finishUniverseGate(){
   // is the only other place the universe gets bound.
   const blocks=typeof sysUsesBlocks==='function'&&sysUsesBlocks();
   if(blocks)bindUniverse();
-  try{renderHero();}catch(e){}
+  try{renderHero();sysLand();}catch(e){}
   if(currentSaveId===null&&!blocks)openSlotModal();
 }
 function foldLegacySlots(u){
@@ -688,32 +748,38 @@ function foldLegacySlots(u){
 function _uniSeriesLabel(u){
   const s=(u&&u.series)||{};
   const t=sysList('SERIES_TONES').find(x=>x.id===s.tone),l=sysList('SERIES_LEVELS').find(x=>x.id===s.level);
+  // Tone and power level are Daring Comics' own. A game that has none was being
+  // nagged in alert colour about something it cannot set.
+  if(!sysList('SERIES_TONES').length&&!sysList('SERIES_LEVELS').length)return '';
   if(!t&&!l)return `<div style="font-size:10px;color:var(--accent)">No tone or power level set<\/div>`;
   return `<div style="font-size:10px;color:var(--gold)">${esc([t&&t.name,l&&l.name].filter(Boolean).join(' · '))}<\/div>`;
 }
 function openUniverseManager(){
   loadUniverses();
-  let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="pg-title" style="font-size:20px">Universes<\/div><button class="btn btn-secondary btn-xs" onclick="closeUniverseModal()">Close<\/button><\/div>`;
-  h+=`<div style="font-size:11px;color:var(--muted);margin:4px 0 10px">Your game worlds. Heroes, NPCs & villains are shared within a universe.<\/div>`;
+  // Every noun here was Daring Comics'. This modal is reached from a bar that
+  // already speaks the pack's words, so "Heroes, NPCs & villains" read as a
+  // different game breaking in.
+  let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="pg-title" style="font-size:20px">${esc(lexU('universes'))}<\/div><button class="btn btn-secondary btn-xs" onclick="closeUniverseModal()">Close<\/button><\/div>`;
+  h+=`<div style="font-size:11px;color:var(--muted);margin:4px 0 10px">Your game worlds. Every ${esc(lex('hero'))}, ${esc(lex('npc'))} and wiki entry is shared within a ${esc(lex('universe'))}.<\/div>`;
   U.universes.forEach(function(u){
     const heroes=universeHeroCount(u.id);const isCur=(typeof S!=='undefined'&&S&&S.universeId===u.id);const rc=(u.roster||[]).length;
-    h+=`<div class="card-sm" style="${isCur?'border-color:var(--accent)':''}"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div style="flex:1;min-width:120px"><div class="fw-700">${esc(u.name)}${isCur?' <span style="font-size:10px;color:var(--accent)">(current)<\/span>':''}<\/div><div style="font-size:10px;color:var(--muted)">${heroes} hero${heroes===1?'':'es'} • ${rc} in roster<\/div>${_uniSeriesLabel(u)}<\/div>`;
+    h+=`<div class="card-sm" style="${isCur?'border-color:var(--accent)':''}"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div style="flex:1;min-width:120px"><div class="fw-700">${esc(u.name)}${isCur?' <span style="font-size:10px;color:var(--accent)">(current)<\/span>':''}<\/div><div style="font-size:10px;color:var(--muted)">${heroes} ${esc(heroes===1?lex('hero'):lex('heroes'))} • ${rc} in ${esc(lex('roster'))}<\/div>${_uniSeriesLabel(u)}<\/div>`;
     h+=`<button class="btn btn-secondary btn-xs" onclick="openUniverseSetup(false,'${u.id}')" title="Name, tone and power level">Settings<\/button>`;
-    if(typeof S!=='undefined'&&S&&S.char&&!isCur)h+=`<button class="btn btn-gold btn-xs" onclick="moveHeroToUniverse('${u.id}')" title="Move the hero you are playing into this universe">Move hero<\/button>`;
+    if(typeof S!=='undefined'&&S&&S.char&&!isCur)h+=`<button class="btn btn-gold btn-xs" onclick="moveHeroToUniverse('${u.id}')" title="Move the ${esc(lex('hero'))} you are playing into this ${esc(lex('universe'))}">Move ${esc(lex('hero'))}<\/button>`;
     if(U.universes.length>1)h+=`<button class="btn btn-danger btn-xs" onclick="deleteUniversePrompt('${u.id}')">Del<\/button>`;
     h+=`<\/div><\/div>`;
   });
-  h+=`<button class="btn btn-primary btn-full" style="margin-top:8px" onclick="openUniverseSetup(false)">+ New Universe<\/button>`;
-  h+=`<div class="divider"><\/div><button class="btn btn-gold btn-full" onclick="openMultiplayer()" title="Share a universe with your table">\u{1F310} Play With Your Table<\/button>`;
-  h+=`<div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center">Share a universe's roster and wiki with other players. Your heroes and save files stay on this device.<\/div><\/div>`;
+  h+=`<button class="btn btn-primary btn-full" style="margin-top:8px" onclick="openUniverseSetup(false)">+ New ${esc(lexU('universe'))}<\/button>`;
+  h+=`<div class="divider"><\/div><button class="btn btn-gold btn-full" onclick="openMultiplayer()" title="Share a ${esc(lex('universe'))} with your table">\u{1F310} Play With Your Table<\/button>`;
+  h+=`<div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center">Share a ${esc(lex('universe'))}'s ${esc(lex('roster'))} and ${esc(lex('wiki'))} with other players. Your ${esc(lex('heroes'))} and save files stay on this device.<\/div><\/div>`;
   document.getElementById('universe-modal-body').innerHTML=h;
   document.getElementById('universe-modal').classList.remove('locked');
   document.getElementById('universe-modal').classList.add('open');
 }
 function deleteUniversePrompt(id){
-  loadUniverses();if(U.universes.length<=1)return alert('You must keep at least one universe.');
+  loadUniverses();if(U.universes.length<=1)return alert('You must keep at least one '+lex('universe')+'.');
   const cnt=universeHeroCount(id);
-  if(!confirm('Delete this universe'+(cnt?' and unlink its '+cnt+' hero'+(cnt===1?'':'es'):'')+'? Its shared roster will be removed. This cannot be undone.'))return;
+  if(!confirm('Delete this '+lex('universe')+(cnt?' and unlink its '+cnt+' '+(cnt===1?lex('hero'):lex('heroes')):'')+'? Its shared '+lex('roster')+' will be removed. This cannot be undone.'))return;
   listSaves(id).slice().forEach(function(sm){
     const d=getSaveData(sm.id);
     if(!d)return;
@@ -726,7 +792,9 @@ function deleteUniversePrompt(id){
 }
 function moveHeroToUniverse(id){
   if(!S||!S.char)return;const u=getUniverse(id);if(!u)return;
-  if(!confirm('Move "'+(S.char.costumedName||'this hero')+'" into "'+u.name+'"? Its future NPCs & villains will be shared with that universe.'))return;
+  // sysCharName, so the confirm actually names the character: outside Daring
+  // Comics it always read "this hero".
+  if(!confirm('Move "'+(sysCharName(S.char)||'this '+lex('hero'))+'" into "'+u.name+'"? Its future '+lex('npcs')+' will be shared with that '+lex('universe')+'.'))return;
   S.universeId=id;bindUniverse();syncHeroToRoster();save();
   closeUniverseModal();refreshUniverseUI();
 }
@@ -755,6 +823,12 @@ function showTab(id){
   if(typeof renderSysTab==='function')renderSysTab(id);
 }
 function renderAll(){renderHero();}
+// A pack whose first useful page isn't the sheet says where to open instead.
+function sysLand(){
+  const t=(typeof SYS!=='undefined'&&SYS&&typeof SYS.landing==='function')?SYS.landing(S.char):'';
+  if(t)showTab(t);
+  return !!t;
+}
 
 // ═══════════════════════════════════════════════════════════
 // THEME

@@ -125,7 +125,11 @@ registerSystem({
     map:      { title: 'Neighborhood Map', hint: 'Twenty-five squares of floor. Click an adjacent one to travel.' },
     conflict: { title: 'Combat', hint: 'Rounds, Actions and who is still standing.' },
     notes:    { title: 'Crawl Log', hint: '' },
+    sheet:    { editHint: 'Change your name, number, Race, Class or Unenhanced Stats' },
   },
+
+  // The party's Floor is the clock, so it stays on screen above every tab.
+  floorStrip: { hint: 'Floor sets Mob DR, salvage and pet Ranks' },
 
   // The app is the Crawler Interface, so the words are the System AI's.
   lexicon: {

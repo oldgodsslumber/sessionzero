@@ -159,7 +159,7 @@ function renderMapContent(){
         `</div>`;
     }
   }
-  let sw='<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
+  let sw='<div class="region-sw" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
   here.forEach(x=>{sw+=`<button class="btn btn-xs ${x.i===S.activeRegion?'btn-primary':'btn-secondary'}" onclick="switchRegion(${x.i})">${esc(x.r.name)}</button>`;});
   sw+=`<button class="btn btn-xs btn-gold" onclick="newRegion()">+ New</button>`;
   if(mapUsesFloors()){
@@ -181,7 +181,7 @@ function renderMapContent(){
     _miScope='region';_miIdx=si;_miVal=isGiSlug(sc.icon)?sc.icon:'';_miDefault=sc.name||region.name||'';
     det=`<div class="card"><div class="fw-700" style="font-size:14px;font-family:var(--font-title);color:var(--accent);margin-bottom:6px">${esc(mapCellWord())} ${si+1}: ${esc(sc.name)||'Unknown'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${!cur&&adj?`<button class="btn btn-primary btn-xs" onclick="travelTo(${si})">Travel Here</button>`:''}<button class="btn btn-secondary btn-xs" onclick="toggleMapVoid(${si})">${sc.isVoid?('Not '+esc(mapBlockedWord().toLowerCase())):('Mark '+esc(mapBlockedWord().toLowerCase()))}</button><button class="btn btn-gold btn-xs" onclick="enterSZ(${si})">${sc.subZone?('Inside \u2014 '+esc(sc.subZone.type)):'Map the inside'}</button></div><div class="form-group"><label>${esc(mapCellWord())} Name</label><input value="${esc(sc.name)}" onchange="setMapProp(${si},'name',this.value)" placeholder="${esc(mapHint('cellName','e.g. Wayne Tower, City Hall, Docks...'))}"></div><div class="form-group"><label>What it is</label><select onchange="setMapZone(${si},this.value)"><option value="">\u2014 ${esc(mapZoneWord().toLowerCase())} \u2014</option>${mapZoneTypes().map(function(z){return `<option value="${esc(z)}"${z===sc.zone?' selected':''}>${esc(z)}</option>`;}).join('')}</select></div>${mapIconField()}<div class="form-group"><label>Feature</label><input value="${esc(sc.feature)}" onchange="setMapProp(${si},'feature',this.value)" placeholder="${esc(mapHint('cellFeature','e.g. Villain HQ, Hospital, Park...'))}"></div><div class="form-group"><label>Notes</label><textarea rows="2" onchange="setMapProp(${si},'notes',this.value)">${esc(sc.notes)}</textarea></div></div>`;}
 
-  const heroInfo=S.char?`<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:22px;font-weight:900;font-family:var(--font-title);color:var(--accent)">${heroMarker()}</span><div><div style="font-weight:700;color:var(--accent)">${esc(S.char.costumedName)}</div><div style="font-size:10px;color:var(--muted)">${esc(S.char.civilianName)}</div></div></div>`:'';
+  const heroInfo=S.char?`<div class="card-sm" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:22px;font-weight:900;font-family:var(--font-title);color:var(--accent)">${heroMarker()}</span><div><div style="font-weight:700;color:var(--accent)">${esc(sysCharName(S.char))}</div><div style="font-size:10px;color:var(--muted)">${esc(S.char.civilianName||'')}</div></div></div>`:'';
 
   // The map and the cell you clicked, side by side where there is room. On a
   // phone .map-split is a plain block, so the detail still falls under the grid.

@@ -354,20 +354,22 @@ function applySysFonts() {
 // The swatch row was hardcoded comic-book colours in the markup. Each pack now
 // declares its own [value, label, gradientStops] triples; a pack with none gets
 // no swatch row at all, rather than another game's palette.
-// The persistent floor control. A pack that does not track a floor gets nothing,
-// and the strip collapses.
+// The persistent floor control. A pack asks for it with floorStrip; every other pack
+// gets nothing and the strip collapses. S.floor can't decide this, because every
+// state is born with one, and rendering through blocks can't either: that is how
+// Marvel Multiverse came to show a strip about Mobs, salvage and pets.
 function renderFloorStrip() {
   const el = document.getElementById('floor-strip');
   if (!el) return;
-  const uses = typeof sysUsesBlocks === 'function' && sysUsesBlocks()
-    && typeof S !== 'undefined' && S && S.floor !== undefined && S.floor !== null;
+  const strip = typeof SYS !== 'undefined' && SYS && SYS.floorStrip;
+  const uses = strip && typeof S !== 'undefined' && S && S.floor !== undefined && S.floor !== null;
   if (!uses) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML =
     '<button class="uni-fbtn" title="Up a ' + esc(lexL('logBreak')) + '" onclick="sysFloorStep(-1)">\u2212</button>' +
     '<span class="fs-num">' + esc(lexU('logBreak')) + ' ' + esc(String(S.floor)) + '</span>' +
     '<button class="uni-fbtn" title="Down a ' + esc(lexL('logBreak')) + '" onclick="sysFloorStep(1)">+</button>' +
-    '<span class="fs-hint">' + esc(lexU('logBreak')) + ' sets Mob DR, salvage and pet Ranks</span>';
+    '<span class="fs-hint">' + esc(strip.hint || '') + '</span>';
 }
 
 function renderThemeSwatches() {

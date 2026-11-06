@@ -204,9 +204,18 @@ function iconField(id, opts) {
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
     '<div id="' + esc(st.els.preview) + '" class="ic-preview"></div>' +
     '<input id="' + esc(st.els.search) + '" placeholder="' +
-    esc(o.placeholder || 'Search icons — sword, potion, skull…') +
+    esc(o.placeholder || ('Search icons — ' + iconExamples() + '…')) +
     '" oninput="iconSearch(&#39;' + esc(id) + '&#39;)"></div>' +
     '<div id="' + esc(st.els.results) + '" class="ic-results"></div></div>';
+}
+
+// The example words are the only part of the icon picker that is about the
+// game rather than the library, and dungeon props read as a mistake in a game
+// with no dungeons. A pack overrides them with copy.icons.examples.
+function iconExamples() {
+  return (typeof sysCopy === 'function')
+    ? sysCopy('icons', 'examples', 'sword, potion, skull, shield')
+    : 'sword, potion, skull, shield';
 }
 
 function iconPreview(id) {
@@ -221,8 +230,8 @@ function iconResults(id, icons) {
   const st = iconState(id), res = document.getElementById(st.els.results);
   if (!res) return;
   if (!icons || !icons.length) {
-    res.innerHTML = '<div class="ic-note">No icons found — try another word ' +
-      '(sword, potion, skull, shield).</div>';
+    res.innerHTML = '<div class="ic-note">No icons found — try another word (' +
+      esc(iconExamples()) + ').</div>';
     return;
   }
   res.innerHTML = icons.map(function (ic) {

@@ -322,7 +322,11 @@
     _withRemote(function(){
       Object.keys(map||{}).forEach(function(uid){
         if(uid===mine)return;
-        const ch=map[uid];if(!ch||!ch.costumedName)return;
+        // Through sysCharName, not costumedName: that field is Daring Comics'
+        // alone, so this returned early for every remote player in the other
+        // two games and no teammate's hero ever reached the table.
+        const ch=map[uid];if(!ch||typeof ch!=='object')return;
+        if(!(sysCharName(ch)||ch.costumedName))return;
         const id='hero_'+uid;
         const ent=Object.assign(characterToNpc(ch,id),{id:id,heroId:id,fromHero:true,remoteOwner:uid});
         const i=u.roster.findIndex(function(r){return r.id===id;});

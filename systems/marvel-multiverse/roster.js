@@ -117,7 +117,12 @@ function mmrPlayProfile(id) {
 // What the sheet shows of a pregen until the sheet's own blocks arrive (PLAN §10, M3).
 function mmrSheetExtra(ch) {
   const p = ch && ch.profile ? mmrProfile(ch.profile) : null;
-  return p ? '<div class="card">' + mmrStatBlockHTML(p) + '</div>' : '';
+  if (p) return '<div class="card">' + mmrStatBlockHTML(p) + '</div>';
+  if (ch && sysCharName(ch)) return '';
+  return `<div class="card tac" style="padding:20px">`
+    + `<div class="fw-700 mb-1">No ${esc(lex('hero'))} yet</div>`
+    + `<div class="text-muted mb-3" style="font-size:13px">Pick one of the ${MMR_PROFILES.length} official characters to play. Building your own comes with the full sheet.</div>`
+    + `<button class="btn btn-primary" onclick="showTab('npcs')">Browse the official characters</button></div>`;
 }
 
 // ─── drawing one ─────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-function parseIssues(log){const g=[];let cur={label:'Campaign Log',entries:[]};log.forEach(e=>{if(e.type==='issue_break'){g.push(cur);cur={label:e.title||'Issue',entries:[]};}else cur.entries.push(e);});g.push(cur);return g.filter(g=>g.label==='Campaign Log'?g.entries.length>0:true);}
+function parseIssues(log){const base=lexU('log');const g=[];let cur={label:base,entries:[]};log.forEach(e=>{if(e.type==='issue_break'){g.push(cur);cur={label:e.title||lexU('logBreak'),entries:[]};}else cur.entries.push(e);});g.push(cur);return g.filter(g=>g.label===base?g.entries.length>0:true);}
 
 function renderNotes(){
   const el=document.getElementById('notes-content');if(!el)return;
@@ -7,7 +7,7 @@ function renderNotes(){
   // Header
   h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px"><div class="pg-title">${esc(sysCopy('notes','title',lexOpt('log')||'Journal'))}</div><div style="display:flex;gap:4px;flex-wrap:wrap">`;
   if(!reorder){
-    h+=`<button class="btn btn-xs btn-gold" onclick="addIssueBreak()">\u25b6 NEW ISSUE</button>`;
+    h+=`<button class="btn btn-xs btn-gold" onclick="addIssueBreak()">\u25b6 NEW ${esc(lexU('logBreak').toUpperCase())}</button>`;
     h+=`<button class="btn btn-xs btn-secondary" onclick="exportLog()">\u2197 Export</button>`;
     h+=`<button class="btn btn-xs btn-secondary" onclick="window._logNewest=!window._logNewest;renderNotes()">${nf?'\u2193 Newest':'\u2191 Oldest'}</button>`;
   }
@@ -15,13 +15,13 @@ function renderNotes(){
   h+=`</div></div>`;
 
   if(!entries.length){
-    h+=`<div class="tac" style="padding:40px"><div style="font-size:36px;margin-bottom:8px">\ud83d\udcd6</div><div class="text-muted">No entries yet. Start a new Issue or add an entry.</div></div>`;
+    h+=`<div class="tac" style="padding:40px"><div style="font-size:36px;margin-bottom:8px">\ud83d\udcd6</div><div class="text-muted">No entries yet. Start a new ${esc(lexU('logBreak'))} or add an entry.</div></div>`;
   } else {
     const ordered=(nf&&!reorder)?[...entries].map((n,i)=>({n,i})).reverse():entries.map((n,i)=>({n,i}));
     ordered.forEach(({n:entry,i})=>{
       const drag=reorder?` draggable="true" ondragstart="logDS(event,${i})" ondragover="logDO(event)" ondragleave="logDL(event)" ondrop="logDD(event,${i})"`:' ';
       if(entry.type==='issue_break'){
-        h+=`<div class="log-episode"${drag}>${reorder?'<span class="log-grip">\u2982</span>':''}<div class="log-episode-label">${esc(entry.title||'Issue')}</div>${!reorder?`<button class="btn btn-xs btn-secondary" onclick="editIssue(${i})" style="padding:2px 6px">\u270e</button><button class="btn btn-xs btn-danger" onclick="deleteLogEntry(${i})" style="padding:2px 6px">\u2715</button>`:''}</div>`;
+        h+=`<div class="log-episode"${drag}>${reorder?'<span class="log-grip">\u2982</span>':''}<div class="log-episode-label">${esc(entry.title||lexU('logBreak'))}</div>${!reorder?`<button class="btn btn-xs btn-secondary" onclick="editIssue(${i})" style="padding:2px 6px">\u270e</button><button class="btn btn-xs btn-danger" onclick="deleteLogEntry(${i})" style="padding:2px 6px">\u2715</button>`:''}</div>`;
         return;
       }
       const ti=LOG_TYPES.find(t=>t.key===entry.type)||LOG_TYPES[0];
@@ -50,15 +50,18 @@ function renderNotes(){
 // Issue breaks
 function addIssueBreak(){
   const n=S.notes.filter(e=>e.type==='issue_break').length+1;
-  const val=prompt('Issue label:','Issue '+n);if(!val||!val.trim())return;
+  const val=prompt(lexU('logBreak')+' label:',lexU('logBreak')+' '+n);if(!val||!val.trim())return;
   S.notes.push({type:'issue_break',title:val.trim()});
   save();renderNotes();showAddEntry();
 }
-function editIssue(i){const e=S.notes[i];if(!e)return;const v=prompt('Issue label:',e.title||'Issue');if(v&&v.trim()){e.title=v.trim();save();renderNotes();}}
+function editIssue(i){const e=S.notes[i];if(!e)return;const v=prompt(lexU('logBreak')+' label:',e.title||lexU('logBreak'));if(v&&v.trim()){e.title=v.trim();save();renderNotes();}}
 
 // Add entry flow
 function showAddEntry(){
-  let h=`<div class="card"><div class="pg-title" style="font-size:18px;margin-bottom:8px">New Entry</div>`;
+  // The type picker replaced the whole page with eight buttons and no way out,
+  // so the only route back to your log was to pick a type you did not want and
+  // cancel on the next screen.
+  let h=`<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><button class="btn btn-secondary btn-xs" onclick="renderNotes()">← Back</button><div class="pg-title" style="font-size:18px;margin:0">New Entry</div></div>`;
   h+=`<div class="label mb-2">Select type</div>`;
   // Primary
   const main=LOG_TYPES[0];
@@ -134,7 +137,27 @@ function exportLog(){
   const regHTML=(S.regions||[]).map((r,ri)=>{const cells=r.cells||[];return`<div class="src-card" draggable="true" ondragstart="srcDS(event,'map',${ri})" style="margin-bottom:10px"><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:6px;font-weight:700">${e(r.name)}</div><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px">${cells.slice(0,25).map(c=>`<div style="aspect-ratio:1;background:${c.isVoid?'transparent':c.name?'var(--card-bg)':'var(--empty-cell)'};border:1px solid ${c.isVoid?'transparent':'var(--cell-border)'};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1px;border-radius:2px;font-size:14px">${e(c.icon||'')}${c.name?`<span style="font-size:7px;color:var(--cell-text);text-align:center;overflow:hidden">${e(c.name)}</span>`:''}</div>`).join('')}</div></div>`;}).join('');
   // Character stats
   const ch=S.char;
-  const statsHTML=ch?`<div class="src-card" draggable="true" ondragstart="srcDS(event,'stats',0)"><div style="font-size:13px;font-weight:700;color:var(--accent)">${e(ch.costumedName)}</div><div style="font-size:10px;color:var(--muted);margin-bottom:4px">${e(ch.civilianName)}</div><div style="font-size:10px">Concept: ${e(ch.aspects?.concept||'')}</div><div style="font-size:10px">Motivation: ${e(ch.aspects?.motivation||'')}</div><div style="font-size:9px;color:var(--muted);margin-top:4px">${SKILLS.filter(sk=>(ch.skills[sk]||0)>0).sort((a,b)=>(ch.skills[b]||0)-(ch.skills[a]||0)).map(sk=>sk+' +'+ch.skills[sk]).join(', ')}</div></div>`:'<div style="font-size:11px;color:var(--muted);padding:10px">No character.</div>';
+  // Built from the pack's own save summary, not from Daring Comics' sheet.
+  // This card used to read SKILLS, costumedName, aspects and ch.skills
+  // directly, so Export threw "SKILLS is not defined" the moment a character
+  // existed — the button was dead in every game but Daring Comics, with no
+  // error on screen. The concept/motivation and skill lines are still printed
+  // wherever a pack actually has them.
+  let statsHTML='<div style="font-size:11px;color:var(--muted);padding:10px">No '+e(lex('hero'))+'.</div>';
+  if(ch){
+    const sum=(typeof packSummary==='function'?packSummary(S):null)||{};
+    const skills=(typeof sysList==='function'?sysList('SKILLS'):[])||[];
+    let body=`<div style="font-size:13px;font-weight:700;color:var(--accent)">${e(sum.name||sysCharName(ch)||'')}</div>`;
+    if(sum.sub)body+=`<div style="font-size:10px;color:var(--muted);margin-bottom:4px">${e(sum.sub)}</div>`;
+    if(ch.aspects&&ch.aspects.concept)body+=`<div style="font-size:10px">Concept: ${e(ch.aspects.concept)}</div>`;
+    if(ch.aspects&&ch.aspects.motivation)body+=`<div style="font-size:10px">Motivation: ${e(ch.aspects.motivation)}</div>`;
+    (sum.lines||[]).forEach(function(ln){if(ln)body+=`<div style="font-size:10px">${e(ln)}</div>`;});
+    if(skills.length&&ch.skills){
+      const sk=skills.filter(s=>(ch.skills[s]||0)>0).sort((a,b)=>(ch.skills[b]||0)-(ch.skills[a]||0)).map(s=>s+' +'+ch.skills[s]).join(', ');
+      if(sk)body+=`<div style="font-size:9px;color:var(--muted);margin-top:4px">${e(sk)}</div>`;
+    }
+    statsHTML=`<div class="src-card" draggable="true" ondragstart="srcDS(event,'stats',0)">${body}</div>`;
+  }
   // Episode checkboxes
   const epChecks=`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="ep-all" onchange="document.querySelectorAll('.ep-chk').forEach(c=>c.checked=this.checked);renderOut()" checked> ALL</label>`+episodes.map((ep,i)=>`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ep-chk" checked onchange="document.getElementById('ep-all').checked=![...document.querySelectorAll('.ep-chk')].some(c=>!c.checked);renderOut()"> ${e(ep.label)}</label>`).join('');
 
@@ -190,8 +213,8 @@ body{height:100%;background:var(--bg);color:var(--text);display:flex;flex-direct
 .notes-ta{width:100%;background:transparent;border:1px solid var(--accent-dim);color:var(--text);font-family:inherit;font-size:11px;padding:8px;border-radius:4px;resize:vertical;min-height:80px;margin-top:6px}
 @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{overflow:visible;height:auto}body.print-mode,body.print-mode #doc-left,body.print-mode #doc-right,body.print-mode #doc-area{background:#fff!important}body.print-mode .log-card,body.print-mode .dropped-card{background:#f8f8f8!important}body.print-mode .log-card.alert{background:#fff0f0!important}body.print-mode .col-hdr{background:#ccc!important;color:#222!important}#topbar,#src-panel{display:none}#doc-area{grid-template-columns:38% 1fr}#doc-left{border-right:1px solid var(--accent-dim)}#drop-zone,.dc-handle,.rm-btn{display:none}.dc-wrap .dropped-card{border-radius:6px}#doc-left,#doc-right{overflow:visible;height:auto}.log-card,.dropped-card,.ep-banner,.col-hdr{page-break-inside:avoid}.notes-ta{border:none;resize:none;padding:0;min-height:unset}}`;
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Issue Report \u2014 ${heroName}</title><style>${css}</style></head><body>
-<div id="topbar"><div id="tb-title">ISSUE REPORT // ${heroName}</div><div id="ep-sel">${epChecks}</div><button class="tb-btn" id="theme-btn" onclick="document.body.classList.toggle('print-mode');var pm=document.body.classList.contains('print-mode');document.documentElement.style.background=pm?'#fff':'#0a0e1a';this.textContent=pm?'\u25d0 DARK':'\u25d1 PRINT MODE'">\u25d1 PRINT MODE</button><button class="tb-btn" onclick="window.print()">\ud83d\udda8 PRINT</button></div>
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${e(lexU('logBreak'))} Report \u2014 ${heroName}</title><style>${css}</style></head><body>
+<div id="topbar"><div id="tb-title">${e(lexU('logBreak').toUpperCase())} REPORT // ${heroName}</div><div id="ep-sel">${epChecks}</div><button class="tb-btn" id="theme-btn" onclick="document.body.classList.toggle('print-mode');var pm=document.body.classList.contains('print-mode');document.documentElement.style.background=pm?'#fff':'#0a0e1a';this.textContent=pm?'\u25d0 DARK':'\u25d1 PRINT MODE'">\u25d1 PRINT MODE</button><button class="tb-btn" onclick="window.print()">\ud83d\udda8 PRINT</button></div>
 <div class="accent-strip"></div>
 <div id="main">
 <div id="src-panel"><div id="src-tabs"><button class="stab active" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='npcs'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===0?' active':''))})">NPCs</button><button class="stab" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='maps'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===1?' active':''))})">MAPS</button><button class="stab" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='stats'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===2?' active':''))})">HERO</button></div>
@@ -199,7 +222,7 @@ body{height:100%;background:var(--bg);color:var(--text);display:flex;flex-direct
 <div id="st-maps" style="padding:10px;overflow-y:auto;flex:1;display:none">${regHTML}</div>
 <div id="st-stats" style="padding:10px;overflow-y:auto;flex:1;display:none">${statsHTML}<div class="src-card" draggable="true" ondragstart="srcDS(event,'notes',0)"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">NOTES BLOCK</div><div style="font-size:10px;color:var(--muted)">Drag to add a text area</div></div></div>
 </div>
-<div id="doc-area"><div id="doc-left" ondragover="event.preventDefault();event.dataTransfer.dropEffect='copy';document.getElementById('drop-zone').classList.add('drag-over')" ondragleave="if(!document.getElementById('doc-left').contains(event.relatedTarget))document.getElementById('drop-zone').classList.remove('drag-over')" ondrop="event.preventDefault();document.getElementById('drop-zone').classList.remove('drag-over');if(!_srcItem)return;DROPPED.push(_srcItem);_srcItem=null;renderDI()"><div class="col-hdr col-hdr-annex">ANNEXES</div><div id="drop-zone">DRAG ITEMS HERE</div><div id="dropped-items"></div></div><div id="doc-right"><div class="col-hdr col-hdr-log">ISSUE LOG</div><div id="log-output"></div></div></div>
+<div id="doc-area"><div id="doc-left" ondragover="event.preventDefault();event.dataTransfer.dropEffect='copy';document.getElementById('drop-zone').classList.add('drag-over')" ondragleave="if(!document.getElementById('doc-left').contains(event.relatedTarget))document.getElementById('drop-zone').classList.remove('drag-over')" ondrop="event.preventDefault();document.getElementById('drop-zone').classList.remove('drag-over');if(!_srcItem)return;DROPPED.push(_srcItem);_srcItem=null;renderDI()"><div class="col-hdr col-hdr-annex">ANNEXES</div><div id="drop-zone">DRAG ITEMS HERE</div><div id="dropped-items"></div></div><div id="doc-right"><div class="col-hdr col-hdr-log">${e(lexU('log').toUpperCase())}</div><div id="log-output"></div></div></div>
 </div>
 <script>
 var EPISODES=${JSON.stringify(episodes).replace(/<\//g,'<\\/')};
@@ -210,7 +233,7 @@ var DROPPED=[];
 var _srcItem=null;var _reIdx=null;
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function srcDS(e,kind,idx){_srcItem={kind:kind,idx:idx};_reIdx=null;e.dataTransfer.effectAllowed='copy';e.dataTransfer.setData('text/plain',kind);}
-function renderOut(){var sel=[];document.querySelectorAll('.ep-chk').forEach(function(c,i){if(c.checked)sel.push(i);});var h='';sel.forEach(function(ei){var ep=EPISODES[ei];if(!ep)return;h+='<div class="ep-banner"><div><div class="ep-banner-label">Issue</div><div class="ep-banner-title">'+esc(ep.label)+'</div></div></div>';ep.entries.forEach(function(en){var isMajor=en.type==='main',isAlert=en.type==='battle',isSupp=en.type==='supplemental';var cls=isAlert?'log-card alert':isSupp?'log-card supplemental':isMajor?'log-card':'log-card base';h+='<div class="'+cls+'"><div class="log-card-header"><span style="font-size:'+(isMajor?'20':'16')+'px">'+esc(en.emoji||'')+'</span><div><div class="log-card-title">'+esc(en.title||en.type||'Log')+'</div><div class="log-card-meta">'+esc(en.date||'')+'</div></div></div>'+(en.body?'<div class="log-card-body">'+esc(en.body)+'</div>':'')+'</div>';});});document.getElementById('log-output').innerHTML=h||'<div style="font-size:12px;color:var(--muted);padding:20px">No issues selected.</div>';}
+function renderOut(){var sel=[];document.querySelectorAll('.ep-chk').forEach(function(c,i){if(c.checked)sel.push(i);});var h='';sel.forEach(function(ei){var ep=EPISODES[ei];if(!ep)return;h+='<div class="ep-banner"><div><div class="ep-banner-label">${e(lexU('logBreak'))}</div><div class="ep-banner-title">'+esc(ep.label)+'</div></div></div>';ep.entries.forEach(function(en){var isMajor=en.type==='main',isAlert=en.type==='battle',isSupp=en.type==='supplemental';var cls=isAlert?'log-card alert':isSupp?'log-card supplemental':isMajor?'log-card':'log-card base';h+='<div class="'+cls+'"><div class="log-card-header"><span style="font-size:'+(isMajor?'20':'16')+'px">'+esc(en.emoji||'')+'</span><div><div class="log-card-title">'+esc(en.title||en.type||'Log')+'</div><div class="log-card-meta">'+esc(en.date||'')+'</div></div></div>'+(en.body?'<div class="log-card-body">'+esc(en.body)+'</div>':'')+'</div>';});});document.getElementById('log-output').innerHTML=h||'<div style="font-size:12px;color:var(--muted);padding:20px">No ${e(lexL('logBreak'))}s selected.</div>';}
 function renderDI(){document.getElementById('dropped-items').innerHTML=DROPPED.map(function(item,i){return'<div class="dc-wrap" draggable="true" ondragstart="cdS(event,'+i+')" ondragover="cdO(event,'+i+')" ondrop="cdD(event,'+i+')" ondragend="cdE()"><div class="dc-handle">\\u2982 DRAG TO REORDER</div>'+renderDC(item,i)+'</div>';}).join('');}
 function renderDC(item,i){var h='<div class="dropped-card"><button class="rm-btn" onclick="DROPPED.splice('+i+',1);renderDI()">\\u2715</button>';if(item.kind==='npc'){var n=SRC_NPCS[item.idx]||{};h+='<div style="font-size:14px;font-weight:700;color:var(--purple)">'+esc(n.name)+'</div><div style="font-size:10px;color:var(--muted)">'+esc(n.type||'')+' '+esc(n.desc||'')+'</div>'+(n.powers?'<div style="font-size:10px;color:var(--purple);margin-top:2px">'+esc(n.powers)+'</div>':'');}
 else if(item.kind==='map'){var r=ALL_REGIONS[item.idx]||{cells:[]};h+='<div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">'+esc(r.name)+'</div><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px">'+r.cells.slice(0,25).map(function(c){return\x27<div style="aspect-ratio:1;background:\x27+(c.isVoid?\x27transparent\x27:c.name?\x27var(--card-bg)\x27:\x27var(--empty-cell)\x27)+\x27;border:1px solid \x27+(c.isVoid?\x27transparent\x27:\x27var(--cell-border)\x27)+\x27;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;border-radius:2px">\x27+esc(c.icon||"")+(c.name?\x27<span style="font-size:7px;color:var(--cell-text);text-align:center">\x27+esc(c.name)+\x27</span>\x27:\x27\x27)+\x27</div>\x27;}).join(\x27\x27)+\x27</div>\x27;}

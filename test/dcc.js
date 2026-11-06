@@ -1631,6 +1631,12 @@ function boot(entry) {
     const html = ev("(document.getElementById('floor-strip')||{}).innerHTML||''");
     return html !== '' || 'this game tracks a floor and has no strip';
   });
+  check('[floor] the strip\'s words are this pack\'s, not the shell\'s', () => {
+    const hint = ev("(document.querySelector('#floor-strip .fs-hint')||{}).textContent||''");
+    if (hint !== 'Floor sets Mob DR, salvage and pet Ranks') return 'the hint reads ' + JSON.stringify(hint);
+    const core = require('fs').readFileSync(require('path').join(__dirname, '..', 'core/chrome.js'), 'utf8');
+    return !/sets Mob DR/.test(core) || 'the shell still carries it';
+  });
   check('[floor] the sheet header follows the party down', () => {
     // It used to show the floor the character was BUILT for, which stops being
     // true the moment they descend.

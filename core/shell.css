@@ -235,6 +235,23 @@ html[data-theme="crawler"] .nb.active{color:var(--accent)}
 html[data-theme="crawler"] .nb{color:var(--muted)}
 html[data-theme="crawler"] .uni-bar{border-color:var(--border)}
 html[data-theme="crawler"] .uni-name{font-family:var(--font-label);letter-spacing:.08em}
+/* Marvel Multiverse. Our own look: no logos and no trade dress, per its PLAN. */
+html[data-theme="multiverse"]{
+  --bg:#0b0e16;--surface:#141926;--surface2:#1c2333;--surface3:#283044;
+  --accent:#6ea0ff;--accent2:#9dbfff;--text:#eef2fa;--muted:#8a96ab;
+  --border:#2a3448;--green:#3fbf7f;--yellow:#f5b83d;--blue:#6ea0ff;
+  --red:#ef5350;--gold:#f5b83d;--purple:#a77bff;--cyan:#5ad1e6;
+  --font-title:'Oswald',system-ui,sans-serif;--font-label:'Oswald',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,'Segoe UI',sans-serif;
+  --font-data:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --radius-card:8px;--radius-btn:6px;--radius-input:6px;
+  --comic-shadow:none;--comic-shadow-lg:none;--ink:rgba(0,0,0,0);--comic:0;
+}
+html[data-theme="multiverse"] .pg-title{
+  font-family:var(--font-title);font-weight:600;letter-spacing:.02em;
+  text-transform:uppercase;text-shadow:none;font-size:26px;
+}
+html[data-theme="multiverse"] .btn-primary{background:#2f6bff;color:#fff}
 html[data-theme="dark"]{
   --bg:#0c0c0c;--surface:#1a1a1a;--surface2:#252525;--surface3:#333;
   --accent:#d4a020;--accent2:#e8b838;--text:#d8d0c0;--muted:#706858;
@@ -273,8 +290,20 @@ html[data-theme="golden"]{
   --font-body:'Comic Neue',sans-serif;
   --radius-card:8px;--radius-btn:6px;--radius-input:6px;
 }
+/* overflow-wrap is global because every free-text surface takes pasted text:
+   one long unbroken string — a URL in a log entry, a pasted token as a location
+   name — stretched the whole page to 12,000px wide and squashed the app into a
+   sliver at the left edge. A word that cannot be broken at a space is broken
+   anywhere rather than pushing the layout open. */
 body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:15px;line-height:1.5;
-  max-width:520px;margin:0 auto;padding-bottom:72px;-webkit-font-smoothing:antialiased}
+  max-width:520px;margin:0 auto;padding-bottom:72px;-webkit-font-smoothing:antialiased;
+  overflow-wrap:anywhere}
+/* Flex and grid children default to min-width:auto, which refuses to shrink
+   below their content — so the rule above cannot take effect inside them. */
+.card,.card-sm,.combatant,.zone-card,.npc-card{min-width:0}
+/* A region's name is a button in a row of them; a 400-character one became a
+   single 3,800px-wide bar. */
+.region-sw>.btn{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
   background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;
   padding-bottom:env(safe-area-inset-bottom)}

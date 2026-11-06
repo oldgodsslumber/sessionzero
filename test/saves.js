@@ -135,7 +135,9 @@ function legacySeed(ls) {
     const w = mk(legacySeed); await waitReady(w);
     const check = checker(w, 'universe');
     check('list scopes to the current universe', 'var u2=createUniverse("Other");var st=defaultState();st.universeId=u2.id;st.char={costumedName:"Elsewhere",aspects:{concept:"c",motivation:"m",contingent:[{cat:"",text:""},{cat:"",text:""},{cat:"",text:""}]},consequences:{mild:"",moderate:"",severe:""},stress:{physical:[],mental:[]},supportingCast:[],roguesGallery:[],refresh:5,fatePoints:5,activeForm:0,gear:"",forms:[],skills:{},stunts:[]};createSave(st);return listSaves("u_test").length===3&&listSaves(u2.id).length===1');
-    check('modal footnote counts other universes', 'openSlotModal();return /1 more character/.test(document.getElementById("slot-modal-body").innerHTML)');
+    // Through the lexicon: the footnote used to hardcode "character", which is
+    // the shell's default word and nobody's actual one.
+    check('modal footnote counts other universes', 'openSlotModal();return new RegExp("1 more "+lex("hero")+" in other "+lex("universes")).test(document.getElementById("slot-modal-body").innerHTML)');
     check('deleting a universe unlinks its saves, keeps them', 'var u2=U.universes.find(function(u){return u.name==="Other"});var n=listSaves().length;deleteUniversePrompt(u2.id);return listSaves().length===n&&listSaves().some(function(s){return s.name==="Elsewhere"&&s.universeId===null})');
     check('NPC export creates a new playable save', 'S.npcs.push(ensureId({type:"rogue",name:"Doctor Malice",forms:[{name:"Main",powerSets:[],gear:[]}],activeForm:0,skills:{},aspects:[],stunts:[],stress:[],consequences:{mild:"",moderate:"",severe:""}}));var n=listSaves().length;exportNPCToSlot(S.npcs.length-1);confirmExportNPC(false);return listSaves().length===n+1&&listSaves().some(function(s){return s.name==="Doctor Malice"})');
     check('NPC export did not touch the open game', 'return S.char.costumedName==="Gamma"');

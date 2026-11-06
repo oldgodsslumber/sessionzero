@@ -88,7 +88,7 @@ function renderSysSheet(){
   // wizReopen() existed and nothing called it.
   h+=`<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">`;
   h+=`<button class="btn ${_sysEdit?'btn-gold':'btn-secondary'} btn-xs" onclick="sysToggleEdit()"
-    title="${_sysEdit?'Stop editing who you are':'Change your name, number, Race, Class or Unenhanced Stats'}"
+    title="${_sysEdit?'Stop editing who you are':esc(sysCopy('sheet','editHint','Change your name and stats'))}"
     >${_sysEdit?'Done':'Edit'}</button>`;
   if((SYS.creation||[]).length){
     h+=`<button class="btn btn-secondary btn-xs" onclick="sysReopenCreation()" title="Go back and change your creation choices">Edit creation</button>`;
@@ -103,7 +103,8 @@ function renderSysSheet(){
   // set at the end of creation and steppable from the bar now, so it is the
   // truthful answer and it follows the party down.
   const shownFloor=(S&&S.floor)||((ch&&ch.floor!==undefined&&ch.floor!==null)?ch.floor:3);
-  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)} · ${esc(lexU('logBreak'))} ${esc(String(shownFloor))}</div>`;
+  const whereNow=SYS.floorStrip?` · ${esc(lexU('logBreak'))} ${esc(String(shownFloor))}`:'';
+  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)}${whereNow}</div>`;
   h+=`<div class="id-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
   ids.forEach(f=>{
     h+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;

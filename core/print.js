@@ -168,7 +168,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .map-key{font-size:8.5pt;line-height:1.4}
 .map-key div{padding:1px 0;border-bottom:1px solid #f0f0f0}
 .map-key b{font-weight:700}
-/* issue log */
+/* the log */
 .iss{font-size:13pt;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #111;margin:10px 0 6px;padding-bottom:2px;break-after:avoid;page-break-after:avoid}
 .log-e{margin-bottom:7px;padding-left:8px;border-left:2.5px solid #999;break-inside:avoid;page-break-inside:avoid}
 .log-t{font-size:10pt;font-weight:700}
@@ -310,7 +310,7 @@ function sheetBodyHTML(ch,opts){
 function printCharSheet(){
   const ch=S.char;if(!ch)return;
   const nm=String(ch.costumedName||'Hero').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  dcOpenPrintDoc(nm+' \u2014 Daring Comics',sheetBodyHTML(ch,{}),{autoPrint:true});
+  dcOpenPrintDoc(nm+' \u2014 '+prGameName(),sheetBodyHTML(ch,{}),{autoPrint:true});
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -329,12 +329,15 @@ let _prSel=null,_prOpts=null,_prDragFrom=null;
 
 function prLoadPrefs(){
   if(_prSel)return;
-  try{const p=JSON.parse(localStorage.getItem('dc_print_prefs'))||{};
+  // Namespaced per pack like every other store. On the flat key, printing in
+  // one game set up the document in the other two: a game you had never opened
+  // the Print tab in came up already holding another game's characters and maps.
+  try{const p=JSON.parse(localStorage.getItem(storeKey('print_prefs')))||{};
     _prSel=Array.isArray(p.items)?p.items:[];
     _prOpts=Object.assign({toc:true,guides:true,ink:false,paper:'letter'},p.opts||{});
   }catch(e){_prSel=[];_prOpts={toc:true,guides:true,ink:false,paper:'letter'};}
 }
-function prSavePrefs(){try{localStorage.setItem('dc_print_prefs',JSON.stringify({items:_prSel,opts:_prOpts}));}catch(e){}}
+function prSavePrefs(){try{localStorage.setItem(storeKey('print_prefs'),JSON.stringify({items:_prSel,opts:_prOpts}));}catch(e){}}
 
 // ─── what's available to print ───────────────────────────────────────────
 // Each category yields {key,label,hint,dens[],def,items[{id,name,sub,tag}]}.
@@ -342,16 +345,23 @@ function prCatalog(){
   const cats=[],np=S.npcs||[];
   const mine=n=>!n.fromHero;
   const heroDens=['full','half','card'];
-  if(S.char)cats.push({key:'hero',label:'Hero',hint:'The hero in this save slot',dens:heroDens,def:'full',
+  if(S.char)cats.push({key:'hero',label:lexU('hero'),hint:'The '+lex('hero')+' in this save file',dens:heroDens,def:'full',
     // sysCharName reads whichever identity field the pack declares, so a
     // crawler stops printing as "Unnamed Hero".
     items:[{id:'@self',name:(typeof sysCharName==='function'&&sysCharName(S.char))||S.char.costumedName||('Unnamed '+(typeof lexU==='function'?lexU('hero'):'Hero')),sub:S.char.civilianName||''}]});
   // Heroes parked in other save slots bound to the same universe
   const others=(S.universeId?listSaves(S.universeId):listSaves()).filter(s=>s.started&&s.id!==currentSaveId);
-  if(others.length)cats.push({key:'slot',label:'Other heroes',hint:'Other save slots in this universe — printed with their own tone',dens:heroDens,def:'full',
-    items:others.map(s=>({id:s.id,name:s.name||'Unnamed Hero',sub:s.civilianName||''}))});
-  // Multiplayer: teammates' heroes mirrored into the roster
-  const players=np.filter(n=>n.fromHero&&!(S.char&&n.heroId===S.char.heroId));
+  if(others.length)cats.push({key:'slot',label:'Other '+lex('heroes'),hint:'Other save files in this '+lex('universe'),dens:heroDens,def:'full',
+    items:others.map(s=>({id:s.id,name:s.name||('Unnamed '+lexU('hero')),sub:s.civilianName||''}))});
+  // Multiplayer: teammates' heroes mirrored into the roster.
+  // Every pack now mirrors its own heroes into the universe roster too, so a
+  // solo player with two save files saw the second one listed twice — once as
+  // another save and again as "mirrored from other players at your table" —
+  // and "Select everything" put that character in the document twice. A mirror
+  // of a hero this universe already holds a save for is not a teammate.
+  const ownHeroIds=(S.char&&S.char.heroId?[S.char.heroId]:[])
+    .concat(others.map(s=>s.heroId).filter(Boolean));
+  const players=np.filter(n=>n.fromHero&&ownHeroIds.indexOf(n.heroId)<0);
   if(players.length)cats.push({key:'player',label:'Player heroes',hint:'Mirrored from other players at your table',dens:heroDens,def:'full',
     items:players.map(n=>({id:n.id,name:n.name,sub:n.desc||''}))});
   if(S.team){const it=[{id:'@team',name:S.team.name||'Super Team',sub:S.team.charter||''}];
@@ -369,7 +379,7 @@ function prCatalog(){
   if(regs.length)cats.push({key:'region',label:'Region maps',hint:'Grid plus a key of every named location',dens:['full','half'],def:'full',items:regs});
   const iss=parseIssues(S.notes||[]);
   const withEntries=iss.map((g,i)=>({g,i})).filter(x=>x.g.entries.length);
-  if(withEntries.length)cats.push({key:'log',label:'Issue log',hint:'Your campaign log, one section per issue',dens:['flow'],def:'flow',
+  if(withEntries.length)cats.push({key:'log',label:lexU('logBreak')+' log',hint:'Your '+lexL('log')+', one section per '+lexL('logBreak'),dens:['flow'],def:'flow',
     items:withEntries.map(x=>({id:'i'+x.i,name:x.g.label,sub:x.g.entries.length+' entr'+(x.g.entries.length===1?'y':'ies')}))});
   cats.push({key:'ref',label:'Reference',hint:'Built from whatever else you selected',dens:['table'],def:'table',
     items:[{id:'@gear',name:'Gear table',sub:'Every item carried by the sheets in this document'},
@@ -514,7 +524,11 @@ function prBlockRows(block, ctx) {
   const val = spec => blockValue(spec, ctx, null);
   if (block.type === 'traitGrid') {
     (block.traits || []).forEach(function (tr) {
-      const cell = d[tr.id] || {};
+      // A single-layer grid stores the trait as a plain number, not {base,bonus}
+      // — reading .base off it printed every stat as 0 while the screen showed
+      // the real figures.
+      const raw = d[tr.id];
+      const cell = (raw && typeof raw === 'object') ? raw : { base: +raw || 0 };
       const base = cell.base || 0, bonus = cell.bonus || 0;
       const modFn = sysDerive(block.mod);
       const mod = modFn ? modFn(base + bonus, ctx) : null;
@@ -864,6 +878,9 @@ function prBlockSheetHTML(char, opts) {
   // printed as a run-on comma list with none of the mechanics, which is no use
   // at a table.
   ((SYS.schema && SYS.schema.blocks) || []).filter(function (b) {
+    // Same `when` test the screen uses, so a block that does not apply to this
+    // character is not printed either.
+    if (typeof blockApplies === 'function' && !blockApplies(b, char)) return false;
     return b.type !== 'inventory';
   }).forEach(function (b) {
     let rows;
@@ -896,7 +913,10 @@ function prBlockSheetHTML(char, opts) {
   return prPage(name, kick, h) + prCarriedPages(char, name, kick);
 }
 
-function prPage(title,kicker,body){return `<section class="pg"><div class="pg-h"><div class="pg-h-t">${prE(title)}</div><div class="pg-h-s">${prE(kicker||'Daring Comics')}</div></div>${body}</section>`;}
+// The printed document used to sign every page "Daring Comics" whatever game
+// it came from, so a Marvel character printed under the other game's name.
+function prGameName(){return (typeof SYS!=='undefined'&&SYS&&SYS.name)||'Daring Comics';}
+function prPage(title,kicker,body){return `<section class="pg"><div class="pg-h"><div class="pg-h-t">${prE(title)}</div><div class="pg-h-s">${prE(kicker||prGameName())}</div></div>${body}</section>`;}
 
 // A character-shaped object as a quarter-page index card.
 function prCharCard(ch,role){
@@ -1036,8 +1056,12 @@ function prResolveChar(s){
   if(s.k==='hero')return S.char?{ch:S.char,series:null,role:'Hero'}:null;
   if(s.k==='slot'){const st=getSaveData(s.id);if(!st||!st.char)return null;
     const _ids=seriesIdsFor(st);
-    return{ch:st.char,role:'Hero',series:{tone:SERIES_TONES.find(t=>t.id===_ids.tone),
-      level:SERIES_LEVELS.find(l=>l.id===_ids.level),exp:EXP_LEVELS.find(e=>e.id===_ids.experience)}};}
+    // Through sysList, not the bare globals: tone, power level and experience
+    // are Daring Comics' own lists, so reaching for them directly threw
+    // "SERIES_TONES is not defined" in every other game and the preview came
+    // out empty — the whole Print tab died as soon as a second save existed.
+    return{ch:st.char,role:'Hero',series:{tone:sysList('SERIES_TONES').find(t=>t.id===_ids.tone),
+      level:sysList('SERIES_LEVELS').find(l=>l.id===_ids.level),exp:sysList('EXP_LEVELS').find(e=>e.id===_ids.experience)}};}
   const n=(S.npcs||[]).find(x=>x.id===s.id);if(!n)return null;
   if(s.k==='player')return{ch:npcToCharacter(n),role:'Player hero',series:null};
   return{ch:npcToCharacter(n),role:(typeof npcKindLabel==='function'?npcKindLabel(n.type):'NPC'),series:null,npc:n};
@@ -1099,7 +1123,7 @@ function prBuildBody(){
     if(d==='flow'){
       run.items.forEach(s=>{const b=prLogHTML(s.id);if(!b)return;
         const iss=parseIssues(S.notes||[])[+String(s.id).slice(1)];
-        noteTOC('Issue log',iss?iss.label:'Issue');out+=prPage('Issue Log','CAMPAIGN RECORD',b);});
+        noteTOC(lexU('logBreak')+' log',iss?iss.label:lexU('logBreak'));out+=prPage(lexU('logBreak')+' Log','CAMPAIGN RECORD',b);});
       return;
     }
     if(d==='table'){
@@ -1114,7 +1138,7 @@ function prBuildBody(){
     let b='<div class="toc">';
     Object.keys(groups).forEach(g=>{b+=`<div class="toc-g">${prE(g)}</div>`;groups[g].forEach(n=>{b+=`<div>${prE(n)}</div>`;});});
     b+='</div>';
-    const title=(currentUniverse()&&currentUniverse().name)||'Daring Comics';
+    const title=(currentUniverse()&&currentUniverse().name)||prGameName();
     out=prPage(title,'CONTENTS',b)+out;
   }
   return out||'<div class="pg">Nothing selected.</div>';
@@ -1126,7 +1150,7 @@ function prOpenDoc(){
   const body=prBuildBody();
   const n=prPageCount();
   const cls=['previewing',_prOpts.ink?'ink-saver':'',_prOpts.guides?'guides':'no-guides',_prOpts.paper==='a4'?'a4':''].filter(Boolean).join(' ');
-  const bar=`<div id="pv-bar"><span class="pv-t">Daring Comics · Print</span><span id="pv-pages">≈${n} sheet${n===1?'':'s'}</span>`
+  const bar=`<div id="pv-bar"><span class="pv-t">${prE(prGameName())} · Print</span><span id="pv-pages">≈${n} sheet${n===1?'':'s'}</span>`
     +`<label><input type="checkbox" ${_prOpts.ink?'checked':''} onchange="document.body.classList.toggle('ink-saver',this.checked)"> Ink saver</label>`
     +`<label><input type="checkbox" ${_prOpts.guides?'checked':''} onchange="document.body.classList.toggle('guides',this.checked);document.body.classList.toggle('no-guides',!this.checked)"> Cut guides</label>`
     +`<select onchange="pvPaper(this.value)"><option value="letter" ${_prOpts.paper==='letter'?'selected':''}>Letter</option><option value="a4" ${_prOpts.paper==='a4'?'selected':''}>A4</option></select>`
@@ -1134,7 +1158,7 @@ function prOpenDoc(){
   const script='function pvPaper(v){document.body.classList.toggle("a4",v==="a4");'
     +'document.getElementById("pv-page").textContent="@page{size:"+(v==="a4"?"A4":"letter")+" portrait;margin:.5in}";}'
     +'pvPaper('+JSON.stringify(_prOpts.paper)+');';
-  const title=((currentUniverse()&&currentUniverse().name)||'Daring Comics')+' — Print';
+  const title=((currentUniverse()&&currentUniverse().name)||prGameName())+' — Print';
   dcOpenPrintDoc(prE(title),bar+body,{bodyClass:cls,script:script});
 }
 

@@ -251,12 +251,23 @@ function renderWiki(){
 
   // Theme swatches — the Wiki replaced the Theme button in the mobile nav, so
   // the swatches move here. Hidden on desktop, where the sidebar still has them.
-  h+=`<div class="wiki-theme-strip"><div class="label mb-1" style="text-align:center">Theme</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">`;
-  [['','Classic Comics','#0a0e1a,#e63946'],['dark','Dark & Gritty','#0c0c0c,#d4a020'],['cosmic','Cosmic','#0a0020,#ff2d78'],['street','Street Level','#111510,#e8a020'],['golden','Golden Age','#1a140e,#cc3333']].forEach(function(t){
-    const on=(localStorage.getItem('dc_theme')||'')===t[0];
-    h+=`<button class="theme-swatch${on?' active':''}" data-theme="${t[0]}" title="${esc(t[1])}" onclick="setTheme('${t[0]}')" style="width:32px;height:32px;background:linear-gradient(135deg,${t[2]})"></button>`;
-  });
-  h+=`</div></div>`;
+  // The pack's own palettes, exactly as the desktop sidebar renders them. This
+  // strip used to hardcode Daring Comics' five, so on a phone every game
+  // offered them — and tapping one in Dungeon Crawler Carl replaced the whole
+  // look with the other game's and stuck, because nothing in that game offers
+  // its own theme back. It also marked the active one from the dead `dc_theme`
+  // key, so the wrong swatch was lit. A pack with no themes gets no strip.
+  const _wikiThemes=(typeof SYS!=='undefined'&&SYS&&SYS.themes)||[];
+  if(_wikiThemes.length){
+    let _active='';
+    try{_active=localStorage.getItem(storeKey('theme'))||'';}catch(e){}
+    if(!_active)_active=(SYS&&SYS.defaultTheme)||'';
+    h+=`<div class="wiki-theme-strip"><div class="label mb-1" style="text-align:center">Theme</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">`;
+    _wikiThemes.forEach(function(t){
+      h+=`<button class="theme-swatch${t[0]===_active?' active':''}" data-theme="${esc(t[0])}" title="${esc(t[1])}" onclick="setTheme('${esc(t[0])}')" style="width:32px;height:32px;background:linear-gradient(135deg,${esc(t[2])})"></button>`;
+    });
+    h+=`</div></div>`;
+  }
 
   h+=`</div>`;
   el.innerHTML=h;

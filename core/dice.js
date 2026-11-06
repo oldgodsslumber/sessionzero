@@ -439,7 +439,7 @@ function renderDice(){
   if(m==='none'){
     el.innerHTML='<div class="pg-title">'+esc(lexU('roll'))+'</div>'+
       '<div class="card tac" style="padding:26px;color:var(--muted);font-size:13px">'+
-      esc(SYS&&SYS.name?SYS.name:'This game')+' does not declare a dice engine yet.</div>';
+      esc(sysCopy('dice','none',(SYS&&SYS.name?SYS.name:'This game')+' does not declare a dice engine yet.'))+'</div>';
     return;
   }
   return renderDiceFate();

@@ -58,7 +58,11 @@ function openMultiplayer(){
   migrateSlotsToSaves();
   loadSaves();
   if(!saveIndexHealthy())rebuildSaveIndex();
-  migrateUniverseSeries();
+  // Migrations read stored data written by older versions of the app, and a
+  // throw here used to kill every render below it — the app came up as a bare
+  // nav strip with no gate, and a reload hit the same throw. A migration that
+  // cannot run is not a reason to lose the app.
+  try{migrateUniverseSeries();}catch(e){}
   // A crawler who was living on the old single scratch key becomes a save file
   // here, before anything decides what to load.
   if(typeof migrateScratchToSave==='function')migrateScratchToSave();
@@ -73,7 +77,9 @@ function openMultiplayer(){
   bindUniverse();
   if(typeof renderFloorStrip==='function')renderFloorStrip();
   renderHero();
+  const landed=sysLand();
   // Nobody is loaded: open the file list rather than a blank sheet. Every pack
-  // uses save files now, so this is no longer only Daring Comics' problem.
-  if(currentSaveId===null)openSlotModal();
+  // uses save files now, so this is no longer only Daring Comics' problem. A pack
+  // that has just opened somewhere useful doesn't need the list on top of it.
+  if(currentSaveId===null&&!landed)openSlotModal();
 })();

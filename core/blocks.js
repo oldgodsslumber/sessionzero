@@ -86,14 +86,26 @@ function blockRepaint(id) {
 // `only` names the blocks to draw, for a surface that wants some of them — a
 // pack tab. Without it the sheet draws everything EXCEPT what a tab has claimed,
 // so a block does not appear twice under two headings.
+// A block can declare `when(char)` to say it does not apply to this character.
+// Marvel needs it: a character out of the book carries the book's own stat
+// block, where Defense and Check are trained values that cannot be recomputed
+// from the score — so offering an editable score beside it was offering a
+// number that silently disagreed with the table above it.
+// A pack that declares no `when` is unaffected.
+function blockApplies(b, char) {
+  if (!b || typeof b.when !== 'function') return true;
+  try { return !!b.when(char); } catch (e) { return true; }
+}
+
 function renderBlockSheet(char, targetEl, mount, only) {
   const el = typeof targetEl === 'string' ? document.getElementById(targetEl) : targetEl;
   if (!el || !SYS) return;
   const all = (SYS.schema && SYS.schema.blocks) || [];
   const claimed = (typeof sysTabBlockIds === 'function') ? sysTabBlockIds() : [];
-  const blocks = only && only.length
+  const blocks = (only && only.length
     ? only.map(function (id) { return all.filter(function (b) { return b.id === id; })[0]; }).filter(Boolean)
-    : all.filter(function (b) { return claimed.indexOf(b.id) < 0; });
+    : all.filter(function (b) { return claimed.indexOf(b.id) < 0; })
+  ).filter(function (b) { return blockApplies(b, char); });
   // The container carries the layout, the blocks carry their spans. Stamped
   // here rather than asked of the caller so every mount — sheet, second screen,
   // whatever a pack adds next — gets the desktop columns without being told.
@@ -193,12 +205,18 @@ registerBlockType('traitGrid', {
             Enhanced = ${esc(b.layers[0] || 'Base')} + gear, Spells and Buffs. The Mod comes off the Enhanced value.</div>`;
     } else {
       h += `<div style="display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center">`;
+      // Same lock as the dual-layer branch above: without it a single-layer
+      // grid was a live editor whenever it was on screen, so a finger landing
+      // on the page rewrote a stat outside Edit mode and saved it.
+      const open1 = !b.locked || (typeof sysEditing === 'function' && sysEditing());
       traits.forEach(t => {
         const id = t.id || t;
         h += `<div style="font-size:13px">${esc(t.name || id)}</div>
-              <input type="number" value="${d[id] || 0}" style="width:64px;text-align:center;padding:5px"
-                oninput="traitSet('${esc(b.id)}','${esc(id)}','value',this.value)"
-                onchange="traitCommit('${esc(b.id)}')">`;
+              ${open1
+                ? `<input type="number" value="${d[id] || 0}" style="width:64px;text-align:center;padding:5px"
+                    oninput="traitSet('${esc(b.id)}','${esc(id)}','value',this.value)"
+                    onchange="traitCommit('${esc(b.id)}')">`
+                : `<div class="id-val" style="width:64px;text-align:center">${d[id] || 0}</div>`}`;
       });
       h += `</div>`;
     }

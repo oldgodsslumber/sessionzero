@@ -208,18 +208,40 @@ function npcToCharacter(npc){
 function characterToNpc(char, existingId){
   const asp=[char.aspects&&char.aspects.concept,char.aspects&&char.aspects.motivation].concat(((char.aspects&&char.aspects.contingent)||[]).map(c=>c&&c.text)).filter(Boolean);
   const _hid=existingId||uid();
+  // sysCharName first: reading costumedName first named every mirrored hero by
+  // a field only Daring Comics fills.
   const ent={id:_hid,heroId:_hid,type:'main',fromHero:true,sourceSaveId:currentSaveId,
-    name:char.costumedName||sysCharName(char)||'Unnamed Hero',desc:char.civilianName||'',
-    aspects:asp,skills:JSON.parse(JSON.stringify(char.skills||{})),
-    forms:JSON.parse(JSON.stringify(char.forms||[])),activeForm:char.activeForm||0,
-    stunts:JSON.parse(JSON.stringify(char.stunts||[])),stress:[],
-    consequences:JSON.parse(JSON.stringify(char.consequences||{mild:'',moderate:'',severe:''})),gear:char.gear||''};
+    name:sysCharName(char)||char.costumedName||('Unnamed '+lexU('hero')),desc:char.civilianName||''};
+  // Aspects, skills, stress and the rest are Daring Comics' sheet. A pack that
+  // builds its character from blocks carried all of them as empty dead weight
+  // on every roster row — and synced them to Firebase.
+  if(typeof sysUsesBlocks==='function'&&sysUsesBlocks()){
+    if(char.blocks)ent.blocks=JSON.parse(JSON.stringify(char.blocks));
+  }else{
+    Object.assign(ent,{
+      aspects:asp,skills:JSON.parse(JSON.stringify(char.skills||{})),
+      forms:JSON.parse(JSON.stringify(char.forms||[])),activeForm:char.activeForm||0,
+      stunts:JSON.parse(JSON.stringify(char.stunts||[])),stress:[],
+      consequences:JSON.parse(JSON.stringify(char.consequences||{mild:'',moderate:'',severe:''})),gear:char.gear||''});
+  }
   // What a pack's roster card reads is the pack's to fill in.
   const extra=(SYS&&SYS.npc&&SYS.npc.fromHero)?SYS.npc.fromHero(char):null;
   return extra?Object.assign(ent,extra):ent;
 }
 function syncHeroToRoster(){
   if(!S||!S.char)return;const u=currentUniverse();if(!u)return;
+  // A pack that declares fromHero decides whether this character has a table
+  // row yet. Marvel's returns null until you are actually playing somebody, so
+  // touching the Name box on a blank sheet used to put an "Unnamed Hero" row
+  // into the shared roster — a character nobody made, pushed to everyone.
+  if(SYS&&SYS.npc&&typeof SYS.npc.fromHero==='function'&&!SYS.npc.fromHero(S.char)){
+    // Spliced, not reassigned: S.npcs IS this array, so replacing it would
+    // leave the app writing to an array the universe no longer holds.
+    if(S.char.heroId){
+      for(let i=u.roster.length-1;i>=0;i--)if(u.roster[i]&&u.roster[i].id===S.char.heroId)u.roster.splice(i,1);
+    }
+    return;
+  }
   if(!S.char.heroId)S.char.heroId=uid();
   const ent=characterToNpc(S.char,S.char.heroId);
   const i=u.roster.findIndex(e=>e.id===ent.id);

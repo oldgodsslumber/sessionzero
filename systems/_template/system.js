@@ -23,12 +23,24 @@ registerSystem({
   },
 
   // ─── look ────────────────────────────────────────────────────────────────
-  // theme  — the data-theme value your theme.css defines
-  // themes — swatches offered in the sidebar: [value, label, cssGradientStops]
+  // defaultTheme — the data-theme value your theme.css defines. This is the key
+  //   the shell reads; a pack without it paints with :root, which is Daring
+  //   Comics' palette. Set it in your entry index.html's <html> tag too, or the
+  //   page shows that palette until the scripts load.
+  // themes — swatches offered in the sidebar AND in the Codex strip on a phone:
+  //   [value, label, cssGradientStops]. A pack with none gets no swatches, which
+  //   is what you want: another game's palettes are a one-way door.
   // fonts  — Google Fonts hrefs; the shell ships none, so ask for what you use
-  theme: null,
+  defaultTheme: null,
   themes: [],
   fonts: [],
+
+  // ─── where the table is ──────────────────────────────────────────────────
+  // floorStrip — {hint} keeps a stepper for S.floor above every tab. Omit it
+  //              unless your game has a number like that.
+  // landing    — (char) => a tab id to open on, or '' to open on the sheet
+  // floorStrip: { hint: 'What the number changes' },
+  // landing: (char) => '',
 
   // ─── the character ───────────────────────────────────────────────────────
   // identity — plain text fields at the top of the sheet

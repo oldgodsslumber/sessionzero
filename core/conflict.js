@@ -27,8 +27,8 @@ function renderConflict(){
     // the same single stack there that it has always been.
     h+=`<div class="conflict-grid"><div class="conflict-col">`;
     h+=`<div class="card"><div class="label mb-1">Turn Order</div>`;
-    c.turnOrder.forEach((t,i)=>{h+=`<div class="combatant ${i===c.currentTurn?'current':''}"><div style="width:20px;font-size:12px;font-weight:700;color:${i===c.currentTurn?'var(--accent)':'var(--muted)'}">${i+1}</div><div style="flex:1;font-weight:600;font-size:13px">${esc(t.name)}</div><span style="font-size:11px;color:var(--muted)">${t.type}</span><button class="btn btn-danger btn-xs" onclick="S.conflict.turnOrder.splice(${i},1);if(S.conflict.currentTurn>=${i}&&S.conflict.currentTurn>0)S.conflict.currentTurn--;save();renderConflict()" style="padding:2px 6px">X</button></div>`;});
-    h+=`<div style="display:flex;gap:4px;margin-top:6px"><input id="ct-name" placeholder="Name" style="flex:1;font-size:12px;padding:6px"><select id="ct-type" style="width:80px;font-size:12px;padding:6px"><option>Hero</option><option>NPC</option><option>Villain</option><option>Team</option></select><button class="btn btn-secondary btn-xs" onclick="addCombat()">Add</button></div>`;
+    c.turnOrder.forEach((t,i)=>{h+=`<div class="combatant ${i===c.currentTurn?'current':''}"><div style="width:20px;font-size:12px;font-weight:700;color:${i===c.currentTurn?'var(--accent)':'var(--muted)'}">${i+1}</div><div style="flex:1;font-weight:600;font-size:13px">${esc(t.name)}</div><span style="font-size:11px;color:var(--muted)">${esc(ctTypeLabel(t.type))}</span><button class="btn btn-danger btn-xs" onclick="S.conflict.turnOrder.splice(${i},1);if(S.conflict.currentTurn>=${i}&&S.conflict.currentTurn>0)S.conflict.currentTurn--;save();renderConflict()" style="padding:2px 6px">X</button></div>`;});
+    h+=`<div style="display:flex;gap:4px;margin-top:6px"><input id="ct-name" placeholder="Name" style="flex:1;font-size:12px;padding:6px"><select id="ct-type" style="width:80px;font-size:12px;padding:6px"><option value="Hero">${esc(ctTypeLabel('Hero'))}</option><option value="NPC">${esc(ctTypeLabel('NPC'))}</option><option value="Villain">${esc(ctTypeLabel('Villain'))}</option><option value="Team">Team</option></select><button class="btn btn-secondary btn-xs" onclick="addCombat()">Add</button></div>`;
     if(S.team?.expanded&&!c.turnOrder.some(t=>t.type==='Team')){h+=`<button class="btn btn-gold btn-xs btn-full mt-1" onclick="addTeamToConflict()">+ Add ${esc(S.team.name)}</button>`;}
     h+=`<button class="btn btn-primary btn-sm btn-full mt-2" onclick="nextTurn()">Next Turn \u2192</button></div>`;
     h+=`</div><div class="conflict-col">`;
@@ -40,10 +40,21 @@ function renderConflict(){
   }
   el.innerHTML=h;
 }
-function startConflict(){S.conflict={active:true,zones:[{name:'Zone 1',aspects:'',occupants:[]}],turnOrder:[],currentTurn:0,round:1,log:['Conflict started']};if(S.char)S.conflict.turnOrder.push({name:S.char.costumedName,type:'Hero'});if(S.team?.expanded)S.conflict.turnOrder.push({name:S.team.name+' (Team)',type:'Team'});save();renderConflict();}
+function startConflict(){S.conflict={active:true,zones:[{name:'Zone 1',aspects:'',occupants:[]}],turnOrder:[],currentTurn:0,round:1,log:['Conflict started']};if(S.char)S.conflict.turnOrder.push({name:sysCharName(S.char)||lexU('hero'),type:'Hero'});if(S.team?.expanded)S.conflict.turnOrder.push({name:S.team.name+' (Team)',type:'Team'});save();renderConflict();}
 function endConflict(){if(confirm('End conflict?')){S.conflict={active:false,zones:[],turnOrder:[],currentTurn:0,round:1,log:[]};save();renderConflict();}}
-function nextTurn(){const c=S.conflict;c.currentTurn=(c.currentTurn+1)%Math.max(1,c.turnOrder.length);c.log.push('Turn: '+(c.turnOrder[c.currentTurn]?.name||'?'));save();renderConflict();}
-function nextRound(){S.conflict.round++;S.conflict.currentTurn=0;S.conflict.log.push('--- Round '+S.conflict.round+' ---');save();renderConflict();}
+// Both guard on active: a stale DOM — most likely a multiplayer repaint that
+// landed after someone else ended the fight — could otherwise advance the round
+// of a conflict that is over and save it, logging a turn for nobody.
+function nextTurn(){const c=S.conflict;if(!c||!c.active||!c.turnOrder.length)return;c.currentTurn=(c.currentTurn+1)%c.turnOrder.length;c.log.push('Turn: '+(c.turnOrder[c.currentTurn]?.name||''));save();renderConflict();}
+function nextRound(){const c=S.conflict;if(!c||!c.active)return;c.round++;c.currentTurn=0;c.log.push('--- Round '+c.round+' ---');save();renderConflict();}
+// The stored value stays 'Hero'/'NPC'/'Villain'/'Team' so old saves and the
+// Team check keep working; only what a player reads goes through the lexicon,
+// because a game that calls them Narrator Characters was still offering "NPC".
+function ctTypeLabel(v){
+  if(v==='Hero')return lexU('hero');
+  if(v==='NPC')return lexU('npc');
+  return v||'';
+}
 function addCombat(){const n=document.getElementById('ct-name').value.trim(),t=document.getElementById('ct-type').value;if(!n)return;S.conflict.turnOrder.push({name:n,type:t});S.conflict.log.push(n+' joined');save();renderConflict();}
 function addZone(){const n=document.getElementById('zn-name').value.trim()||('Zone '+(S.conflict.zones.length+1));S.conflict.zones.push({name:n,aspects:'',occupants:[]});save();renderConflict();}
 function addToZone(i){const inp=document.getElementById('za-'+i),n=inp?.value?.trim();if(!n)return;S.conflict.zones[i].occupants.push(n);save();renderConflict();}

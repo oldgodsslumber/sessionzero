@@ -12,7 +12,7 @@
 registerSystem({
   id: 'daring-comics',
   name: 'Daring Comics',
-  theme: '',                 // '' is this pack's default data-theme
+  defaultTheme: '',          // '' is this pack's default data-theme
 
   // The pop-out second screen in core/log.js is this pack's: it reads
   // costumedName, stress.physical and Fate Points off the character, and draws

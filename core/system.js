@@ -63,7 +63,11 @@ function registerSystem(def) {
   if (SYSTEMS[def.id]) throw new Error('registerSystem: duplicate id ' + def.id);
   const pack = Object.assign({
     name: def.id,
-    theme: null,          // data-theme value this pack's CSS defines
+    // The shell reads defaultTheme and nothing else. The default used to be
+    // declared here as `theme`, which no code has ever read, so a pack that
+    // followed the template got no theme at all and inherited :root — which is
+    // Daring Comics' palette.
+    defaultTheme: null,   // data-theme value this pack's CSS defines
     themes: [],           // [[value, label, 'cssGradient'], ...] for the swatch row
     fonts: [],            // Google-Fonts hrefs this pack needs (shell ships none)
     lexicon: {},
@@ -226,6 +230,16 @@ function sysCharName(char) {
     if (typeof v === 'string' && v.trim()) return v.trim();
   }
   return String(char.costumedName || char.name || '').trim();
+}
+
+// Which field a new name should be WRITTEN to. sysCharName reads the pack's
+// identity fields but nothing could write them, so Rename and Duplicate wrote
+// Daring Comics' costumedName whatever the game: in Marvel the rename appeared
+// to do nothing (the list reads sysCharName) while quietly stamping a junk
+// field onto the character, and two duplicates could not be told apart.
+function sysCharNameField() {
+  const ids = (SYS && SYS.schema && SYS.schema.identity) || [];
+  return ids[0] || 'costumedName';
 }
 
 // ─── ruleset-constant fallbacks ─────────────────────────────────────────────
