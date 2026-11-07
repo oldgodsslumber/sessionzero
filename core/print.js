@@ -157,7 +157,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;backgrou
 .strip-o{font-size:11pt;font-weight:900;color:#c00;min-width:.85in}
 .strip-d{flex:1;font-size:8.5pt;color:#444;line-height:1.3}
 .strip-s{flex-shrink:0}
-/* region maps */
+/* the maps */
 .map{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;width:5.6in;margin:0 auto 8px}
 .mc{aspect-ratio:1;border:1px solid #999;border-radius:3px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden}
 .mc-void{border:1px dotted #e0e0e0}
@@ -369,14 +369,25 @@ function prCatalog(){
     cats.push({key:'team',label:'Super team',hint:'Charter, friction, stunts and complications',dens:['full'],def:'full',items:it});}
   const grp=(t,label,hint,dens,def)=>{const l=np.filter(n=>n.type===t&&mine(n));
     if(l.length)cats.push({key:t,label,hint,dens,def,items:l.map(n=>({id:n.id,name:n.name,sub:n.desc||'',tag:t==='nameless'?('Obstacle '+(n.obstacle||'+0')):''}))});};
-  grp('main','Main NPCs','Built like heroes — full sheets',heroDens,'full');
-  grp('rogue','Rogues / villains','Half a page each, two to a sheet',['half','full','card'],'half');
-  grp('supporting','Supporting cast','Four index cards to a sheet',['card','half','full'],'card');
-  grp('nameless','Nameless goons','Eight stat strips to a sheet',['strip','card'],'strip');
+  // These four are Daring Comics' NPC kinds. A pack declares its own — Dungeon
+  // Crawler Carl's are mob/boss/npc/crawler — and none of them matched, so
+  // "Select everything" quietly skipped the entire Bestiary and nothing a
+  // player built there could ever reach paper.
+  const ownKinds=(SYS&&SYS.npc&&SYS.npc.kinds)
+    ? (typeof SYS.npc.kinds==='function'?SYS.npc.kinds():SYS.npc.kinds) : null;
+  if(ownKinds&&ownKinds.length){
+    ownKinds.forEach(k=>grp(k.id,k.label||k.one||k.id,
+      k.hint||'Four stat cards to a sheet',['card'],'card'));
+  }else{
+    grp('main','Main NPCs','Built like heroes — full sheets',heroDens,'full');
+    grp('rogue','Rogues / villains','Half a page each, two to a sheet',['half','full','card'],'half');
+    grp('supporting','Supporting cast','Four index cards to a sheet',['card','half','full'],'card');
+    grp('nameless','Nameless goons','Eight stat strips to a sheet',['strip','card'],'strip');
+  }
   const regs=[];
-  (S.regions||[]).forEach((r,ri)=>{regs.push({id:'r'+ri,name:r.name||('Region '+(ri+1)),sub:'5×5 region map'});
-    (r.cells||[]).forEach((c,ci)=>{if(c.subZone)regs.push({id:'r'+ri+'z'+ci,name:c.subZone.name||c.name||('Area '+(ci+1)),sub:'Sub-zone of '+(r.name||'region')});});});
-  if(regs.length)cats.push({key:'region',label:'Region maps',hint:'Grid plus a key of every named location',dens:['full','half'],def:'full',items:regs});
+  (S.regions||[]).forEach((r,ri)=>{regs.push({id:'r'+ri,name:r.name||(lexU('region')+' '+(ri+1)),sub:'5×5 '+lexL('region')+' map'});
+    (r.cells||[]).forEach((c,ci)=>{if(c.subZone)regs.push({id:'r'+ri+'z'+ci,name:c.subZone.name||c.name||('Area '+(ci+1)),sub:'Sub-zone of '+(r.name||lexL('region'))});});});
+  if(regs.length)cats.push({key:'region',label:lexU('regions')+' maps',hint:'Grid plus a key of every named location',dens:['full','half'],def:'full',items:regs});
   const iss=parseIssues(S.notes||[]);
   const withEntries=iss.map((g,i)=>({g,i})).filter(x=>x.g.entries.length);
   if(withEntries.length)cats.push({key:'log',label:lexU('logBreak')+' log',hint:'Your '+lexL('log')+', one section per '+lexL('logBreak'),dens:['flow'],def:'flow',
@@ -861,7 +872,16 @@ function prBlockSheetHTML(char, opts) {
          '<span class="pr-id-v">' + prE(v === undefined || v === null || v === '' ? '-' : String(v)) + '</span></div>';
   });
   h += '</div>';
-  if (typeof SYS.sheetExtra === 'function') {
+  // A pack whose sheet is mostly prose can set that prose for paper itself, in the
+  // print stylesheet's own blocks. Without this the only option is the fallback below,
+  // which strips the tags off the screen's markup — fine for a line of flavour, and a
+  // wall of text for a pack whose sheet IS the prose.
+  let ownPrint = '';
+  if (typeof SYS.sheetPrint === 'function') {
+    try { ownPrint = SYS.sheetPrint(char) || ''; } catch (e) { ownPrint = ''; }
+  }
+  if (ownPrint) h += ownPrint;
+  else if (typeof SYS.sheetExtra === 'function') {
     try {
       const extra = SYS.sheetExtra(char) || '';
       // The pack's prose is already HTML-escaped, so decode it before prE puts
@@ -938,6 +958,27 @@ function prCharCard(ch,role){
 // out in the full builder, so this reads the stored fields directly).
 function prNpcCard(n){
   const role=(typeof npcKindLabel==='function'?npcKindLabel(n.type):'NPC');
+  // A pack that declares its own roster card knows what one of its own is
+  // worth printing. Aspects, Fate skills and stress boxes below are Daring
+  // Comics' sheet, and a Mob has none of them — it has a Level, a Floor, DR,
+  // Evade, Move and its attacks, all of which used to print as a blank card.
+  if(SYS&&SYS.npc&&SYS.npc.readout){
+    const chips=(SYS.npc.readout(n)||[]).filter(Boolean);
+    let p=`<div class="card4"><div class="c4-n">${prE(n.name)}</div><div class="c4-r">${prE(role)}</div>`;
+    if(n.desc)p+=`<div class="c4-d">${prE(n.desc)}</div>`;
+    if(chips.length)p+=`<div class="c4-v">${chips.map(prE).join(' · ')}</div>`;
+    const fields=(SYS.npc.fields)
+      ? (typeof SYS.npc.fields==='function'?SYS.npc.fields():SYS.npc.fields) : [];
+    fields.forEach(f=>{
+      if(!f||f.key==='name'||f.key==='desc')return;
+      const v=n[f.key];
+      if(v===undefined||v===null||v===''||typeof v==='object')return;
+      if(chips.some(c=>String(c).indexOf(String(v))>=0))return;
+      p+=`<div class="c4-l">${prE(f.label||f.key)}</div><div class="c4-v">${prE(String(v))}</div>`;
+    });
+    p+=`<div class="c4-l">Notes</div>${prRules(2)}</div>`;
+    return p;
+  }
   const sk=Object.entries(n.skills||{}).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,5);
   let h=`<div class="card4"><div class="c4-n">${prE(n.name)}</div><div class="c4-r">${prE(role)}${n.obstacle?' · Obstacle '+prE(n.obstacle):''}</div>`;
   if(n.desc)h+=`<div class="c4-d">${prE(n.desc)}</div>`;
@@ -1009,7 +1050,7 @@ function prMapHTML(id,half){
   if(m[2]!==undefined){const c=(reg.cells||[])[+m[2]];const sz=c&&c.subZone;if(!sz)return'';
     cells=sz.cells||[];name=sz.name||c.name||'Sub-zone';kicker='SUB-ZONE OF '+(reg.name||'').toUpperCase();
     cur=sz.currentCell;}
-  else{cells=reg.cells||[];name=reg.name||'Region';kicker='REGION MAP';cur=reg.currentCell;}
+  else{cells=reg.cells||[];name=reg.name||lexU('region');kicker=lexU('region').toUpperCase()+' MAP';cur=reg.currentCell;}
   let g='<div class="map">';
   for(let i=0;i<25;i++){const c=cells[i]||{};
     let cls='mc';if(c.isVoid)cls+=' mc-void';else if(i===cur)cls+=' mc-cur';
@@ -1030,7 +1071,7 @@ function prMapHTML(id,half){
 function prLogHTML(id){
   const iss=parseIssues(S.notes||[]);const g=iss[+String(id).slice(1)];if(!g)return'';
   let b=`<div class="iss">${prE(g.label)}</div>`;
-  g.entries.forEach(en=>{b+=`<div class="log-e"><div class="log-t">${prE(en.emoji||'')} ${prE(en.title||'Entry')}</div><div class="log-m">${prE((LOG_TYPES.find(t=>t.key===en.type)||{}).label||en.type||'')}${en.date?' · '+prE(en.date):''}</div>${en.body?`<div class="log-b">${prE(en.body)}</div>`:''}</div>`;});
+  g.entries.forEach(en=>{b+=`<div class="log-e"><div class="log-t">${prE(en.emoji||'')} ${prE(en.title||'Entry')}</div><div class="log-m">${prE((logTypes().find(t=>t.key===en.type)||{}).label||en.type||'')}${en.date?' · '+prE(en.date):''}</div>${en.body?`<div class="log-b">${prE(en.body)}</div>`:''}</div>`;});
   return b;
 }
 // Gear table, built from every character sheet in the assembled document.
@@ -1053,17 +1094,17 @@ function prBlankHTML(){return prPage('Session Notes','','<div class="map-key">'+
 
 // Resolve one selection entry into the character object a sheet needs.
 function prResolveChar(s){
-  if(s.k==='hero')return S.char?{ch:S.char,series:null,role:'Hero'}:null;
+  if(s.k==='hero')return S.char?{ch:S.char,series:null,role:lexU('hero'),isOwn:true}:null;
   if(s.k==='slot'){const st=getSaveData(s.id);if(!st||!st.char)return null;
     const _ids=seriesIdsFor(st);
     // Through sysList, not the bare globals: tone, power level and experience
     // are Daring Comics' own lists, so reaching for them directly threw
     // "SERIES_TONES is not defined" in every other game and the preview came
     // out empty — the whole Print tab died as soon as a second save existed.
-    return{ch:st.char,role:'Hero',series:{tone:sysList('SERIES_TONES').find(t=>t.id===_ids.tone),
+    return{ch:st.char,role:lexU('hero'),isOwn:true,series:{tone:sysList('SERIES_TONES').find(t=>t.id===_ids.tone),
       level:sysList('SERIES_LEVELS').find(l=>l.id===_ids.level),exp:sysList('EXP_LEVELS').find(e=>e.id===_ids.experience)}};}
   const n=(S.npcs||[]).find(x=>x.id===s.id);if(!n)return null;
-  if(s.k==='player')return{ch:npcToCharacter(n),role:'Player hero',series:null};
+  if(s.k==='player')return{ch:npcToCharacter(n),role:'Player '+lexL('hero'),isOwn:true,series:null};
   return{ch:npcToCharacter(n),role:(typeof npcKindLabel==='function'?npcKindLabel(n.type):'NPC'),series:null,npc:n};
 }
 function prRawNpc(s){return (S.npcs||[]).find(x=>x.id===s.id)||null;}
@@ -1088,14 +1129,14 @@ function prBuildBody(){
         let html='',title='';
         if(s.k==='team'){html=prTeamHTML(s.id);title=((S.team&&S.team.name)||'Team')+(s.id==='@expanded'?' — Expanded Roster':'');noteTOC('Team',title);}
         else if(s.k==='region'){html=prMapHTML(s.id,d==='half');const mm=/^r(\d+)(?:z(\d+))?$/.exec(s.id);
-          const reg=(S.regions||[])[+mm[1]];title=mm[2]!==undefined?(((reg.cells||[])[+mm[2]]||{}).subZone||{}).name||'Sub-zone':(reg&&reg.name)||'Region';
+          const reg=(S.regions||[])[+mm[1]];title=mm[2]!==undefined?(((reg.cells||[])[+mm[2]]||{}).subZone||{}).name||'Sub-zone':(reg&&reg.name)||lexU('region');
           noteTOC('Maps',title);}
         else{const r=prResolveChar(s);if(!r)return;
           html=(typeof sysUsesBlocks==='function'&&sysUsesBlocks())
             ? prBlockSheetHTML(r.ch,{kicker:(r.role||'').toUpperCase()+' SHEET'})
             : sheetBodyHTML(r.ch,{series:r.series,half:d==='half',kicker:(r.role||'').toUpperCase()+' SHEET'});
           title=(typeof sysCharName==='function'&&sysCharName(r.ch))||r.ch.costumedName||'Sheet';
-          noteTOC(r.role==='Hero'||r.role==='Player hero'?'Heroes':'NPCs',title);}
+          noteTOC(r.isOwn?lexU('heroes'):lexU('npcs'),title);}
         if(!html)return;
         if(d==='full')out+=html;
         else{buf.push(html);if(buf.length===2){out+=`<section class="pg">${buf.join('')}</section>`;buf=[];}}
@@ -1106,7 +1147,8 @@ function prBuildBody(){
     if(d==='card'){
       const cards=[];
       run.items.forEach(s=>{
-        if(s.k==='supporting'||s.k==='nameless'){const n=prRawNpc(s);if(n){cards.push(prNpcCard(n));noteTOC('Cards',n.name);}return;}
+        if(s.k!=='hero'&&s.k!=='slot'&&s.k!=='player'){const n=prRawNpc(s);
+          if(n){cards.push(prNpcCard(n));noteTOC(lexU('npcs'),n.name);}return;}
         const r=prResolveChar(s);if(!r)return;
         const useBlocks=(typeof sysUsesBlocks==='function'&&sysUsesBlocks());
         cards.push(useBlocks?prBlockSheetHTML(r.ch,{kicker:'REFERENCE'}):prCharCard(r.ch,r.role));
@@ -1146,7 +1188,9 @@ function prBuildBody(){
 
 function prOpenDoc(){
   prLoadPrefs();
-  if(!_prSel.length)return;
+  // Nothing ticked used to mean nothing happened at all — no window, no
+  // message — so the button read as broken rather than as waiting for you.
+  if(!_prSel.length){alert('Nothing is selected to print yet. Tick what you want — or press "Select everything" — and then open the preview.');return;}
   const body=prBuildBody();
   const n=prPageCount();
   const cls=['previewing',_prOpts.ink?'ink-saver':'',_prOpts.guides?'guides':'no-guides',_prOpts.paper==='a4'?'a4':''].filter(Boolean).join(' ');

@@ -114,60 +114,10 @@ function mmrPlayProfile(id) {
   showTab('hero');
 }
 
-// What the sheet shows of a pregen until the sheet's own blocks arrive (PLAN §10, M3).
-function mmrSheetExtra(ch) {
-  const p = ch && ch.profile ? mmrProfile(ch.profile) : null;
-  if (p) return '<div class="card">' + mmrStatBlockHTML(p) + '</div>';
-  if (ch && sysCharName(ch)) return '';
-  return `<div class="card tac" style="padding:20px">`
-    + `<div class="fw-700 mb-1">No ${esc(lex('hero'))} yet</div>`
-    + `<div class="text-muted mb-3" style="font-size:13px">Pick one of the ${MMR_PROFILES.length} official characters to play. Building your own comes with the full sheet.</div>`
-    + `<button class="btn btn-primary" onclick="showTab('npcs')">Browse the official characters</button></div>`;
-}
-
-// ─── drawing one ─────────────────────────────────────────────────────────────
-function mmrStatBlockHTML(p) {
-  const fact = (k, v) => (v === null || v === undefined || v === '') ? ''
-    : `<div class="npc-derived"><span>${esc(k)}</span><strong style="font-size:13px;color:var(--text)">${esc(String(v))}</strong></div>`;
-  const head = t => `<div class="label mb-1" style="margin-top:10px">${esc(t)}</div>`;
-  const prose = t => `<div style="font-size:12px;line-height:1.5">${esc(t)}</div>`;
-  const dr = n => (n ? ' (DR ' + n + ')' : '');
-  let h = `<div class="label mb-1">Rank ${esc(String(p.rank))} · ${esc(MMR_KIND_LABEL[p.kind] || '')} · Book p. ${esc(String(p.page))}</div>`;
-  h += fact('Health', p.health + dr(p.healthDR));
-  h += fact('Focus', p.focus + dr(p.focusDR));
-  h += fact('Karma', p.karma);
-  h += fact('Initiative', mmrSigned(p.init) + (p.initEdge ? ' with an edge' : ''));
-  h += fact('Speed', mmrSpeedText(p));
-
-  // One row per ability, so the six can be compared at a glance on a phone.
-  const th = (t, al) => `<th style="font-weight:600;color:var(--muted);text-align:${al};padding:3px 4px">${t}</th>`;
-  const td = (t, al, st) => `<td style="text-align:${al};padding:4px;border-top:1px solid var(--border);${st || ''}">${esc(String(t))}</td>`;
-  h += head('Abilities');
-  h += `<table style="width:100%;border-collapse:collapse;font-size:13px"><tr>${th('', 'left')}${th('Score', 'right')}${th('Def', 'right')}${th('Check', 'right')}${th('Damage', 'right')}</tr>`;
-  MMR_ABILITY_ORDER.forEach(([k, n]) => {
-    const a = p.abilities[k], d = p.damage[k];
-    h += '<tr>' + td(n, 'left') + td(a.score, 'right', 'font-weight:700') + td(a.def, 'right') + td(mmrSigned(a.check), 'right')
-      + td(d ? '×' + d.mult + ' ' + mmrSigned(d.ability) : '', 'right') + '</tr>';
-  });
-  h += '</table>';
-
-  if (p.formNote) h += head('Note') + prose(p.formNote);
-  h += head('Background');
-  h += fact('Real name', p.realName) + fact('Origin', p.origin) + fact('Occupation', p.occupation)
-    + fact('Size', p.size) + fact('Teams', p.teams) + fact('Base', p.base);
-  if (p.traits.length) h += head('Traits') + prose(p.traits.join(', '));
-  if (p.tags.length) h += head('Tags') + prose(p.tags.join(', '));
-  if (p.powers.length) {
-    h += head('Powers');
-    mmrPowerGroups(p).forEach(g => {
-      h += `<div style="font-size:12px;line-height:1.5;margin-bottom:6px"><strong>${esc(g.set)}:</strong> ${esc(g.names.join(', '))}</div>`;
-    });
-  }
-  const story = t => `<div style="font-size:13px;line-height:1.55;white-space:pre-wrap">${esc(t)}</div>`;
-  if (p.history) h += head('History') + story(p.history);
-  if (p.personality) h += head('Personality') + story(p.personality);
-  return h;
-}
+// The stat block, the sheet and the printed page all live in sheet.js now: what the
+// pack shows OF a character grew past what it does WITH one, and the two were sharing
+// a file. This one keeps the book's rows, the copies a table makes of them, and the
+// browser you pick one from.
 
 let _mmrOfficialQuery = '', _mmrOfficialKind = '', _mmrOfficialOpen = {};
 
@@ -190,7 +140,10 @@ function mmrOfficialCardsHTML() {
     if (onTable) h += `<span class="npc-chip hero">On your table</span>`;
     h += `</div></div><div class="npc-caret">▶</div></div>`;
     if (open) {
-      h += `<div class="npc-card-body">${mmrStatBlockHTML(p)}<div class="npc-card-acts">`;
+      // An open card spans the shelf (see #mmr-official-list in shell.css), so the
+      // block inside it gets the same room as the hero sheet rather than a 250px
+      // column with a paragraph of rules text squeezed down it.
+      h += `<div class="npc-card-body">${mmrStatBlockHTML(p, { wide: true })}<div class="npc-card-acts">`;
       h += `<button class="btn btn-gold btn-xs" onclick="mmrAddProfileToTable('${esc(p.id)}')">${onTable ? 'Add another' : 'Add to table'}</button>`;
       h += `<button class="btn btn-secondary btn-xs" onclick="mmrPlayProfile('${esc(p.id)}')">Play as ${esc(lex('hero'))}</button>`;
       h += `</div></div>`;
@@ -210,11 +163,16 @@ function mmrToggleOfficial(id) { _mmrOfficialOpen[id] = !_mmrOfficialOpen[id]; m
 
 function mmrOfficialPanelHTML() {
   const opt = (v, t) => `<option value="${v}"${_mmrOfficialKind === v ? ' selected' : ''}>${t}</option>`;
+  mmrApplyRulesPref();
   let h = `<div style="font-size:11px;color:var(--muted);margin:-6px 0 8px">Every profile in the Core Rulebook. `
     + `Add one to your table to run or edit your own copy, or play one as your ${esc(lex('hero'))}.</div>`;
   h += `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">`;
-  h += `<input style="flex:1;min-width:160px" placeholder="Search ${MMR_PROFILES.length} characters" value="${esc(_mmrOfficialQuery)}" oninput="mmrFilterOfficial(this.value)">`;
-  h += `<select onchange="mmrKindOfficial(this.value)">${opt('', 'Everyone')}${opt('hero', 'Heroes')}${opt('villain', 'Villains')}${opt('other', 'Others')}</select></div>`;
+  h += `<input style="flex:1 1 180px;min-width:140px" placeholder="Search ${MMR_PROFILES.length} characters" value="${esc(_mmrOfficialQuery)}" oninput="mmrFilterOfficial(this.value)">`;
+  // width:auto and no grow: a <select> inherits width:100% from the shell's form
+  // styles, so left to itself it took a whole row and pushed the filters into a stack
+  // of full-width bars.
+  h += `<select style="flex:0 0 auto;width:auto" onchange="mmrKindOfficial(this.value)">${opt('', 'Everyone')}${opt('hero', 'Heroes')}${opt('villain', 'Villains')}${opt('other', 'Others')}</select>`;
+  h += mmrRulesBtnHTML() + `</div>`;
   h += `<div class="npc-grid" id="mmr-official-list">${mmrOfficialCardsHTML()}</div>`;
   return h;
 }

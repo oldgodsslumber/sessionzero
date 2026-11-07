@@ -191,7 +191,7 @@ html[data-theme="crawler"] /* One slot of a track. Live slots carry the accent; 
 .tal-set{opacity:.7}
 .tal-set input{font-size:11px}
 .inv-stat{display:block;font-size:10px;color:var(--blue);font-family:var(--font-label);letter-spacing:.02em;margin-top:1px}
-.inv-ctl{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}
+.inv-ctl{display:flex;align-items:center;gap:4px;flex:0 1 auto;min-width:0;flex-wrap:wrap;margin-left:auto}
 .inv-slot{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
 .inv-slot-h{width:104px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--text)}
 .inv-slot-h.is-full{color:var(--muted)}
@@ -515,6 +515,18 @@ body.has-sheet-roller #nb-dice{display:none}
 .pr-doc{flex:0 0 320px;position:sticky;top:16px}
 .pr-item{display:flex;align-items:flex-start;gap:8px;padding:6px 7px;border-radius:8px;border:1px solid transparent}
 .pr-item.on{background:var(--surface2);border-color:var(--border)}
+/* The print picker's density control sizes to its content. It inherited the
+   global width:100% for form controls, which took the whole row and squeezed
+   the item's name to zero width — and a zero-width name under
+   overflow-wrap:anywhere renders one letter per line, as a vertical column of
+   characters. */
+.pr-item select{width:auto;max-width:160px;flex:0 0 auto}
+.pr-item>label{min-width:90px}
+/* Short uppercase labels are never the thing that stretches a layout, and
+   breaking them mid-word reads as a typo: the view-only banner was rendering
+   "CLICK LOCKE/D AT THE TOP". */
+.no-edit-banner{overflow-wrap:normal}
+
 .pr-row{display:flex;align-items:center;gap:5px;padding:5px 6px;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:grab}
 .pr-row.pr-over{border-top:2px solid var(--accent)}
 .pr-grip{color:var(--muted);font-size:11px;letter-spacing:-2px;flex-shrink:0}
@@ -547,8 +559,8 @@ body.has-sheet-roller #nb-dice{display:none}
 .no-edit .editable-input,.no-edit .editable-textarea{background:transparent!important;border:none!important;padding:0!important;pointer-events:none;cursor:default;resize:none!important;outline:none!important}
 .no-edit .editable-input::placeholder,.no-edit .editable-textarea::placeholder{color:transparent}
 .no-edit .edit-checkbox{pointer-events:none;opacity:.7}
-.no-edit-banner{display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(122,138,158,.1);border:1px dashed var(--border);border-radius:var(--radius-btn);color:var(--muted);font-size:11px;font-family:var(--font-label);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-.no-edit-banner::before{content:'\1f512'}
+.no-edit-banner{display:block;padding:6px 10px;background:rgba(122,138,158,.1);border:1px dashed var(--border);border-radius:var(--radius-btn);color:var(--muted);font-size:11px;font-family:var(--font-label);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.no-edit-banner::before{content:'\1f512';margin-right:6px}
 /* POWER SET FLAVOR (matches the per-power flavor block) */
 .ps-flavor{font-style:italic;font-size:12px;color:var(--blue);margin-top:8px;padding:6px 8px;background:rgba(52,152,219,.06);border:none;border-left:2px solid var(--blue);border-radius:0 3px 3px 0;width:100%;min-height:42px;font-family:var(--font-body);resize:vertical;outline:none;line-height:1.45;display:block}
 .ps-flavor:focus{background:rgba(52,152,219,.12)}
@@ -639,6 +651,100 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
   border-radius:var(--radius-card);box-shadow:var(--comic-shadow);overflow:hidden}
 .cat-list .cat-row:last-child{border-bottom:none}
 
+/* ═══════════════════ MARVEL MULTIVERSE: THE CHARACTER ═══════════════════
+   A profile out of the Core Rulebook is sixteen powers, eight traits, seven tags and
+   two pages of prose, and every one of those carries a rule you need in play. Two
+   things follow, and this section is only those two things.
+
+   One: the rule goes next to the name. systems/marvel-multiverse/rules.js has the
+   text; .mmr-pow and .mmr-def are what it is set in.
+
+   Two: a column is a MEASURE, not a page width. A rule set across 1,100px of desktop
+   is a row you read by dragging your finger along the monitor, which is the shape the
+   first sheet had and the reason it was no better than the official PDF. Every grid
+   here is auto-fill with a minimum around 290px, so widening the window adds columns
+   and never adds line length. The phone is one column of the same cards. */
+.mmr-sheet{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+.mmr-sheet>.card{margin-bottom:0}
+.mmr-card{min-width:0}
+.mmr-card-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mmr-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.mmr-head-m{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;
+  font-family:var(--font-label);font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.mmr-rank{color:var(--accent);font-weight:700}
+.mmr-page{font-family:var(--font-label);font-size:10px;letter-spacing:.06em;color:var(--muted);
+  white-space:nowrap;flex:0 0 auto}
+
+/* The numbers you read every round, as tiles. Four short facts do not need four
+   full-width rows, and on a phone they fit two by two. */
+.mmr-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:6px}
+.mmr-tile{border:1px solid var(--border);border-radius:var(--radius-btn);
+  padding:5px 8px 6px;background:var(--surface2);min-width:0}
+.mmr-tile-k{font-family:var(--font-label);font-size:9px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--muted)}
+.mmr-tile-v{font-family:var(--font-label);font-size:21px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.mmr-tile-s{display:block;font-size:10px;color:var(--muted);line-height:1.3}
+.mmr-kv{font-size:12.5px;line-height:1.5;padding:2px 0;overflow-wrap:break-word}
+.mmr-kv-k{font-family:var(--font-label);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--muted);margin-right:6px}
+
+/* Six rows of four two-digit numbers. Capped, because nothing is learned by spreading
+   them across the screen. */
+.mmr-abil{width:100%;max-width:360px;border-collapse:collapse;font-size:13px}
+.mmr-abil thead th{font-family:var(--font-label);font-weight:500;font-size:9px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--muted);text-align:right;padding:0 4px 2px}
+.mmr-abil tbody th{text-align:left;font-weight:600;font-size:12.5px;color:var(--text);padding:4px 4px 4px 0;
+  border-top:1px solid var(--border)}
+.mmr-abil td{text-align:right;padding:4px;border-top:1px solid var(--border);font-variant-numeric:tabular-nums}
+.mmr-abil-s{font-weight:700}
+
+/* Powers, under the set they came from. */
+.mmr-set+.mmr-set{margin-top:13px}
+.mmr-set-h{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.mmr-set-n{font-family:var(--font-label);font-size:10.5px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.11em;color:var(--accent);flex:0 1 auto;min-width:0}
+.mmr-set-c{font-family:var(--font-label);font-size:9px;color:var(--muted);
+  border:1px solid var(--border);border-radius:999px;padding:0 6px;flex:0 0 auto}
+.mmr-set-h::after{content:'';flex:1 1 auto;border-top:1px solid var(--border);min-width:8px}
+/* Columns, not a grid of cells. A grid lines the cards up in rows, so one long power
+   leaves a hole beside every short one next to it — Spider-Man's sheet was a third
+   empty. Column flow packs each column full and the cards keep their own heights. */
+.mmr-pow-grid{column-gap:10px}
+.mmr-pow{min-width:0;background:var(--surface2);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:0 var(--radius-btn) var(--radius-btn) 0;
+  padding:7px 9px 8px;margin-bottom:8px;break-inside:avoid;page-break-inside:avoid}
+.mmr-pow-grid>.mmr-pow:last-child{margin-bottom:0}
+.mmr-pow-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mmr-pow-n{font-weight:700;font-size:13.5px;line-height:1.25;overflow-wrap:break-word}
+.mmr-pow-note{font-size:11.5px;font-style:italic;color:var(--blue);line-height:1.4;margin-top:2px}
+.mmr-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.mmr-chip{font-family:var(--font-label);font-size:9px;text-transform:uppercase;letter-spacing:.07em;
+  border:1px solid var(--border);border-radius:3px;padding:1px 5px;background:var(--surface);
+  white-space:nowrap;color:var(--text)}
+.mmr-chip-k{color:var(--muted);margin-right:4px}
+.mmr-eff{font-size:12.5px;line-height:1.5;margin-top:5px}
+.mmr-eff-none{color:var(--muted);font-style:italic}
+.mmr-sub{color:var(--muted);font-size:11.5px;margin-top:4px}
+
+/* Traits and tags: a tag is a line where a power is a paragraph, so they are set
+   tighter and share the same column rule. */
+.mmr-defs{column-gap:14px}
+.mmr-def{min-width:0;border-top:1px solid var(--border);padding-top:7px;margin-bottom:9px;
+  break-inside:avoid;page-break-inside:avoid}
+.mmr-def:first-child{border-top:none;padding-top:0}
+.mmr-def-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mmr-def-n{font-weight:700;font-size:13px;overflow-wrap:break-word}
+.mmr-prose{font-size:13px;line-height:1.6;white-space:pre-wrap;max-width:68ch}
+
+/* The switch. A class on <html> rather than a repaint: the hero sheet and the 128
+   official cards are the same page, and a repaint of either loses where you were. The
+   label is CSS for the same reason. */
+.mmr-rules-btn::after{content:'Hide rules text'}
+.mmr-no-rules .mmr-rules-btn::after{content:'Show rules text'}
+.mmr-no-rules .mmr-eff{display:none}
+.mmr-no-rules .mmr-eff-on{display:block}
+
 /* ═══════════════════ DESKTOP: MULTI-COLUMN ═══════════════════
    Everything above this line describes one column of cards, which is the phone
    and is still the truth of the app: a page is a stack. This section takes that
@@ -727,6 +833,31 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
      Each row is self-contained, so the split costs nothing. */
   .cat-list{column-count:2;column-gap:0}
   .cat-row{break-inside:avoid}
+
+  /* Marvel's character. Vitals, Abilities and Background are three short cards and
+     make one row; everything with rules text in it spans and columns internally, so
+     the line length is the card's and not the window's. */
+  .mmr-sheet:not(.is-narrow){grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .mmr-wide{grid-column:1/-1}
+  /* column-width, so the number of columns is whatever the room allows and the
+     measure stays put: widening the window adds a column, never a longer line. */
+  .mmr-pow-grid{column-width:290px}
+  .mmr-defs{column-width:280px}
+  /* In columns a rule above each entry reads as the bottom of the one beside it, so
+     the separator turns on its side. */
+  .mmr-def{border-top:none;padding-top:0;border-left:2px solid var(--border);padding-left:9px}
+  .mmr-def:first-child{padding-left:9px}
+  /* An open official character takes the shelf: the same block as the hero sheet,
+     rather than a paragraph of rules text down a 250px card. The same goes for a copy
+     on the table once it is carrying rules text — and :has() means that is decided by
+     what is inside the card, so no other game's roster moves. */
+  #mmr-official-list .npc-card.open,
+  .npc-grid .npc-card.open:has(.mmr-npc-rules){grid-column:1/-1}
+  /* Widening that card widened the editable fields above the rules with it, and a
+     label on the left with its value a thousand pixels away on the right is the thing
+     the rules text below was set in columns to avoid. The fields keep a column; only
+     the card grew. */
+  .npc-card.open:has(.mmr-npc-rules) .npc-derived{max-width:640px}
 
   /* The journal is prose. Widening the frame must not widen the line. */
   #notes-content{max-width:900px}

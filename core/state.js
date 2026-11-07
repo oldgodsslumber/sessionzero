@@ -3,7 +3,12 @@ function toggleHeroEdit(){_heroEditMode=!_heroEditMode;renderSheet();}
 function toggleNPCEdit(){_npcEditMode=!_npcEditMode;if(_npcFullMode)renderFullNPCEditor();else renderNPCs();}
 function editToggleBtn(on,handler){return `<button class="edit-toggle ${on?'on':''}" onclick="${handler}()" title="${on?'Sheet unlocked \u2014 tap to lock (view only)':'Sheet locked \u2014 tap to edit'}">${on?'\u{1F513} Editing \u2014 tap to lock':'\u{1F512} Locked \u2014 tap to edit'}</button>`;}
 function noEditBanner(){return `<div class="no-edit-banner">View only — click <strong style="color:var(--accent)">Locked</strong> at the top to enable edits.</div>`;}
-const LOG_TYPES=[
+// The journal's entry types. This list is Daring Comics' — Villain Intel and a
+// Civilian Report are a superhero comic's categories, and only the first entry
+// was ever routed through the lexicon, so a dungeon crawl offered to file intel
+// on a villain. A pack that has its own kinds of entry declares `logTypes`, and
+// logTypes() below is what every renderer should read.
+const LOG_TYPES_DEFAULT=[
   {key:'main',get label(){return lexU('logBreak')+' Log';},emoji:'\ud83d\udcd6',get placeholder(){return lexU('logBreak')+' log entry...';},desc:'The primary session record \u2014 scene, stakes, and status.'},
   {key:'supplemental',label:'Supplemental',emoji:'\ud83d\udcdd',placeholder:'Additional details...',desc:'An update or addendum. What has changed?'},
   {key:'battle',label:'Battle Report',emoji:'\ud83d\udca5',placeholder:'Combat broke out...',desc:'Combat, crisis, or immediate threat.'},
@@ -13,6 +18,17 @@ const LOG_TYPES=[
   {key:'civilian',label:'Civilian Report',emoji:'\ud83d\udce2',placeholder:'Witnesses report...',desc:'Civilian encounters, public reaction, collateral.'},
   {key:'gm',label:'GM Note',emoji:'\ud83c\udfac',placeholder:'Behind the scenes...',desc:'Gamemaster notes and plans.'}
 ];
+
+// A pack's own list, or Daring Comics'. The first entry is the main one \u2014
+// log.js leans on LOG_TYPES[0] and [1] for the two primary buttons \u2014 so a pack
+// that overrides this keeps a "main" and a "supplemental" in those slots.
+function logTypes(){
+  const own=(typeof SYS!=='undefined'&&SYS&&SYS.logTypes)
+    ? (typeof SYS.logTypes==='function'?SYS.logTypes():SYS.logTypes) : null;
+  return (own&&own.length)?own:LOG_TYPES_DEFAULT;
+}
+// Kept as a name so nothing that still reads it breaks; prefer logTypes().
+const LOG_TYPES=LOG_TYPES_DEFAULT;
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -49,7 +65,12 @@ function packNewState(){
 function defaultState(){
   return{series:{tone:null,level:null,experience:null},char:null,
     creation:{step:0,costumedName:'',civilianName:'',aspects:{concept:'',motivation:'',contingent:[{cat:'',text:''},{cat:'',text:''},{cat:'',text:''}]},supportingCast:[],roguesGallery:[],skills:{},powerSets:[],stunts:[]},
-    team:null,universeId:null,floor:3,npcs:[],regions:[defaultRegion()],activeRegion:0,conflict:{active:false,zones:[],turnOrder:[],currentTurn:0,round:1,log:[]},dice:null,notes:[]};
+    // Floor 1. It was 3, so a brand-new Crawl opened on "FLOOR 3", stamped the
+    // gate's own starter region — the one actually named "The First Floor" —
+    // with floor 3, and then the creation wizard set the floor to 1 and the Map
+    // tab reported no map of floor 1, orphaning anything already drawn there.
+    // Mobs quick-added before creation inherited DR 3 the same way.
+    team:null,universeId:null,floor:1,npcs:[],regions:[defaultRegion()],activeRegion:0,conflict:{active:false,zones:[],turnOrder:[],currentTurn:0,round:1,log:[]},dice:null,notes:[]};
 }
 let S=defaultState(),currentSaveId=null;
 
@@ -196,15 +217,40 @@ function duplicateSave(id){
 }
 function renameSave(id){
   const s=getSaveSummary(id);if(!s)return;
-  const n=prompt('Rename this save:',s.name||'');
+  const n=prompt('Rename this '+lexL('save')+':',s.name||'');
   if(n===null)return;
+  // An empty answer is not a rename. It used to be accepted, which emptied the
+  // name field — and sysCharName then walked on to the next identity field and
+  // called the character by their Race, so a crawler became "Human" in the save
+  // list, the roster, the sheet and the printout at once.
+  const nn=n.trim();
+  if(!nn)return;
   const d=getSaveData(id);if(!d)return;
   const f=sysCharNameField();
-  if(d.char)d.char[f]=n.trim();
-  else{d.creation=d.creation||{};d.creation[f]=n.trim();}
+  if(d.char)d.char[f]=nn;
+  else{d.creation=d.creation||{};d.creation[f]=nn;}
   writeSave(id,d);
+  // The roster row carries its own copy of the name, and renaming a character
+  // you are not currently playing never touched it: the save list said the new
+  // name while the roster, the manager's count and the printout said the old
+  // one, indefinitely.
+  renameRosterEntry(d,nn);
   if(id===currentSaveId){S=d;bindUniverse();renderAll();}
   renderSaveModal();
+}
+
+// Rename this character's mirrored roster row, in whichever universe holds it.
+function renameRosterEntry(d,name){
+  const hid=d&&d.char&&d.char.heroId;
+  if(!hid)return;
+  loadUniverses();
+  let touched=false;
+  U.universes.forEach(function(u){
+    (u.roster||[]).forEach(function(n){
+      if(n&&n.heroId===hid&&n.name!==name){n.name=name;touched=true;}
+    });
+  });
+  if(touched)saveUniverses();
 }
 
 // The blobs are truth; the manifest is a cache. Anything that can desync it —
@@ -242,12 +288,23 @@ function saveIndexHealthy(){
 }
 
 // ─── Migration from the old fixed 10 slots ────────────────
+// The ten fixed slots that came before save files. They are FLAT dc_* keys and
+// they are Daring Comics' alone — no other pack ever wrote them. Reading them
+// unconditionally meant every pack imported Daring Comics' old characters on
+// boot: its heroes and NPCs turned up in the Bestiary as Mobs, its journal in
+// the Crawl Log, and worse, the import then wrote BACK into dc_slot_* and
+// emptied its roster, damaging the one backup a DC player still had. A pack
+// that is not Daring Comics has no legacy slots, so it looks for none.
+function ownsLegacySlots(){
+  return typeof SYS==='undefined'||!SYS||!SYS.id||SYS.id==='daring-comics';
+}
 function legacySlotKey(n){return'dc_slot_'+n;}
-function legacySlotData(n){try{const d=localStorage.getItem(legacySlotKey(n));return d?JSON.parse(d):null;}catch(e){return null;}}
+function legacySlotData(n){if(!ownsLegacySlots())return null;try{const d=localStorage.getItem(legacySlotKey(n));return d?JSON.parse(d):null;}catch(e){return null;}}
 function legacySlotCount(){let c=0;for(let i=0;i<10;i++)if(legacySlotData(i))c++;return c;}
 // Copies rather than moves — the originals stay recoverable until the user
 // presses "Clean up old slots" in the save manager.
 function migrateSlotsToSaves(){
+  if(!ownsLegacySlots())return 0;
   loadSaves();
   let v=null;try{v=localStorage.getItem(storeKey('schema_version'));}catch(e){}
   if(v==='3')return 0;
@@ -382,15 +439,55 @@ function saveUniverses(){try{localStorage.setItem(storeKey('universes'),JSON.str
 // had added to the roster, the codex, the map or the journal, with no warning
 // and no way to get it back. The event fires only in the tabs that did not
 // write, which is exactly the set that needs to catch up.
+//
+// The CHARACTER needed the same treatment and did not get it the first time:
+// catching up on the world while S still held a stale character meant the very
+// next save() in this tab wrote that stale character back, so a rename made in
+// the other tab vanished. Both halves have to catch up, or neither does.
+//
+// A field with the caret in it is left alone — re-reading from disk mid-sentence
+// would throw away what is being typed here, which is the thing this is meant
+// to prevent. The catch-up is held and run on the way out of that field.
+let _staleSave=false;
+function _editingNow(){
+  if(typeof document==='undefined')return false;
+  const a=document.activeElement;
+  if(!a)return false;
+  return a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable===true;
+}
+function reloadActiveSave(){
+  if(currentSaveId===null)return false;
+  SV=null;loadSaves();
+  const d=getSaveData(currentSaveId);
+  if(!d||typeof d!=='object'||Array.isArray(d))return false;
+  S=d;
+  if(typeof bindUniverse==='function')bindUniverse();
+  return true;
+}
+function catchUpFromOtherTab(){
+  U=null;loadUniverses();
+  if(_editingNow()){_staleSave=true;}
+  else{_staleSave=false;reloadActiveSave();}
+  if(typeof S!=='undefined'&&S&&typeof bindUniverse==='function')bindUniverse();
+  if(typeof renderAll==='function')renderAll();
+  if(typeof renderFloorStrip==='function')renderFloorStrip();
+}
 if(typeof window!=='undefined'&&window.addEventListener){
   window.addEventListener('storage',function(ev){
     if(typeof SYS==='undefined'||!SYS)return;
     // key is null when another tab calls localStorage.clear().
-    if(ev&&ev.key&&ev.key!==storeKey('universes'))return;
-    U=null;loadUniverses();
-    if(typeof S!=='undefined'&&S&&typeof bindUniverse==='function')bindUniverse();
-    if(typeof renderAll==='function')renderAll();
-    if(typeof renderFloorStrip==='function')renderFloorStrip();
+    const mine=!ev||!ev.key
+      ||ev.key===storeKey('universes')
+      ||ev.key===storeKey('saves')
+      ||ev.key.indexOf(savePrefix())===0;
+    if(!mine)return;
+    catchUpFromOtherTab();
+  });
+  // The held catch-up, once the caret has left.
+  window.addEventListener('focusout',function(){
+    if(!_staleSave)return;
+    _staleSave=false;
+    if(reloadActiveSave()&&typeof renderAll==='function')renderAll();
   });
 }
 function getUniverse(id){loadUniverses();return U.universes.find(u=>u.id===id)||null;}
@@ -445,11 +542,31 @@ function ensureTable(u){
 
 // Adopt whatever the character was carrying the first time a universe is bound,
 // so nobody loses the map they drew before the table had one of its own.
+//
+// COPIED, not referenced. S.regions/notes/conflict are already the arrays some
+// OTHER universe's table holds — bindTable aliased them there — so handing them
+// over by reference made both universes share one map, one journal and one
+// fight. Editing room 13 in the second Crawl then rewrote room 13 of the first,
+// permanently and with no warning. Primitives are fine either way; the arrays
+// and objects have to be cloned.
+function cloneTableValue(v){
+  if(v===null||typeof v!=='object')return v;
+  try{return JSON.parse(JSON.stringify(v));}catch(e){return Array.isArray(v)?[]:{};}
+}
 function adoptTable(u){
   const t=ensureTable(u);
   TABLE_KEYS.forEach(function(k){
-    if(t[k]===undefined&&S[k]!==undefined)t[k]=S[k];
+    if(t[k]===undefined&&S[k]!==undefined)t[k]=cloneTableValue(S[k]);
   });
+  return t;
+}
+
+// A universe that has never had a table gets a blank one of its own. A new
+// Crawl is a new dungeon: it should not open on the last one's map and journal
+// just because the character walking in was standing somewhere.
+function freshTable(u){
+  const t=ensureTable(u),d=defaultState();
+  TABLE_KEYS.forEach(function(k){if(t[k]===undefined)t[k]=d[k];});
   return t;
 }
 
@@ -762,7 +879,11 @@ function openUniverseManager(){
   let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="pg-title" style="font-size:20px">${esc(lexU('universes'))}<\/div><button class="btn btn-secondary btn-xs" onclick="closeUniverseModal()">Close<\/button><\/div>`;
   h+=`<div style="font-size:11px;color:var(--muted);margin:4px 0 10px">Your game worlds. Every ${esc(lex('hero'))}, ${esc(lex('npc'))} and wiki entry is shared within a ${esc(lex('universe'))}.<\/div>`;
   U.universes.forEach(function(u){
-    const heroes=universeHeroCount(u.id);const isCur=(typeof S!=='undefined'&&S&&S.universeId===u.id);const rc=(u.roster||[]).length;
+    const heroes=universeHeroCount(u.id);const isCur=(typeof S!=='undefined'&&S&&S.universeId===u.id);
+    // Mirrored characters are already counted as heroes, and the roster screen
+    // deliberately hides your own, so counting them again here advertised "1 in
+    // Bestiary" over a Bestiary that showed nothing under any tab.
+    const rc=(u.roster||[]).filter(function(n){return n&&!n.fromHero;}).length;
     h+=`<div class="card-sm" style="${isCur?'border-color:var(--accent)':''}"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div style="flex:1;min-width:120px"><div class="fw-700">${esc(u.name)}${isCur?' <span style="font-size:10px;color:var(--accent)">(current)<\/span>':''}<\/div><div style="font-size:10px;color:var(--muted)">${heroes} ${esc(heroes===1?lex('hero'):lex('heroes'))} • ${rc} in ${esc(lex('roster'))}<\/div>${_uniSeriesLabel(u)}<\/div>`;
     h+=`<button class="btn btn-secondary btn-xs" onclick="openUniverseSetup(false,'${u.id}')" title="Name, tone and power level">Settings<\/button>`;
     if(typeof S!=='undefined'&&S&&S.char&&!isCur)h+=`<button class="btn btn-gold btn-xs" onclick="moveHeroToUniverse('${u.id}')" title="Move the ${esc(lex('hero'))} you are playing into this ${esc(lex('universe'))}">Move ${esc(lex('hero'))}<\/button>`;
@@ -795,6 +916,10 @@ function moveHeroToUniverse(id){
   // sysCharName, so the confirm actually names the character: outside Daring
   // Comics it always read "this hero".
   if(!confirm('Move "'+(sysCharName(S.char)||'this '+lex('hero'))+'" into "'+u.name+'"? Its future '+lex('npcs')+' will be shared with that '+lex('universe')+'.'))return;
+  // Give the destination its own blank table first, so adoptTable has nothing
+  // to adopt. Without this the character carries the previous world's map and
+  // journal in with them, which is not what moving somewhere means.
+  freshTable(u);
   S.universeId=id;bindUniverse();syncHeroToRoster();save();
   closeUniverseModal();refreshUniverseUI();
 }

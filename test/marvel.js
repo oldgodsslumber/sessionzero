@@ -243,7 +243,9 @@ function check(name, fn) {
   check('a card opens onto the full stat block', () => {
     openCard('Spider-Man (Peter Parker)');
     const t = list().textContent;
-    return (/Spider-Sense/.test(t) && /Combat Reflexes/.test(t) && /Book p\. 237/.test(t)
+    // \s, not a space: the page reference is set with a non-breaking space so "p." and
+    // the number cannot be split across a line.
+    return (/Spider-Sense/.test(t) && /Combat Reflexes/.test(t) && /Book p\.\s237/.test(t)
       && /History/.test(t) && /Personality/.test(t) && /wisecracking/.test(t)) || t.slice(0, 200);
   });
 
@@ -436,6 +438,153 @@ function check(name, fn) {
     return (/marvel-multiverse\/Marvel-Multiverse-RPG-Core-Rulebook\.\*/.test(ignore)
       && /marvel-multiverse\/\.book\//.test(ignore)) || 'ignore rules are gone';
   });
+
+  // ─── the sheet reads the character, instead of naming them ──────────────────
+  // The pack shipped the same thing the official sheets give you: power names, and
+  // then go and find the book. powers.js and traits.js carry what each one DOES; these checks are
+  // that the text is there, that it is the book's, and that a name with the
+  // character's own particulars stuck to it still finds it.
+  check('[rules] the catalogue is the whole of both lists', () => {
+    const n = ev('[Object.keys(MMR_POWER_RULES).length,Object.keys(MMR_TRAIT_RULES).length,Object.keys(MMR_TAG_RULES).length].join()');
+    return n === '385,57,48' || 'powers,traits,tags = ' + n;
+  });
+  check('[rules] known answers, word for word off the page', () => {
+    const want = [
+      ["MMR_POWER_RULES['Clobber'].effect",
+        'The character makes a close attack against an enemy. If the attack is a success, the enemy takes regular damage. On a Fantastic success, the enemy takes double damage and is knocked prone.'],
+      ["MMR_POWER_RULES['Spider-Sense'].set", 'Spider-Powers'],
+      ["MMR_POWER_RULES['Spider-Sense'].page", 120],
+      ["MMR_POWER_RULES['Mighty 4'].rank", 4],
+      ["MMR_POWER_RULES['Webslinging'].prereqs.join()", 'Webcasting'],
+      ["MMR_TRAIT_RULES['Combat Reflexes'].effect",
+        'The character can react quickly in combat. This grants them one additional reaction each turn.'],
+      ["MMR_TAG_RULES['X-Gene'].effect",
+        'The character has mutant genes that cause them to develop super-powers.\n\nRestriction: For mutants only.'],
+    ];
+    const bad = want.filter(([e, v]) => ev(e) !== v).map(([e, v]) => e + ' -> ' + JSON.stringify(ev(e)));
+    return !bad.length || bad.join(' | ');
+  });
+  check('[rules] the text is prose, not OCR', () => {
+    // Each of these was in the generated file and was read off the page to fix it: a
+    // lost space after a digit ("reach to 2.They"), a hyphen standing in for an em dash
+    // ("their ancestors-is"), a doubled full stop. The pattern is tested HERE rather
+    // than inside an evaluated string, where a backslash belongs to the string first.
+    const cats = JSON.parse(ev('JSON.stringify([MMR_POWER_RULES,MMR_TRAIT_RULES,MMR_TAG_RULES])'));
+    const ocr = /[a-z0-9]\.[A-Z][a-z]|\.\. |[a-z]{3,}- [a-z]|[a-z]{3,}-(?:is|are|was|were)\b/;
+    const bad = [];
+    cats.forEach(c => Object.keys(c).forEach(k => {
+      const m = ocr.exec(c[k].effect || '');
+      if (m) bad.push(k + ': ' + JSON.stringify(m[0]));
+    }));
+    return !bad.length || bad.slice(0, 5).join(' | ');
+  });
+  check('[rules] every name on all 128 profiles finds its rule', () => {
+    const miss = ev(`(function(){
+      const out={powers:[],traits:[],tags:[]};
+      MMR_PROFILES.forEach(function(p){
+        (p.powers||[]).forEach(function(x){if(!mmrPowerRule(x.name).rule)out.powers.push(x.name);});
+        (p.traits||[]).forEach(function(t){if(!mmrTraitRule(t).rule)out.traits.push(t);});
+        (p.tags||[]).forEach(function(t){if(!mmrTagRule(t).rule)out.tags.push(t);});});
+      return JSON.stringify({p:out.powers.slice(0,4),t:out.traits.slice(0,4),
+        g:Array.from(new Set(out.tags))});})()`);
+    const m = JSON.parse(miss);
+    if (m.p.length || m.t.length) return 'unresolved: ' + miss;
+    // Doctor Strange's page prints a tag the book never defines; the sheet shows the
+    // name with nothing under it rather than inventing a rule for it.
+    return (m.g.length === 1 && m.g[0] === 'Prescription Pad') || 'unresolved tags: ' + miss;
+  });
+  check('[rules] a name with the character\'s own particulars on it still resolves', () => {
+    const cases = [
+      ['mmrPowerRule("Animal Communication (Squirrels)")', 'Animal Communication', 'Squirrels'],
+      ['mmrTraitRule("Connections: Military (Dora Milaje)")', 'Connections', 'Military (Dora Milaje)'],
+      ['mmrTraitRule("Surprising Power (2) (Grand Illusion, Mirror Images)")', 'Surprising Power', '2; Grand Illusion, Mirror Images'],
+      ['mmrTagRule("Enemy: Red Skull")', 'Enemy', 'Red Skull'],
+    ];
+    const bad = cases.filter(([e, n, note]) =>
+      ev(e + '.name') !== n || ev(e + '.note') !== note || !ev('!!' + e + '.rule'))
+      .map(([e]) => e + ' -> ' + ev('JSON.stringify({name:' + e + '.name,note:' + e + '.note,rule:!!' + e + '.rule})'));
+    return !bad.length || bad.join(' | ');
+  });
+  check('[rules] the OCR\'s spelling of a power set is not what the sheet prints', () => {
+    const bad = [['Martialarts', 'Martial Arts'], ['Super-Strengths', 'Super-Strength'],
+      ['Omniversal Travels', 'Omniversal Travel'], ['Magic (Sorcery Set)', 'Magic (Sorcery)'],
+      ['Elemental Control (Fire)', 'Elemental Control (Fire)']]
+      .filter(([a, b]) => ev('mmrSetLabel(' + JSON.stringify(a) + ')') !== b)
+      .map(([a, b]) => a + ' -> ' + ev('mmrSetLabel(' + JSON.stringify(a) + ')') + ', wanted ' + b);
+    return !bad.length || bad.join(' | ');
+  });
+  check('[sheet] a power on the sheet carries its rule, its cost and what it needs', () => {
+    ev("showTab('hero')");
+    const t = doc.getElementById('hero-sheet').textContent;
+    if (!/Elemental Barrage/.test(t)) return 'Storm\'s powers are not on the sheet';
+    const rule = ev("MMR_POWER_RULES['Elemental Barrage'].effect").slice(0, 40);
+    if (t.indexOf(rule) < 0) return 'the rule text is missing: ' + JSON.stringify(rule);
+    // The chips are the part you read mid-turn.
+    return /15 FOCUS|15 Focus/i.test(t) || 'no Focus cost on the card';
+  });
+  check('[sheet] traits and tags carry their text too', () => {
+    const t = doc.getElementById('hero-sheet').textContent;
+    const trait = ev("MMR_TRAIT_RULES['Combat Reflexes'].effect").slice(0, 40);
+    const tag = ev("MMR_TAG_RULES['Krakoan'].effect").slice(0, 40);
+    if (t.indexOf(trait) < 0) return 'no trait text';
+    return t.indexOf(tag) >= 0 || 'no tag text';
+  });
+  check('[sheet] one rules switch, and it is this pack\'s own setting', () => {
+    const onSheet = doc.querySelectorAll('#hero-sheet .mmr-rules-btn').length;
+    if (onSheet !== 1) return onSheet + ' switches on the sheet';
+    ev('mmrToggleRules()');
+    const off = ev("document.documentElement.classList.contains('mmr-no-rules')");
+    const key = ev("localStorage.getItem('rpg:marvel-multiverse:mmr_rules')");
+    ev('mmrToggleRules()');
+    if (!off) return 'the switch does not fold the text away';
+    if (key !== 'off') return 'stored as ' + key;
+    return !ev("localStorage.getItem('mmr_rules')") || 'it wrote an un-namespaced key as well';
+  });
+  check('[cast] a copy on the table reads, instead of listing labels', () => {
+    // A roster row is flat text because that is what syncs, so before this it was the
+    // same problem one tab over: names, and then go and find the book.
+    const row = ev("S.npcs.filter(n=>!n.fromHero)[0]");
+    if (!row) return 'no copy on the table to read';
+    const h = ev('mmrNpcRulesHTML(S.npcs.filter(n=>!n.fromHero)[0])');
+    const spider = ev("MMR_POWER_RULES['Spider-Sense'].effect").slice(0, 40);
+    if (h.indexOf(spider) < 0) return 'the power rules never reach the row: ' + h.slice(0, 120);
+    const trait = ev("MMR_TRAIT_RULES['Combat Reflexes'].effect").slice(0, 40);
+    return h.indexOf(trait) >= 0 || 'the trait rules never reach the row';
+  });
+  check('[cast] the rules follow the row\'s OWN names once a Narrator edits it', () => {
+    // The copy is theirs to change. Looking the rules up from the profile it came from
+    // would show the book's powers under a list they had rewritten.
+    const h = ev("mmrNpcRulesHTML({profile:'spider-man-peter-parker',"
+      + "powers:'Super-Strength: Clobber',traits:'Berserker',tags:''})");
+    const clobber = ev("MMR_POWER_RULES['Clobber'].effect").slice(0, 40);
+    if (h.indexOf(clobber) < 0) return 'the edited list was ignored';
+    const spider = ev("MMR_POWER_RULES['Spider-Sense'].effect").slice(0, 40);
+    return h.indexOf(spider) < 0 || 'it showed the book\'s powers instead of theirs';
+  });
+  check('[cast] a name the book never prints shows no rule rather than a wrong one', () => {
+    const h = ev("mmrNpcRulesHTML({powers:'Basic: Not A Real Power',traits:'',tags:''})");
+    return (h.indexOf('Not A Real Power') >= 0 && /No rules text/.test(h))
+      || 'a made-up power got a rule: ' + h.slice(0, 160);
+  });
+  check('[cast] the body hook is optional, so the other games are untouched', () =>
+    ev("(function(){var f=SYS.npc.bodyExtra;SYS.npc.bodyExtra=undefined;"
+      + "try{return npcPackBody(S.npcs.filter(function(n){return !n.fromHero})[0]).indexOf('mmr-npc-rules')<0;}"
+      + "finally{SYS.npc.bodyExtra=f;}})()") === true);
+
+  check('[print] the sheet prints as blocks with the rules in them', () => {
+    const h = ev('(function(){try{return prBlockSheetHTML(S.char,{});}catch(e){return "THREW: "+e.message;}})()');
+    if (/^THREW/.test(h)) return h;
+    const rule = ev("MMR_POWER_RULES['Elemental Barrage'].effect").slice(0, 40);
+    // It used to be SYS.sheetExtra with its tags stripped: one run-on paragraph of
+    // every word on the sheet, which for a character out of the book is 2,000 of them.
+    if ((h.match(/pr-blk-t/g) || []).length < 4) return 'not blocks: ' + (h.match(/pr-blk-t/g) || []).length;
+    if (h.indexOf(rule.replace(/&/g, '&amp;')) < 0) return 'the rules text never reaches paper';
+    return !/\[object/.test(h) || 'printed [object Object]';
+  });
+  check('[print] a pack with no printed prose of its own still gets the old behaviour', () =>
+    ev('typeof SYS.sheetPrint') === 'function'
+      && ev("(function(){var f=SYS.sheetPrint;SYS.sheetPrint=undefined;"
+        + "try{return /pr-id/.test(prBlockSheetHTML(S.char,{}));}finally{SYS.sheetPrint=f;}})()") === true);
 
   console.log('\nPASS ' + ok.length);
   if (fails.length) {

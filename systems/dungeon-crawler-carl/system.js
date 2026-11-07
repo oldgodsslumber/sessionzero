@@ -131,6 +131,30 @@ registerSystem({
   // The party's Floor is the clock, so it stays on screen above every tab.
   floorStrip: { hint: 'Floor sets Mob DR, salvage and pet Ranks' },
 
+  // The journal's entry types. The shell's own list is Daring Comics' — a crawl
+  // has no villains to gather intel on and no civilians to report. The KEYS are
+  // deliberately the shell's, because they are what every stored entry already
+  // carries: changing them would strand every journal written before this.
+  // Only the words change.
+  logTypes: () => [
+    { key: 'main', label: 'Floor Log', emoji: '\u{1F4D6}', placeholder: 'Floor log entry...',
+      desc: 'The primary record of the floor — where you are, what is hunting you, who is still alive.' },
+    { key: 'supplemental', label: 'Supplemental', emoji: '\u{1F4DD}', placeholder: 'Additional details...',
+      desc: 'An update or addendum. What has changed?' },
+    { key: 'battle', label: 'Battle Report', emoji: '\u{1F4A5}', placeholder: 'It came out of the dark...',
+      desc: 'A fight, a near miss, or whatever took a Health Bar off you.' },
+    { key: 'investigation', label: 'Recon', emoji: '\u{1F50D}', placeholder: 'The hallway ahead...',
+      desc: 'Scouting, mapping, and what the Atlas will not tell you.' },
+    { key: 'personal', label: 'Personal Log', emoji: '\u{1F4AD}', placeholder: 'Been thinking about...',
+      desc: 'Private thoughts, doubts, and the parts the viewers do not need.' },
+    { key: 'villain', label: 'Mob Intel', emoji: '\u{1F479}', placeholder: 'Intel on the Mob...',
+      desc: 'What a Mob or Boss does, and what it did to somebody else first.' },
+    { key: 'civilian', label: 'Crowd & Sponsors', emoji: '\u{1F4E3}', placeholder: 'The viewers loved...',
+      desc: 'Audience reaction, AI Favor, sponsors, and the cost of being watched.' },
+    { key: 'gm', label: 'Production Note', emoji: '\u{1F3AC}', placeholder: 'Behind the scenes...',
+      desc: 'Notes for whoever is running the dungeon.' },
+  ],
+
   // The app is the Crawler Interface, so the words are the System AI's.
   lexicon: {
     universe: 'Crawl',        universes: 'Crawls',
@@ -257,8 +281,8 @@ registerSystem({
         options: () => DCC_SIZES.map(z => ({ value: z.n, label: z.name + ' (' + z.n + ')' })),
         def: 4 },
 
-      { key: 'level', label: 'Level', type: 'number', def: 1, group: 'Numbers', quick: true },
-      { key: 'floor', label: 'Floor it belongs to', type: 'number', group: 'Numbers', quick: true,
+      { key: 'level', label: 'Level', type: 'number', def: 1, min: 1, max: 999, group: 'Numbers', quick: true },
+      { key: 'floor', label: 'Floor it belongs to', type: 'number', min: 1, max: 999, group: 'Numbers', quick: true,
         def: () => (typeof S !== 'undefined' && S && S.floor) || 1,
         hint: 'A Mob from another floor keeps its home floor' },
       { key: 'hbSlots', label: 'Health Bar slots', group: 'Numbers',
@@ -267,8 +291,8 @@ registerSystem({
       { key: 'dr', label: 'Damage Resistance', group: 'Numbers',
         derive: (d) => Number(d.floor) || 0,
         hint: 'equals the Floor Number' },
-      { key: 'evade', label: 'Evade', type: 'number', def: 10, group: 'Numbers' },
-      { key: 'move',  label: 'Move (feet)', type: 'number', def: DCC_BASE_MOVE, group: 'Numbers' },
+      { key: 'evade', label: 'Evade', type: 'number', def: 10, min: 0, group: 'Numbers' },
+      { key: 'move',  label: 'Move (feet)', type: 'number', def: DCC_BASE_MOVE, min: 0, group: 'Numbers' },
 
       { key: 'stats', label: 'Stats', group: 'Stats', rows: 2,
         hint: 'STR 6, CON 8, DEX 4, INT 2, CHA 1' },

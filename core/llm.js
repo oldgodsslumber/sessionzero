@@ -1,5 +1,9 @@
-function llmConfig(){if(_llmCfg)return _llmCfg;try{_llmCfg=Object.assign({},LLM_DEFAULTS,JSON.parse(localStorage.getItem('dc_llm'))||{});}catch(e){_llmCfg=Object.assign({},LLM_DEFAULTS);}if(LLM_RETIRED_MODELS.indexOf(_llmCfg.geminiModel)>=0)_llmCfg.geminiModel=LLM_DEFAULTS.geminiModel;return _llmCfg;}
-function saveLLMConfig(patch){const c=Object.assign(llmConfig(),patch||{});try{localStorage.setItem('dc_llm',JSON.stringify(c));}catch(e){}_llmCfg=c;return c;}
+// The AI settings, including the Gemini API key, are per game. They used to
+// live on a flat 'dc_llm' key that every pack read and wrote, so all three
+// games shared one key and one backend. storeKey() returns 'dc_llm' for Daring
+// Comics, so its existing settings are found exactly where they already are.
+function llmConfig(){if(_llmCfg)return _llmCfg;try{_llmCfg=Object.assign({},LLM_DEFAULTS,JSON.parse(localStorage.getItem(storeKey('llm')))||{});}catch(e){_llmCfg=Object.assign({},LLM_DEFAULTS);}if(LLM_RETIRED_MODELS.indexOf(_llmCfg.geminiModel)>=0)_llmCfg.geminiModel=LLM_DEFAULTS.geminiModel;return _llmCfg;}
+function saveLLMConfig(patch){const c=Object.assign(llmConfig(),patch||{});try{localStorage.setItem(storeKey('llm'),JSON.stringify(c));}catch(e){}_llmCfg=c;return c;}
 function llmReady(){const c=llmConfig();return c.backend==='gemini'?!!c.geminiKey.trim():!!c.localUrl.trim();}
 function llmBackendLabel(){const c=llmConfig();return c.backend==='gemini'?('Gemini · '+c.geminiModel):('Local · '+(c.localModel||'default model'));}
 

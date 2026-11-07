@@ -202,7 +202,7 @@ function renderWiki(){
   // Intake — the headline feature, so it leads the page
   h+=`<div class="card edit-only" style="border-color:var(--gold)">`;
   h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><div class="label" style="margin:0">Add in plain language</div><button class="btn btn-secondary btn-xs" onclick="openAISetup()" title="Choose and configure the AI backend">${llmReady()?'⚙ '+esc(llmBackendLabel()):'⚙ AI Setup'}</button></div>`;
-  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Describe anything about your universe — people, places, teams, artifacts, incidents. It gets filed into entries below. This never touches your hero sheet or the story.</div>`;
+  h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Describe anything about your ${esc(lexL('universe'))} — people, places, groups, artifacts, incidents. It gets filed into entries below. This never touches your ${esc(lexL('sheet'))} or the story.</div>`;
   h+=`<textarea id="wiki-intake" rows="4" oninput="_wikiIntakeText=this.value" placeholder="e.g. Doctor Malice, real name Elias Kane, runs the Ninth Circle out of a converted cathedral in Harrow Bay. He blames Ironclad for the lab accident that scarred him.">${esc(_wikiIntakeText)}</textarea>`;
   h+=`<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><button class="btn btn-primary btn-sm" onclick="runWikiIntake()" ${_wikiBusy?'disabled':''}>${_wikiBusy?'Reading…':'Add to Wiki'}</button><button class="btn btn-secondary btn-sm" onclick="openLoreEditor(null)">+ Manual Entry</button><span style="flex:1"></span><span style="font-size:11px;color:var(--muted)">${esc(_wikiStatus)}</span></div>`;
   h+=`</div>`;
@@ -364,7 +364,7 @@ function renderLoreEditor(){
       h+=`<div style="font-size:12px;margin-bottom:6px">Linked to <span class="fw-700">${esc(linked.name)}</span> on the NPC roster. Stats live there; lore lives here.</div>`;
       h+=`<div class="edit-only" style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-gold btn-xs" onclick="gotoLinkedNPC('${e.npcId}')">Open in NPC Builder</button><button class="btn btn-secondary btn-xs" onclick="setLoreNPC('')">Unlink</button></div>`;
     }else{
-      h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Link this entry to an NPC to give it stats, powers and skills — without copying the lore over.</div>`;
+      h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Link this entry to ${esc(lexL('npc'))==='npc'?'an':'a'} ${esc(lexL('npc'))} to give it a stat block — without copying the lore over.</div>`;
       h+=`<div class="edit-only" style="display:flex;gap:4px;flex-wrap:wrap"><select id="lore-npc" style="flex:1;font-size:12px"><option value="">— Link existing NPC —</option>${roster.map(n=>`<option value="${n.id}">${esc(n.name)}</option>`).join('')}</select><button class="btn btn-secondary btn-xs" onclick="setLoreNPC(document.getElementById('lore-npc').value)">Link</button><button class="btn btn-gold btn-xs" onclick="createNPCFromLore()">Create NPC</button></div>`;
     }
     h+=`</div>`;

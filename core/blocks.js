@@ -310,8 +310,8 @@ registerBlockType('track', {
     h += `</div>`;
     if (b.damageInput) {
       h += `<div style="display:flex;gap:6px;align-items:center;margin-top:8px">
-            <input id="dmg-${esc(b.id)}" type="number" placeholder="damage" style="width:96px;padding:6px">
-            <button class="btn btn-secondary btn-xs" onclick="trackDamage('${esc(b.id)}')">Apply</button>
+            <input id="dmg-${esc(b.id)}" class="dmg-in" type="number" placeholder="damage" style="width:96px;padding:6px">
+            <button class="btn btn-secondary btn-xs" onclick="trackDamage('${esc(b.id)}',this)">Apply</button>
             <button class="btn btn-secondary btn-xs" onclick="trackHeal('${esc(b.id)}',1)">Heal 1</button>
             <button class="btn btn-secondary btn-xs" onclick="trackHeal('${esc(b.id)}',${count})">Full</button></div>`;
       h += `<div style="font-size:10px;color:var(--muted);margin-top:6px">
@@ -358,9 +358,17 @@ function trackSlotsLost(damage, slotValue, slotsRemaining) {
   return Math.min(Math.floor(dmg / v), Math.max(0, slotsRemaining));
 }
 
-function trackDamage(id) {
+// `el` is the Apply button that was pressed, and it is how this finds the right
+// input. The HUD deliberately mounts the same vital blocks a second time, so two
+// inputs carried id="dmg-health" and getElementById always returned the sheet's
+// — pressing Apply on the HUD read the sheet's empty box and recorded nothing,
+// silently, while the identical control on the sheet worked. Scoped to the block
+// wrapper the button sits in; the bare id stays as a fallback for callers that
+// have no element to offer.
+function trackDamage(id, el) {
   const t = _trackBlock(id); if (!t) return;
-  const inp = document.getElementById('dmg-' + id);
+  const scope = (el && el.closest) ? el.closest('.blk') : null;
+  const inp = (scope && scope.querySelector('.dmg-in')) || document.getElementById('dmg-' + id);
   const dmg = parseInt(inp && inp.value, 10) || 0;
   const count = blockValue(t.block.slots, t.ctx, 10) || 0;
   const slotValue = blockValue(t.block.slotValue, t.ctx, 1) || 0;

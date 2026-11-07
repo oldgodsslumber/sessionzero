@@ -53,6 +53,9 @@ registerSystem({
     ],
     // A hero played from a profile shows that profile on the table's roster.
     fromHero: (ch) => mmrHeroRow(ch),
+    // A row lists power and tag NAMES, because flat text is what syncs. This puts the
+    // rules under them, looked up from the names the row itself carries.
+    bodyExtra: (n) => mmrNpcRulesHTML(n),
     readout: (n) => (n ? [
       n.rank ? 'Rank ' + n.rank : '',
       n.health ? 'Health ' + n.health : '',
@@ -85,6 +88,10 @@ registerSystem({
   },
 
   sheetExtra: mmrSheetExtra,
+  // The printed sheet reads a pack's prose by stripping its tags, which turns a
+  // character out of the book into one 2,000-word paragraph. A pack that can set
+  // its own prose for paper says so here.
+  sheetPrint: mmrSheetPrintHTML,
 
   schema: {
     identity: ['name'],

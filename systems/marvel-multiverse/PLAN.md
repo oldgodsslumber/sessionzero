@@ -271,7 +271,7 @@ likely: Hulk's was found only by reading his page. Correct them there as they tu
 Characters, because the shell has no global database, only per-table Firebase. *Add to table*
 copies one into the table's roster, which syncs. *Play as Hero* copies one into a save. Until
 M3 the sheet shows them as a read-only stat block plus the abilities grid; Health, Focus and
-Karma cannot be tracked on it yet. Power names are listed without their text until M1.
+Karma cannot be tracked on it yet.
 
 **How the numbers were checked:** `tools/boxes.py` crops every stat box and reads it alone;
 `tools/parse-profiles.mjs` compares that with the whole-page OCR and re-derives what the
@@ -287,6 +287,67 @@ crystalline form, Blade, Namor. Emma's slash values are stored as her human form
 **Regenerating:** `node tools/parse-profiles.mjs .book tools/profile-overrides.json`, then
 `node tools/build-profiles.mjs .book profiles.js`. The second refuses to write while any
 doubt stands. Corrections go in the overrides file, never in `profiles.js`.
+
+---
+
+### The rules text, brought forward out of M1 (2026-11-07)
+
+**The owner's note:** *"The whole reason I asked you to build this was to have a better setup
+for reading powers and tags. Right now this is just as fine as Marvel's official sheets —
+which means I see the names of the powers, but not what they do."* That is the pack's thesis
+(§1), and it was not true of the first sheet, so the reading half of M1 was built before the
+rest of it.
+
+**Two generated files**, from `tools/build-rules.mjs` (`node tools/build-rules.mjs .book .`):
+
+| | Rows | Source | Why |
+|---|---|---|---|
+| `powers.js` | 385 | the Bullpen, `page` from our scan | §3A: a disagreement is an update, and its wording is cleaner than OCR |
+| `traits.js` | 57 traits, 48 tags | the Core Rulebook, Chapter 5 | "rules outside the power rows come from the book"; the book prints three paragraphs on Berserker where the Bullpen prints one line |
+
+64 powers are flagged `source:'expansion?'` — the Luck, Translation, Sixth Sense,
+Precognition and Dreamtime sets, none of which this book prints anywhere. Everything else
+cites a page. The Bullpen's extra traits and tags are later-book rows and are **not** carried:
+if this book does not print it, it is not here.
+
+The trait and tag text goes through `tools/prose.mjs`, the same cleaner as the character
+prose, so the fixes it gained ("reach to 2.They", "applies-1", "ancestors-is") improved both;
+regenerating `profiles.js` changed five lines, all of them a missing space. The generator
+**refuses to write** on a count it does not expect, on a name out of the book's alphabetical
+order, or on an OCR artefact it knows the shape of.
+
+This is the READING half of M1 only. The structured half — `focus` as a number, `actions` as
+flags, inferred `roll`, `reqTags`, `minRank` — is still M1's, and belongs **beside** these
+rows rather than in place of them. `rules.js` is still free for M2's arithmetic.
+
+**What reads them:** `systems/marvel-multiverse/sheet.js`. `mmrRuleFor()` is the lookup, and
+it has to be: Chapter 8 prints a name with the character's own particulars stuck to it —
+`Animal Communication (Bugs)`, `Elemental Protection 3 (30 points to shatter)`,
+`Connections: Military (Dora Milaje)`, `Surprising Power (2) (Grand Illusion, Mirror Images)`
+— so it peels bracket groups one at a time, then a colon, then a trailing number, and shows
+the particulars beside the rule. Every power and trait on all 128 profiles resolves. One tag
+does not: Doctor Strange's **Prescription Pad**, which his page prints and Chapter 5 never
+defines, so it shows as a name with nothing under it.
+
+**Three surfaces, one renderer:** the hero sheet, an open card in the Official tab, and a
+copy on the table (through the new `SYS.npc.bodyExtra` hook). A table's copy is editable, so
+its rules are looked up from **its own** names, not from the profile it was made from.
+
+**And the layout, which was the other half of the note.** The rule under a name is only
+readable if the line is a measure rather than a page width. Everything with rules text in it
+is set in CSS columns (`column-width:290px`), so widening the window adds a column and never
+a longer line; the three short cards — Vitals, Abilities, Background — make one row above
+them; prose is capped at 68ch. Columns, not a grid: a grid lines the cards up in rows, and
+one long power then leaves a hole beside every short one next to it. The phone is one column
+of the same cards and did not move. A switch (`mmr-no-rules` on `<html>`, so it reaches the
+sheet and 128 cards at once without a repaint) folds the text away for anyone who wants the
+old list back.
+
+**On paper:** `SYS.sheetPrint` is a new hook in `core/print.js`. Without it the printed sheet
+takes `SYS.sheetExtra` and strips its tags, which for a character out of the book is 2,000
+words in one paragraph. Marvel's returns the print stylesheet's own blocks, each entry its
+own `.pr-blk` flowing through `.pr-cols`, so Spider-Man — every power with its rule, traits,
+tags, history, personality — comes out on one letter page.
 
 ---
 
@@ -493,8 +554,9 @@ systems/marvel-multiverse/
   PLAN.md
   data.js        abilities, ranks, sizes, conditions, elements, schooling
   rules.js       the §5 arithmetic, pure
-  powers.js      MMR_POWERS          generated, then hand-corrected
-  traits.js      MMR_TRAITS, MMR_TAGS, MMR_NARRATIVE
+  powers.js      MMR_POWER_RULES     generated (the text; M1 adds the structured fields)
+  traits.js      MMR_TRAIT_RULES, MMR_TAG_RULES, MMR_NOTE_HINTS   generated
+  sheet.js       the stat block, the three reading surfaces, the printed sheet
   origins.js     MMR_ORIGINS, MMR_OCCUPATIONS
   maneuvers.js   MMR_MANEUVERS
   gear.js        items, suits, weapons, vehicles
@@ -541,7 +603,7 @@ Each leaves a working app, in the DCC D-phase style.
 | | Work | Done when |
 |---|---|---|
 | **M0** | `marvel` branch, `marvel/index.html`, skeleton pack, launcher card | pack boots; 1130 existing checks still pass |
-| **M1** | Two-reader importer (§3A), all catalogues, `page` and `source` on each row, integrity suite | every power browsable in the Catalogue; no dangling reference; every core row cites a page |
+| **M1** | Two-reader importer (§3A), all catalogues, `page` and `source` on each row, integrity suite. **The text half is done (§3A, 2026-11-07): `powers.js`, `traits.js`.** | every power browsable in the Catalogue; no dangling reference; every core row cites a page |
 | **M2** | `rules.js`, d616, shell changes 1–5 and 9 | action 3 from the Dice tab, on a phone |
 | **M3** | Sheet blocks, `catalogItems`, extended `pool`, changes 6–8 and 11–13 | a hand-built hero reads correctly |
 | **M4** | Creation wizard: Identity, Rank, Origin, Occupation, Abilities, Powers, Traits & Tags, Review | actions 1, 2 |

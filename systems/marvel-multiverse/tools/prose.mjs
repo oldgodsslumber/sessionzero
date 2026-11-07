@@ -86,7 +86,14 @@ function quotes(text) {
 
 export function cleanParagraph(lines, v, prose, log) {
   let t = joinLines(lines, v)
-    .replace(/([a-z)"’'])([.,;:!?])(?=[A-Za-z"])/g, '$1$2 ')   // "Bullseye.He", not "S.H.I.E.L.D."
+    // "Bullseye.He" and "reach to 2.They", but not "S.H.I.E.L.D." — the lookahead is a
+    // letter, so a decimal ("2.5") and an initial are both left alone.
+    .replace(/([a-z0-9)"’'])([.,;:!?])(?=[A-Za-z"])/g, '$1$2 ')
+    // The book sets a penalty as a minus sign; the scan reads it as a hyphen and sticks
+    // it to the word before: "which applies-1 to their Melee defenses". Only after a
+    // word that is lowercase throughout and only before a single digit, so the universe
+    // designations — Earth-616, Earth-1610 — are left exactly as the book prints them.
+    .replace(/\b([a-z]+)-(\d)(?!\d)/g, '$1 -$2')
     .replace(/(?<=[A-Z]\.)(?=[A-Z][a-z]|[a-z])/g, ' ')         // "S.H.I.E.L.D.Agent", "A.I.M.scientists"
     .replace(/\)(?=[A-Za-z])/g, ') ')                          // "(Invisible Woman)with"
     .replace(/\s+([.,;:!?])/g, '$1')

@@ -473,8 +473,15 @@ function dccHudCard(char, s, cat, spells, held) {
     }).join(' ') + '</div>';
   }
   if (ups.length) {
+    // activeUpgrades() returns {rank, text}. Escaping the object printed
+    // "Earned: [object Object]" on every attack card, while the sheet's own
+    // rows rendered the same upgrades properly — two screens disagreeing
+    // about the same Rank reward.
     h += '<div class="sk-effect"><strong>Earned:</strong> ' +
-      ups.map(function (u) { return esc(u); }).join(' ') + '</div>';
+      ups.map(function (u) {
+        if (!u || typeof u !== 'object') return esc(u);
+        return (u.rank ? 'Rank ' + esc(u.rank) + ': ' : '') + esc(u.text || '');
+      }).filter(Boolean).join(' · ') + '</div>';
   }
   return h + '</div></div>';
 }

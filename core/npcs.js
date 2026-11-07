@@ -74,6 +74,11 @@ function npcPackBody(npc){
     if(f.long){h+=`<div class="npc-derived"><span>${esc(f.label)}</span><div style="flex:1 1 100%;font-size:13px;line-height:1.5;white-space:pre-wrap">${esc(String(v))}</div></div>`;return;}
     h+=`<div class="npc-derived"><span>${esc(f.label)}</span><strong>${esc(String(v))}</strong></div>`;
   });
+  // A pack may have something to add under its own fields that no field describes —
+  // Marvel puts the rules text under the power and tag names the row lists, which are
+  // otherwise a line of labels you have to go and look up.
+  const extra=(SYS&&SYS.npc&&SYS.npc.bodyExtra);
+  if(typeof extra==='function'){try{h+=extra(npc)||'';}catch(e){/* never break the card */}}
   return h;
 }
 
@@ -258,6 +263,7 @@ function renderPackNM(){
         }).join('')+`</select>`;
     }else{
       h+=`<input type="${f.type==='number'?'number':'text'}" value="${esc(v===undefined?'':String(v))}"`+
+        `${f.min!==undefined?` min="${esc(String(f.min))}"`:''}${f.max!==undefined?` max="${esc(String(f.max))}"`:''}`+
         ` placeholder="${esc(f.hint||'')}" oninput="sysNpcSet('${esc(f.key)}',this.value)">`;
     }
     h+=`</div>`;
@@ -327,7 +333,14 @@ function sysNpcSet(key, value) {
   if (!S._npcDraft) return;
   const fields = sysNpcFields() || [];
   const f = fields.filter(function (x) { return x.key === key; })[0];
-  S._npcDraft[key] = (f && f.type === 'number') ? (value === '' ? '' : Number(value)) : value;
+  let v = (f && f.type === 'number') ? (value === '' ? '' : Number(value)) : value;
+  // A min/max a pack declares is a rule, not a hint: the browser's own
+  // spinner respects it but typing straight into the box does not.
+  if (f && f.type === 'number' && v !== '' && !isNaN(v)) {
+    if (f.min !== undefined) v = Math.max(Number(f.min), v);
+    if (f.max !== undefined) v = Math.min(Number(f.max), v);
+  }
+  S._npcDraft[key] = v;
   save();
   sysNpcRefreshDerived();
 }
@@ -397,6 +410,7 @@ function renderSysNPCEditor() {
         oninput="sysNpcSet('${esc(f.key)}',this.value)">${esc(String(d[f.key] || ''))}</textarea>`;
     } else {
       h += `<input type="${f.type === 'number' ? 'number' : 'text'}" value="${esc(String(d[f.key] === undefined ? '' : d[f.key]))}"
+        ${f.min !== undefined ? `min="${esc(String(f.min))}"` : ''} ${f.max !== undefined ? `max="${esc(String(f.max))}"` : ''}
         placeholder="${esc(f.hint || '')}" oninput="sysNpcSet('${esc(f.key)}',this.value)">`;
     }
     h += `</div>`;

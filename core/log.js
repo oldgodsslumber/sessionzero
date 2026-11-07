@@ -24,7 +24,7 @@ function renderNotes(){
         h+=`<div class="log-episode"${drag}>${reorder?'<span class="log-grip">\u2982</span>':''}<div class="log-episode-label">${esc(entry.title||lexU('logBreak'))}</div>${!reorder?`<button class="btn btn-xs btn-secondary" onclick="editIssue(${i})" style="padding:2px 6px">\u270e</button><button class="btn btn-xs btn-danger" onclick="deleteLogEntry(${i})" style="padding:2px 6px">\u2715</button>`:''}</div>`;
         return;
       }
-      const ti=LOG_TYPES.find(t=>t.key===entry.type)||LOG_TYPES[0];
+      const _lt=logTypes();const ti=_lt.find(t=>t.key===entry.type)||_lt[0];
       const emoji=entry.emoji||ti.emoji;
       const isMajor=entry.type==='main',isAlert=entry.type==='battle',isSupp=entry.type==='supplemental';
       const cls=isMajor?'log-major':isAlert?'log-alert':isSupp?'log-supplemental':'log-base';
@@ -64,20 +64,21 @@ function showAddEntry(){
   let h=`<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><button class="btn btn-secondary btn-xs" onclick="renderNotes()">← Back</button><div class="pg-title" style="font-size:18px;margin:0">New Entry</div></div>`;
   h+=`<div class="label mb-2">Select type</div>`;
   // Primary
-  const main=LOG_TYPES[0];
+  const _lt=logTypes();
+  const main=_lt[0];
   h+=`<button class="btn btn-primary btn-full mb-2" onclick="showEntryForm('${main.key}')" style="padding:14px;font-size:14px">${main.emoji} ${main.label}</button>`;
   // Secondary
-  const supp=LOG_TYPES[1];
+  const supp=_lt[1];
   h+=`<button class="btn btn-secondary btn-full mb-2" onclick="showEntryForm('${supp.key}')">${supp.emoji} ${supp.label}</button>`;
   // Rest
   h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
-  LOG_TYPES.slice(2).forEach(t=>{h+=`<button class="btn btn-secondary" onclick="showEntryForm('${t.key}')" style="padding:10px;font-size:12px">${t.emoji} ${t.label}</button>`;});
+  _lt.slice(2).forEach(t=>{h+=`<button class="btn btn-secondary" onclick="showEntryForm('${t.key}')" style="padding:10px;font-size:12px">${t.emoji} ${t.label}</button>`;});
   h+=`</div></div>`;
   document.getElementById('notes-content').innerHTML=h;
 }
 
 function showEntryForm(typeKey){
-  const t=LOG_TYPES.find(l=>l.key===typeKey)||LOG_TYPES[0];
+  const _lt=logTypes();const t=_lt.find(l=>l.key===typeKey)||_lt[0];
   let h=`<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><button class="btn btn-secondary btn-xs" onclick="renderNotes()">\u2190 Back</button><span style="font-size:18px">${t.emoji}</span><span class="pg-title" style="font-size:16px;margin:0">${t.label}</span></div>`;
   h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${t.desc}</div>`;
   h+=`<div class="form-group"><label>Title</label><input id="log-title-in" placeholder="${esc(t.placeholder)}"></div>`;
@@ -101,7 +102,7 @@ function saveNewEntry(){
 // Edit/delete
 function editLogEntry(i){
   const entry=S.notes[i];if(!entry)return;
-  const t=LOG_TYPES.find(l=>l.key===entry.type)||LOG_TYPES[0];
+  const _lt=logTypes();const t=_lt.find(l=>l.key===entry.type)||_lt[0];
   let h=`<div class="card"><div class="pg-title" style="font-size:16px;margin-bottom:8px">\u270e Edit Entry</div>`;
   h+=`<div class="form-group"><label>Title</label><input id="log-title-in" value="${esc(entry.title||'')}" placeholder="${esc(t.placeholder)}"></div>`;
   h+=`<div class="form-group"><label>Entry</label><textarea id="log-body-in" rows="6">${esc(entry.body||'')}</textarea></div>`;
@@ -127,6 +128,18 @@ function logDD(e,t){e.preventDefault();e.currentTarget.classList.remove('log-dra
 // ═══════════════════════════════════════════════════════════
 // LOG EXPORT
 // ═══════════════════════════════════════════════════════════
+// The exported document's own look. It was Daring Comics' navy-and-red palette
+// and 'Comic Neue' hardcoded, so a dungeon crawl exported a comic book. These
+// read the running page's theme instead, with Daring Comics' values as the
+// fallback, so the export looks like the game it came out of.
+function _expVar(name,fallback){
+  try{
+    const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v||fallback;
+  }catch(e){return fallback;}
+}
+function _expFont(){return _expVar('--font-body',"'Comic Neue','Segoe UI',sans-serif");}
+
 function exportLog(){
   const episodes=parseIssues(S.notes||[]);
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -143,6 +156,9 @@ function exportLog(){
   // existed — the button was dead in every game but Daring Comics, with no
   // error on screen. The concept/motivation and skill lines are still printed
   // wherever a pack actually has them.
+  // The same summary is handed to the exported document, so the card you can
+  // actually DRAG into the Annexes column renders from it too.
+  let charSum=null;
   let statsHTML='<div style="font-size:11px;color:var(--muted);padding:10px">No '+e(lex('hero'))+'.</div>';
   if(ch){
     const sum=(typeof packSummary==='function'?packSummary(S):null)||{};
@@ -156,12 +172,16 @@ function exportLog(){
       const sk=skills.filter(s=>(ch.skills[s]||0)>0).sort((a,b)=>(ch.skills[b]||0)-(ch.skills[a]||0)).map(s=>s+' +'+ch.skills[s]).join(', ');
       if(sk)body+=`<div style="font-size:9px;color:var(--muted);margin-top:4px">${e(sk)}</div>`;
     }
+    const _ln=(sum.lines||[]).filter(Boolean).slice();
+    if(ch.aspects&&ch.aspects.motivation)_ln.unshift('Motivation: '+ch.aspects.motivation);
+    if(ch.aspects&&ch.aspects.concept)_ln.unshift('Concept: '+ch.aspects.concept);
+    charSum={name:sum.name||sysCharName(ch)||'',sub:sum.sub||'',lines:_ln};
     statsHTML=`<div class="src-card" draggable="true" ondragstart="srcDS(event,'stats',0)">${body}</div>`;
   }
   // Episode checkboxes
   const epChecks=`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="ep-all" onchange="document.querySelectorAll('.ep-chk').forEach(c=>c.checked=this.checked);renderOut()" checked> ALL</label>`+episodes.map((ep,i)=>`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ep-chk" checked onchange="document.getElementById('ep-all').checked=![...document.querySelectorAll('.ep-chk')].some(c=>!c.checked);renderOut()"> ${e(ep.label)}</label>`).join('');
 
-  const css=`:root{--bg:#0a0e1a;--text:#f0f0f0;--muted:#7a8a9e;--accent:#e63946;--accent-dim:#3a1520;--purple:#9b59b6;--blue:#3b82f6;--red:#e74c3c;--green:#2ecc71;--card-bg:#121828;--card-border:#2a3a5a;--empty-cell:#0d1020;--cell-border:#1a2236;--cell-text:#7a8a9e;--left-bg:#0a0e1a;--divider:#e63946;--src-card-bg:#121828;--src-card-border:#2a3a5a;--drop-hint:#1a2236;--drop-hint-text:#4a5a6e;font-family:'Comic Neue','Segoe UI',sans-serif}
+  const css=`:root{--bg:${_expVar("--bg","#0a0e1a")};--text:${_expVar("--text","#f0f0f0")};--muted:${_expVar("--muted","#7a8a9e")};--accent:${_expVar("--accent","#e63946")};--accent-dim:#3a1520;--purple:#9b59b6;--blue:#3b82f6;--red:#e74c3c;--green:#2ecc71;--card-bg:${_expVar("--surface","#121828")};--card-border:${_expVar("--border","#2a3a5a")};--empty-cell:#0d1020;--cell-border:#1a2236;--cell-text:#7a8a9e;--left-bg:#0a0e1a;--divider:${_expVar("--accent","#e63946")};--src-card-bg:${_expVar("--surface","#121828")};--src-card-border:${_expVar("--border","#2a3a5a")};--drop-hint:#1a2236;--drop-hint-text:#4a5a6e;font-family:${_expFont()}}
 body.print-mode{--bg:#fff;--text:#222;--muted:#888;--accent:#555;--accent-dim:#ccc;--purple:#666;--blue:#666;--red:#888;--green:#666;--card-bg:#f8f8f8;--card-border:#ccc;--empty-cell:#f0f0f0;--cell-border:#ccc;--cell-text:#666;--left-bg:#f5f5f5;--divider:#bbb;--src-card-bg:#fff;--src-card-border:#ddd;--drop-hint:#eee;--drop-hint-text:#aaa}
 *{box-sizing:border-box;margin:0;padding:0}
 html{height:100%;background:var(--bg)}
@@ -217,7 +237,7 @@ body{height:100%;background:var(--bg);color:var(--text);display:flex;flex-direct
 <div id="topbar"><div id="tb-title">${e(lexU('logBreak').toUpperCase())} REPORT // ${heroName}</div><div id="ep-sel">${epChecks}</div><button class="tb-btn" id="theme-btn" onclick="document.body.classList.toggle('print-mode');var pm=document.body.classList.contains('print-mode');document.documentElement.style.background=pm?'#fff':'#0a0e1a';this.textContent=pm?'\u25d0 DARK':'\u25d1 PRINT MODE'">\u25d1 PRINT MODE</button><button class="tb-btn" onclick="window.print()">\ud83d\udda8 PRINT</button></div>
 <div class="accent-strip"></div>
 <div id="main">
-<div id="src-panel"><div id="src-tabs"><button class="stab active" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='npcs'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===0?' active':''))})">NPCs</button><button class="stab" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='maps'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===1?' active':''))})">MAPS</button><button class="stab" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='stats'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===2?' active':''))})">HERO</button></div>
+<div id="src-panel"><div id="src-tabs"><button class="stab active" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='npcs'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===0?' active':''))})">${e(lexU('npcs').toUpperCase())}</button><button class="stab" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='maps'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===1?' active':''))})">MAPS</button><button class="stab" onclick="['npcs','maps','stats'].forEach(n=>{document.getElementById('st-'+n).style.display=n==='stats'?'':'none';document.querySelectorAll('.stab').forEach((b,i)=>b.className='stab'+(i===2?' active':''))})">${e(lexU('hero').toUpperCase())}</button></div>
 <div id="st-npcs" style="padding:10px;overflow-y:auto;flex:1">${npcHTML}</div>
 <div id="st-maps" style="padding:10px;overflow-y:auto;flex:1;display:none">${regHTML}</div>
 <div id="st-stats" style="padding:10px;overflow-y:auto;flex:1;display:none">${statsHTML}<div class="src-card" draggable="true" ondragstart="srcDS(event,'notes',0)"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">NOTES BLOCK</div><div style="font-size:10px;color:var(--muted)">Drag to add a text area</div></div></div>
@@ -229,6 +249,7 @@ var EPISODES=${JSON.stringify(episodes).replace(/<\//g,'<\\/')};
 var SRC_NPCS=${JSON.stringify(S.npcs||[]).replace(/<\//g,'<\\/')};
 var ALL_REGIONS=${JSON.stringify(S.regions||[]).replace(/<\//g,'<\\/')};
 var CHAR=${JSON.stringify(S.char||{}).replace(/<\//g,'<\\/')};
+var CHAR_SUM=${JSON.stringify(charSum).replace(/<\//g,'<\\/')};
 var DROPPED=[];
 var _srcItem=null;var _reIdx=null;
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -237,7 +258,7 @@ function renderOut(){var sel=[];document.querySelectorAll('.ep-chk').forEach(fun
 function renderDI(){document.getElementById('dropped-items').innerHTML=DROPPED.map(function(item,i){return'<div class="dc-wrap" draggable="true" ondragstart="cdS(event,'+i+')" ondragover="cdO(event,'+i+')" ondrop="cdD(event,'+i+')" ondragend="cdE()"><div class="dc-handle">\\u2982 DRAG TO REORDER</div>'+renderDC(item,i)+'</div>';}).join('');}
 function renderDC(item,i){var h='<div class="dropped-card"><button class="rm-btn" onclick="DROPPED.splice('+i+',1);renderDI()">\\u2715</button>';if(item.kind==='npc'){var n=SRC_NPCS[item.idx]||{};h+='<div style="font-size:14px;font-weight:700;color:var(--purple)">'+esc(n.name)+'</div><div style="font-size:10px;color:var(--muted)">'+esc(n.type||'')+' '+esc(n.desc||'')+'</div>'+(n.powers?'<div style="font-size:10px;color:var(--purple);margin-top:2px">'+esc(n.powers)+'</div>':'');}
 else if(item.kind==='map'){var r=ALL_REGIONS[item.idx]||{cells:[]};h+='<div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">'+esc(r.name)+'</div><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px">'+r.cells.slice(0,25).map(function(c){return\x27<div style="aspect-ratio:1;background:\x27+(c.isVoid?\x27transparent\x27:c.name?\x27var(--card-bg)\x27:\x27var(--empty-cell)\x27)+\x27;border:1px solid \x27+(c.isVoid?\x27transparent\x27:\x27var(--cell-border)\x27)+\x27;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;border-radius:2px">\x27+esc(c.icon||"")+(c.name?\x27<span style="font-size:7px;color:var(--cell-text);text-align:center">\x27+esc(c.name)+\x27</span>\x27:\x27\x27)+\x27</div>\x27;}).join(\x27\x27)+\x27</div>\x27;}
-else if(item.kind==='stats'&&CHAR.costumedName){h+='<div style="font-size:14px;font-weight:700;color:var(--accent)">'+esc(CHAR.costumedName)+'</div><div style="font-size:10px;color:var(--muted)">'+esc(CHAR.civilianName||'')+'</div><div style="font-size:10px;margin-top:4px">Concept: '+esc(CHAR.aspects?.concept||'')+'</div><div style="font-size:10px">Motivation: '+esc(CHAR.aspects?.motivation||'')+'</div>';}
+else if(item.kind==='stats'&&CHAR_SUM){h+='<div style="font-size:14px;font-weight:700;color:var(--accent)">'+esc(CHAR_SUM.name)+'</div>'+(CHAR_SUM.sub?'<div style="font-size:10px;color:var(--muted)">'+esc(CHAR_SUM.sub)+'</div>':'')+(CHAR_SUM.lines||[]).map(function(l){return'<div style="font-size:10px;margin-top:2px">'+esc(l)+'</div>';}).join('');}
 else if(item.kind==='notes'){h+='<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">NOTES</div><textarea class="notes-ta" placeholder="Add notes here..."></textarea>';}
 h+='</div>';return h;}
 function cdS(e,i){_reIdx=i;_srcItem=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','reorder');e.stopPropagation();}
@@ -257,11 +278,17 @@ window.addEventListener('DOMContentLoaded',renderOut);
 // ═══════════════════════════════════════════════════════════
 // SECOND SCREEN
 // ═══════════════════════════════════════════════════════════
+// The second screen's channel is per game. One shared 'daring-comics-hud' name
+// meant every pack broadcast its character on it from every save(), so a Daring
+// Comics second screen picked up a Dungeon Crawler Carl crawler and then threw
+// reading costumedName and stress.physical off it. storeKey() keeps Daring
+// Comics on its own existing name.
+function hudChannelName(){return (typeof storeKey==='function')?storeKey('hud'):'dc_hud';}
 let _hudCh=null;
-function secondScreenPush(){try{if(!_hudCh)_hudCh=new BroadcastChannel('daring-comics-hud');_hudCh.postMessage({type:'state',char:S.char,team:S.team,dice:S.dice,conflict:S.conflict,notes:(S.notes||[]).slice(-8)});}catch(e){}}
+function secondScreenPush(){try{if(!_hudCh)_hudCh=new BroadcastChannel(hudChannelName());_hudCh.postMessage({type:'state',char:S.char,team:S.team,dice:S.dice,conflict:S.conflict,notes:(S.notes||[]).slice(-8)});}catch(e){}}
 function openSecondScreen(){const w=window.open('','_blank','width=1280,height=720');if(!w)return;w.document.write(buildSecondScreen());w.document.close();setTimeout(()=>secondScreenPush(),600);}
-function buildSecondScreen(){return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daring Comics — Second Screen</title><link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;700&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0e1a;color:#f0f0f0;font-family:'Comic Neue',sans-serif;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px}.hc{background:#121828;border:1px solid #2a3a5a;border-radius:12px;padding:16px}.ht{font-family:'Bangers',cursive;font-size:28px;color:#e63946}.hl{font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a8a9e;margin-bottom:4px}.sb{display:inline-flex;width:32px;height:32px;border:2px solid #2a3a5a;border-radius:6px;align-items:center;justify-content:center;margin:2px;font-size:14px;font-weight:700}.sb.f{background:#e63946;border-color:#e63946;color:#fff}.fd{display:inline-flex;width:56px;height:56px;border-radius:12px;align-items:center;justify-content:center;font-size:36px;font-weight:900;border:2px solid #2a3a5a;background:#1a2236;margin:4px}.fd.p{color:#2ecc71;border-color:#2ecc71}.fd.m{color:#e74c3c;border-color:#e74c3c}</style></head><body><div class="hc" id="hh" style="grid-column:span 2"><div class="ht" id="hn">Waiting...</div></div><div class="hc"><div class="hl">Stress & FP</div><div id="hs"></div></div><div class="hc"><div class="hl">Last Roll</div><div id="hd" style="text-align:center"></div></div><div class="hc"><div class="hl">Conflict</div><div id="hcf"></div></div><div class="hc"><div class="hl">Journal</div><div id="hn2"></div></div><script>const ch=new BroadcastChannel('daring-comics-hud');ch.postMessage({type:'ping'});ch.onmessage=function(e){const d=e.data;if(d.type!=='state')return;if(d.char){document.getElementById('hn').innerHTML=d.char.costumedName;let s='<div style="margin-top:8px"><div class="hl">Physical</div>';d.char.stress.physical.forEach(function(v,i){s+='<div class="sb'+(v?' f':'')+'\">'+(i+1)+'</div>';});s+='</div><div style="margin-top:8px"><div class="hl">Mental</div>';d.char.stress.mental.forEach(function(v,i){s+='<div class="sb'+(v?' f':'')+'\">'+(i+1)+'</div>';});s+='</div><div style="margin-top:12px;font-size:28px;font-weight:900;color:#f1c40f">FP: '+d.char.fatePoints+'</div>';document.getElementById('hs').innerHTML=s;}if(d.dice&&d.dice.dice){var dh=d.dice.dice.map(function(v){return'<div class="fd'+(v>0?' p':v<0?' m':'')+'\">'+(v>0?'+':v<0?'\\u2212':'0')+'</div>';}).join('');dh+='<div style="font-size:48px;font-weight:900;font-family:Bangers;color:#e63946;margin-top:8px">'+(d.dice.total>=0?'+':'')+d.dice.total+'</div>';document.getElementById('hd').innerHTML=dh;}if(d.conflict&&d.conflict.active){var c='<div style="font-size:16px;font-weight:700">Round '+d.conflict.round+'</div>';d.conflict.turnOrder.forEach(function(t,i){c+='<div style="padding:4px 0;'+(i===d.conflict.currentTurn?'color:#e63946;font-weight:700':'color:#7a8a9e')+'">'+t.name+'</div>';});document.getElementById('hcf').innerHTML=c;}else document.getElementById('hcf').innerHTML='<div style="color:#7a8a9e">No conflict</div>';if(d.notes&&d.notes.length){var n='';d.notes.slice(-5).forEach(function(x){n+='<div style="font-size:13px;padding:2px 0;color:#ccc">'+(x.title||x.body||'')+'</div>';});document.getElementById('hn2').innerHTML=n;}};<\/script></body></html>`;}
-(function(){try{var hc=new BroadcastChannel('daring-comics-hud');hc.onmessage=function(e){if(e.data&&e.data.type==='ping')secondScreenPush();};}catch(e){}})();
+function buildSecondScreen(){return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${e(((typeof SYS!=='undefined'&&SYS&&SYS.name)||'Daring Comics'))} — Second Screen</title><link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;700&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0e1a;color:#f0f0f0;font-family:'Comic Neue',sans-serif;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px}.hc{background:#121828;border:1px solid #2a3a5a;border-radius:12px;padding:16px}.ht{font-family:'Bangers',cursive;font-size:28px;color:#e63946}.hl{font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a8a9e;margin-bottom:4px}.sb{display:inline-flex;width:32px;height:32px;border:2px solid #2a3a5a;border-radius:6px;align-items:center;justify-content:center;margin:2px;font-size:14px;font-weight:700}.sb.f{background:#e63946;border-color:#e63946;color:#fff}.fd{display:inline-flex;width:56px;height:56px;border-radius:12px;align-items:center;justify-content:center;font-size:36px;font-weight:900;border:2px solid #2a3a5a;background:#1a2236;margin:4px}.fd.p{color:#2ecc71;border-color:#2ecc71}.fd.m{color:#e74c3c;border-color:#e74c3c}</style></head><body><div class="hc" id="hh" style="grid-column:span 2"><div class="ht" id="hn">Waiting...</div></div><div class="hc"><div class="hl">Stress & FP</div><div id="hs"></div></div><div class="hc"><div class="hl">Last Roll</div><div id="hd" style="text-align:center"></div></div><div class="hc"><div class="hl">Conflict</div><div id="hcf"></div></div><div class="hc"><div class="hl">Journal</div><div id="hn2"></div></div><script>const ch=new BroadcastChannel('${hudChannelName()}');ch.postMessage({type:'ping'});ch.onmessage=function(e){const d=e.data;if(d.type!=='state')return;if(d.char&&d.char.stress&&d.char.stress.physical){document.getElementById('hn').innerHTML=d.char.costumedName||d.char.name||'';let s='<div style="margin-top:8px"><div class="hl">Physical</div>';d.char.stress.physical.forEach(function(v,i){s+='<div class="sb'+(v?' f':'')+'\">'+(i+1)+'</div>';});s+='</div><div style="margin-top:8px"><div class="hl">Mental</div>';d.char.stress.mental.forEach(function(v,i){s+='<div class="sb'+(v?' f':'')+'\">'+(i+1)+'</div>';});s+='</div><div style="margin-top:12px;font-size:28px;font-weight:900;color:#f1c40f">FP: '+d.char.fatePoints+'</div>';document.getElementById('hs').innerHTML=s;}if(d.dice&&d.dice.dice){var dh=d.dice.dice.map(function(v){return'<div class="fd'+(v>0?' p':v<0?' m':'')+'\">'+(v>0?'+':v<0?'\\u2212':'0')+'</div>';}).join('');dh+='<div style="font-size:48px;font-weight:900;font-family:Bangers;color:#e63946;margin-top:8px">'+(d.dice.total>=0?'+':'')+d.dice.total+'</div>';document.getElementById('hd').innerHTML=dh;}if(d.conflict&&d.conflict.active){var c='<div style="font-size:16px;font-weight:700">Round '+d.conflict.round+'</div>';d.conflict.turnOrder.forEach(function(t,i){c+='<div style="padding:4px 0;'+(i===d.conflict.currentTurn?'color:#e63946;font-weight:700':'color:#7a8a9e')+'">'+t.name+'</div>';});document.getElementById('hcf').innerHTML=c;}else document.getElementById('hcf').innerHTML='<div style="color:#7a8a9e">No conflict</div>';if(d.notes&&d.notes.length){var n='';d.notes.slice(-5).forEach(function(x){n+='<div style="font-size:13px;padding:2px 0;color:#ccc">'+(x.title||x.body||'')+'</div>';});document.getElementById('hn2').innerHTML=n;}};<\/script></body></html>`;}
+(function(){try{var hc=new BroadcastChannel(hudChannelName());hc.onmessage=function(e){if(e.data&&e.data.type==='ping')secondScreenPush();};}catch(e){}})();
 
 // ═══════════════════════════════════════════════════════════
 // MAP

@@ -1270,10 +1270,21 @@ function dccScreenReview(ctx) {
     row('Class', diff && diff.cls ? esc(diff.cls.name) : '<span style="color:var(--muted)">none</span>') +
     '</div>';
 
+  // The Stat this crawler will actually HAVE once Race and Class are applied.
+  // The deltas only land in dccFinishCreation, so reading them off `c` here
+  // described the crawler as they were before the Race they just picked: the
+  // Stats grid showed the new numbers while Mana, Evade, Health Bar and
+  // Popularity underneath it showed the old ones, and the last screen before
+  // you commit was the one screen that disagreed with the finished sheet.
+  const afterStat = function (id) {
+    return (diff && diff.stats[id]) ? diff.stats[id].to : dccStatOf(c, id);
+  };
+  const afterMod = function (id) { return dccStatMod(afterStat(id)); };
+
   h += '<div class="card"><div class="label">Stats</div>' +
        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px;text-align:center">';
   DCC_STATS.forEach(function (s) {
-    const after = diff && diff.stats[s.id] ? diff.stats[s.id].to : dccStatOf(c, s.id);
+    const after = afterStat(s.id);
     h += '<div><div style="font-size:20px;font-weight:800">' + after + '</div>' +
          '<div style="font-size:11px;color:var(--accent)">+' + dccStatMod(after) + '</div>' +
          '<div class="label" style="margin:0">' + s.id + '</div></div>';
@@ -1281,15 +1292,15 @@ function dccScreenReview(ctx) {
   h += '</div></div>';
 
   h += '<div class="card"><div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:space-around;text-align:center">' +
-       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">10 &times; ' + dccModOf(c, 'CON') + '</div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">10 &times; ' + afterMod('CON') + '</div>' +
        '<div class="label" style="margin:0">Health Bar</div></div>' +
-       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + dccStatOf(c, 'INT') + '</div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + afterStat('INT') + '</div>' +
        '<div class="label" style="margin:0">Mana</div></div>' +
-       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">+' + dccModOf(c, 'DEX') + '</div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">+' + afterMod('DEX') + '</div>' +
        '<div class="label" style="margin:0">Evade</div></div>' +
        '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + (fs.favor === null ? '—' : fs.favor) + '</div>' +
        '<div class="label" style="margin:0">AI Favor</div></div>' +
-       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + (dccModOf(c, 'CHA') * 2) + '</div>' +
+       '<div><div style="font-size:20px;font-weight:800;color:var(--accent)">' + (afterMod('CHA') * 2) + '</div>' +
        '<div class="label" style="margin:0">Popularity</div></div></div></div>';
 
   const final = dccFinalSkills(c);

@@ -5753,6 +5753,186 @@ function boot(entry) {
       || 'the keypad drew ' + JSON.stringify(String(slot).slice(0, 140));
   });
 
+
+  // --- the three playtests, 2026-11-07 ------------------------------------
+  // Everything below was found by playing the game in a real browser while this
+  // suite was green, so each check is written against the specific wrong
+  // behaviour rather than the shape of the code around it.
+
+  check('[floor] a new Crawl starts on Floor 1, not Floor 3', () => {
+    const f = ev("defaultState().floor");
+    return f === 1 || 'defaultState().floor is ' + JSON.stringify(f);
+  });
+
+  check('[table] a second Crawl does not share the first one\u2019s map and journal', () => {
+    ev("loadUniverses();U.universes=[];U.activeUniverseId=null;saveUniverses();" +
+       "var a=createUniverse('A');S.universeId=a.id;bindUniverse();" +
+       "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.regions[0].cells[13].name='TUTORIAL GUILD';S.notes=[{type:'main',title:'in A'}];save();");
+    ev("var b=createUniverse('B');window.confirm=function(){return true};moveHeroToUniverse(b.id);" +
+       "S.regions[0].cells[13].name='EDITED IN B';S.notes.push({type:'main',title:'in B'});save();");
+    const out = ev("(function(){var us=loadUniverses().universes;" +
+      "var a=us.filter(function(u){return u.name==='A'})[0],b=us.filter(function(u){return u.name==='B'})[0];" +
+      "if(!a||!b)return JSON.stringify({err:'missing universe'});" +
+      "return JSON.stringify({aCell:(((a.table||{}).regions||[{cells:[]}])[0].cells[13]||{}).name||''," +
+      "shared:(a.table||{}).regions===(b.table||{}).regions})})()");
+    const o = JSON.parse(String(out));
+    if (o.err) return o.err;
+    if (o.shared) return 'both Crawls hold the SAME regions array';
+    return o.aCell === 'TUTORIAL GUILD' || 'the first Crawl\u2019s room 13 became ' + JSON.stringify(o.aCell);
+  });
+
+  check('[saves] a blank rename is refused, not applied', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.name='Carl';S.char.race='Human';save();");
+    const before = ev("sysCharName(S.char)");
+    ev("window.prompt=function(){return '   '};renameSave(currentSaveId);");
+    const after = ev("sysCharName(S.char)");
+    return (before === 'Carl' && after === 'Carl')
+      || 'went from ' + JSON.stringify(before) + ' to ' + JSON.stringify(after);
+  });
+
+  check('[saves] renaming updates the roster row as well as the save', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('R');S.universeId=u.id;bindUniverse();" +
+       "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.name='Before';save();");
+    ev("window.prompt=function(){return 'After'};renameSave(currentSaveId);");
+    const row = ev("(function(){var r=(currentUniverse().roster||[]).filter(function(n){return n.heroId===S.char.heroId})[0];" +
+      "return r?r.name:'(no row)'})()");
+    return row === 'After' || 'the roster still says ' + JSON.stringify(row);
+  });
+
+  check('[roster] your own crawler is filed as a Crawler, with their Level', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('K');S.universeId=u.id;bindUniverse();" +
+       "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.name='Carl';S.char.level=10;save();");
+    const row = ev("(function(){var r=(currentUniverse().roster||[]).filter(function(n){return n.fromHero})[0];" +
+      "return r?JSON.stringify({type:r.type,level:r.level}):''})()");
+    if (!row) return 'no mirrored row at all';
+    const o = JSON.parse(String(row));
+    if (o.type !== 'crawler') return 'filed as ' + JSON.stringify(o.type) + ', not a crawler';
+    return o.level === 10 || 'the row carries level ' + JSON.stringify(o.level);
+  });
+
+  check('[log] the entry types are the pack\u2019s, with no Villain Intel', () => {
+    const labels = ev("logTypes().map(function(t){return t.label}).join(',')");
+    if (/Villain Intel|Civilian Report/.test(labels)) return 'still offers ' + labels;
+    return /Mob Intel/.test(labels) || 'the list reads ' + labels;
+  });
+
+  check('[log] but the stored keys stay the shell\u2019s, so old journals still resolve', () => {
+    const keys = ev("logTypes().map(function(t){return t.key}).sort().join(',')");
+    return keys === 'battle,civilian,gm,investigation,main,personal,supplemental,villain'
+      || 'the keys are ' + keys;
+  });
+
+  check('[storage] the AI key and the second-screen channel are this pack\u2019s own', () => {
+    const o = JSON.parse(ev("JSON.stringify({llm:storeKey('llm'),hud:hudChannelName()})"));
+    if (/^dc_/.test(o.llm)) return 'the AI config writes ' + o.llm;
+    return /dungeon-crawler-carl/.test(o.hud) || 'the HUD channel is ' + o.hud;
+  });
+
+  check('[storage] Daring Comics\u2019 legacy slots are left alone', () => {
+    ev("localStorage.setItem('dc_slot_0',JSON.stringify({char:{costumedName:'Captain Valor'}," +
+       "npcs:[{name:'Doctor Malice',type:'rogue'}]}));localStorage.removeItem(storeKey('schema_version'));");
+    const moved = ev("migrateSlotsToSaves()");
+    const after = JSON.parse(ev("localStorage.getItem('dc_slot_0')"));
+    if (moved !== 0) return 'imported ' + moved + ' of them';
+    return (after.npcs || []).length === 1 || 'it wrote back into dc_slot_0';
+  });
+
+  check('[print] the Bestiary is offered, under the pack\u2019s own kinds', () => {
+    ev("loadUniverses();var u=U.universes[0]||createUniverse('P');S.universeId=u.id;bindUniverse();" +
+       "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.npcs.push({id:'m1',type:'mob',name:'Nagaraja',level:7,floor:1,evade:12,move:30});save();");
+    const cats = ev("prCatalog().map(function(c){return c.key}).join(',')");
+    return /(^|,)mob(,|$)/.test(cats) || 'the print catalogue offers only ' + cats;
+  });
+
+  check('[print] and a Mob prints its own numbers, not an empty sheet', () => {
+    const card = ev("prNpcCard({id:'m1',type:'mob',name:'Nagaraja',level:7,floor:1,dr:1,evade:12,move:30})");
+    if (!/Nagaraja/.test(String(card))) return 'the card does not name it';
+    return /Level 7/.test(String(card)) || 'the card reads ' + JSON.stringify(String(card).slice(0, 160));
+  });
+
+  check('[print] the document never calls a crawler a Hero', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.name='Carl';save();prSelectAll();");
+    const txt = String(ev("prBuildBody()")).replace(/<[^>]*>/g, ' ');
+    return !/\bHERO\b/i.test(txt)
+      || 'it says ' + JSON.stringify((txt.match(/.{0,30}HERO.{0,30}/i) || [''])[0]);
+  });
+
+  check('[print] a Neighborhood is never called a Region', () => {
+    const cats = ev("prCatalog().map(function(c){return c.label}).join(' | ')");
+    return !/Region/i.test(cats) || 'the picker says ' + cats;
+  });
+
+  check('[print] an empty selection says so instead of doing nothing', () => {
+    const said = ev("(function(){var m='';window.alert=function(x){m=String(x)};_prSel=[];prOpenDoc();return m})()");
+    return /Nothing is selected/.test(String(said)) || 'it said ' + JSON.stringify(said);
+  });
+
+  check('[blocks] the HUD damage box fills the HUD\u2019s own block', () => {
+    ev("S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+       "S.char.blocks.stats=S.char.blocks.stats||{};S.char.blocks.stats.CON={base:16,bonus:0};" +
+       "S.char.blocks.health={marked:0};save();showTab('hud');renderHUD();");
+    const out = ev("(function(){var hud=document.getElementById('page-hud');" +
+      "var inp=hud&&hud.querySelector('.dmg-in');if(!inp)return 'no damage box on the HUD';" +
+      "inp.value='9';" +
+      "var btns=[].slice.call(hud.querySelectorAll('button')).filter(function(b){return /Apply/.test(b.textContent)});" +
+      "var btn=btns.filter(function(b){return b.closest('.blk')})[0];" +
+      "if(!btn)return 'the Apply button is outside its block';" +
+      "btn.click();" +
+      "return JSON.stringify({marked:(S.char.blocks.health||{}).marked||0," +
+      "sheetBox:(document.getElementById('dmg-health')||{}).value})})()");
+    if (!/^\{/.test(String(out))) return String(out);
+    const o = JSON.parse(String(out));
+    if (!o.marked) return 'nothing was recorded';
+    return o.sheetBox === '' || 'it read the sheet\u2019s box instead';
+  });
+
+  check('[npcs] a Mob\u2019s Level cannot be set below 1', () => {
+    ev("S._npcDraft={type:'mob',name:'M',level:5};sysNpcSet('level','-999999');");
+    const lv = ev("S._npcDraft.level");
+    return lv === 1 || 'the draft took level ' + JSON.stringify(lv);
+  });
+
+  check('[hud] an earned Rank upgrade is readable, not [object Object]', () => {
+    // The Skill has to actually HAVE an earned upgrade, or this asserts nothing:
+    // pick one whose catalogue entry carries upgrades and set the rank above the
+    // first of them.
+    const setup = ev("(function(){" +
+      "var cat=DCC_SKILLS.filter(function(s){return s.upgrades&&Object.keys(s.upgrades).length})[0];" +
+      "if(!cat)return '(no skill in the book has upgrades)';" +
+      "var rank=Math.max.apply(null,Object.keys(cat.upgrades).map(Number));" +
+      "S.char=SYS.newCharacter();S.char.creation={step:0,complete:true};dccFinishCreation(S.char);" +
+      "S.char.blocks.skills.skills=[{name:cat.name,rank:rank,stat:cat.stat||'STR'}];" +
+      "S.char.blocks.gear=S.char.blocks.gear||{};" +
+      // A weapon Skill only draws its card when the weapon is in hand.
+      "S.char.blocks.gear.equipped={hands:[{name:cat.name,skill:cat.name,qty:1}]};" +
+      "S.char.blocks.gear.hotlist=[{name:cat.name,skill:cat.name,qty:1}];" +
+      "save();showTab('hud');renderHUD();" +
+      "var ups=SYS.derive.activeUpgrades(S.char,cat.name)||[];" +
+      "return JSON.stringify({skill:cat.name,rank:rank,ups:ups.length," +
+      "text:(ups[0]&&ups[0].text)||''})})()");
+    if (!/^\{/.test(String(setup))) return String(setup);
+    const o = JSON.parse(String(setup));
+    if (!o.ups) return 'the fixture produced no earned upgrades for ' + o.skill;
+    const txt = String(ev("(document.getElementById('page-hud')||{}).innerHTML||''"));
+    if (/\[object Object\]/.test(txt)) return 'the HUD prints [object Object]';
+    // ...and it must print the upgrade, not merely avoid the broken string.
+    return txt.indexOf(o.text.slice(0, 18)) >= 0
+      || 'the HUD never shows the earned upgrade ' + JSON.stringify(o.text.slice(0, 40));
+  });
+
+  check('[data] no Race benefit is an unreadable clipping of the book', () => {
+    const bad = ev("(function(){var out=[];DCC_RACES.forEach(function(r){" +
+      "(r.benefits||[]).forEach(function(b){" +
+      "if(b.length>60&&/^[a-z]{1,8} [a-z]+ [a-z]+ /.test(b))out.push(r.id)})});return out.join(',')})()");
+    return String(bad) === '' || 'unreadable benefit text on: ' + bad;
+  });
+
   console.log('\nPASS ' + ok.length);
   if (fails.length) { console.log('FAIL ' + fails.length); fails.forEach(f => console.log('  x ' + f)); process.exit(1); }
   console.log('All Dungeon Crawler Carl checks passed.');

@@ -205,12 +205,49 @@ function npcToCharacter(npc){
     gear:npc.gear||''
   };
 }
+// Which roster kind a player's own character is filed under. It used to be the
+// literal 'main', which is Daring Comics' kind; a pack that does not declare it
+// had every mirrored character fall through npcKindOf() to its FIRST kind, so
+// in Dungeon Crawler Carl your fellow crawlers were filed under Mobs while the
+// Crawlers tab said there were none. A pack can name the kind outright; failing
+// that, the kind whose id matches the pack's own word for a hero wins — which is
+// how 'crawler' is found — and 'main' is the last resort.
+function heroRosterKind(){
+  const kinds=(typeof npcKinds==='function'?npcKinds():[])||[];
+  const ids=kinds.map(function(k){return k.id;});
+  const named=SYS&&SYS.npc&&SYS.npc.heroKind;
+  if(named&&ids.indexOf(named)>=0)return named;
+  const word=(typeof lexL==='function'?lexL('hero'):'').replace(/\s+/g,'');
+  if(word&&ids.indexOf(word)>=0)return word;
+  if(ids.indexOf('main')>=0)return'main';
+  return ids[0]||'main';
+}
+
+// The numbers a pack's roster card reads. A mirrored character carried none of
+// them, so a level 10 crawler showed no Level and one Health Bar slot — the card
+// was reading undefined and falling back to its minimum.
+function copyRosterFields(ent,char){
+  const fields=(SYS&&SYS.npc&&SYS.npc.fields)
+    ? (typeof SYS.npc.fields==='function'?SYS.npc.fields():SYS.npc.fields) : [];
+  fields.forEach(function(f){
+    if(!f||f.key==='name'||f.key==='desc'||f.key==='kind')return;
+    if(ent[f.key]!==undefined)return;
+    const v=char[f.key];
+    if(v!==undefined&&v!==null&&v!==''&&typeof v!=='object')ent[f.key]=v;
+  });
+  // The floor belongs to the table, not the character.
+  const keys=fields.map(function(f){return f&&f.key;});
+  if(keys.indexOf('floor')>=0&&ent.floor===undefined
+     &&typeof S!=='undefined'&&S&&S.floor!==undefined&&S.floor!==null)ent.floor=S.floor;
+  return ent;
+}
+
 function characterToNpc(char, existingId){
   const asp=[char.aspects&&char.aspects.concept,char.aspects&&char.aspects.motivation].concat(((char.aspects&&char.aspects.contingent)||[]).map(c=>c&&c.text)).filter(Boolean);
   const _hid=existingId||uid();
   // sysCharName first: reading costumedName first named every mirrored hero by
   // a field only Daring Comics fills.
-  const ent={id:_hid,heroId:_hid,type:'main',fromHero:true,sourceSaveId:currentSaveId,
+  const ent={id:_hid,heroId:_hid,type:heroRosterKind(),fromHero:true,sourceSaveId:currentSaveId,
     name:sysCharName(char)||char.costumedName||('Unnamed '+lexU('hero')),desc:char.civilianName||''};
   // Aspects, skills, stress and the rest are Daring Comics' sheet. A pack that
   // builds its character from blocks carried all of them as empty dead weight
@@ -224,9 +261,11 @@ function characterToNpc(char, existingId){
       stunts:JSON.parse(JSON.stringify(char.stunts||[])),stress:[],
       consequences:JSON.parse(JSON.stringify(char.consequences||{mild:'',moderate:'',severe:''})),gear:char.gear||''});
   }
-  // What a pack's roster card reads is the pack's to fill in.
+  // What a pack's roster card reads is the pack's to fill in. A pack with no
+  // fromHero of its own still gets the fields its own card declares.
   const extra=(SYS&&SYS.npc&&SYS.npc.fromHero)?SYS.npc.fromHero(char):null;
-  return extra?Object.assign(ent,extra):ent;
+  if(extra)Object.assign(ent,extra);
+  return copyRosterFields(ent,char);
 }
 function syncHeroToRoster(){
   if(!S||!S.char)return;const u=currentUniverse();if(!u)return;
