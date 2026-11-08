@@ -48,9 +48,15 @@ function mmrPowerText(p) {
 // Flat strings and numbers, so it is editable in the shell's builder, readable on a
 // roster card and safe to sync: Firebase refuses `undefined` outright, and one such value
 // wedges every later save.
-function mmrRosterRow(p) {
-  return {
-    type: p.kind, profile: p.id, name: p.name, rank: p.rank,
+// `profileId` is passed when the row is built from a sheet rather than from the book's
+// own object — an owned sheet has no `id`, because it is nobody's catalogue row any
+// more, and leaving `profile: undefined` on the row would both lose the provenance the
+// Official tab reads ("on your table") and hand Firebase an `undefined`, which wedges
+// every later save.
+function mmrRosterRow(p, profileId) {
+  const prof = profileId || p.id || '';
+  const row = {
+    type: p.kind, name: p.name || '', rank: p.rank,
     health: p.health, healthDR: p.healthDR, focus: p.focus, focusDR: p.focusDR,
     karma: p.karma, init: mmrSigned(p.init) + (p.initEdge ? 'E' : ''),
     speed: mmrSpeedText(p), abilities: mmrAbilityText(p), damage: mmrDamageText(p),
@@ -59,6 +65,8 @@ function mmrRosterRow(p) {
     history: p.history, personality: p.personality,
     notes: p.formNote || '',
   };
+  if (prof) row.profile = prof;
+  return row;
 }
 
 function mmrAddProfileToTable(id) {
@@ -72,17 +80,16 @@ function mmrAddProfileToTable(id) {
 }
 
 // ─── the copy a player keeps ─────────────────────────────────────────────────
-function mmrCharFromProfile(p) {
-  const abilities = {};
-  MMR_ABILITY_ORDER.forEach(([k]) => { abilities[k] = p.abilities[k].score; });
-  return { systemId: SYS.id, name: p.name, profile: p.id, blocks: { abilities } };
-}
+// mmrCharFromProfile lives in own.js: taking one of these as your own is a deep copy
+// into a sheet the save owns, not a pointer back into the book. §5A.
 
 // The roster row a played hero mirrors to. Its own name and id come from the mirror.
+// Built from the EFFECTIVE sheet, so the table sees the armor they have on and the
+// edits they have made, rather than the book's row they started from.
 function mmrHeroRow(ch) {
-  const p = ch && ch.profile ? mmrProfile(ch.profile) : null;
+  const p = (typeof mmrEffective === 'function') ? mmrEffective(ch) : null;
   if (!p) return null;
-  const row = mmrRosterRow(p);
+  const row = mmrRosterRow(p, ch.profile);
   delete row.type; delete row.name;
   return row;
 }

@@ -82,7 +82,12 @@ function renderSysSheet(){
   // wide: unwrapped, the last one ran off the edge of the card.
   h+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;
     gap:6px;flex-wrap:wrap;margin-bottom:8px">`;
-  h+=`<div class="pg-title">${esc(lexU('sheet'))}</div>`;
+  // The title said "Hero Sheet" — the same words as the nav tab you pressed to
+  // get here, in the largest type on the page, telling you nothing. It carries
+  // the character's name instead; the field that name came from is then dropped
+  // from the grid below while reading, because it would say it twice.
+  const titleName=(typeof sysCharName==='function'?sysCharName(ch):'')||'';
+  h+=`<div class="pg-title">${esc(titleName||('Unnamed '+lexU('hero')))}</div>`;
   // The sheet used to be a one-way door: once creation finished there was no
   // control anywhere to export, start another character, or fix a choice —
   // wizReopen() existed and nothing called it.
@@ -105,16 +110,19 @@ function renderSysSheet(){
   const shownFloor=(S&&S.floor)||((ch&&ch.floor!==undefined&&ch.floor!==null)?ch.floor:3);
   const whereNow=SYS.floorStrip?` · ${esc(lexU('logBreak'))} ${esc(String(shownFloor))}`:'';
   h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(SYS.name)}${whereNow}</div>`;
-  h+=`<div class="id-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">`;
+  let tiles='';
   ids.forEach(f=>{
-    h+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;
     const v=String(ch[f]===undefined||ch[f]===null?'':ch[f]);
-    h+=_sysEdit
+    // Reading: the title already is this field. Editing: you need the box.
+    if(!_sysEdit&&titleName&&v.trim()===titleName)return;
+    tiles+=`<div class="form-group" style="margin:0"><label>${esc(LABELS[f]||f)}</label>`;
+    tiles+=_sysEdit
       ? `<input value="${esc(v)}" oninput="sysIdentitySet('${esc(f)}',this.value)">`
       : `<div class="id-val">${esc(v||'—')}</div>`;
-    h+=`</div>`;
+    tiles+=`</div>`;
   });
-  h+=`</div></div>`;
+  if(tiles)h+=`<div class="id-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">${tiles}</div>`;
+  h+=`</div>`;
   // A pack may have prose that no block type covers.
   if(typeof SYS.sheetExtra==='function'){try{h+=SYS.sheetExtra(ch)||'';}catch(e){}}
   // The same three roll surfaces Daring Comics has always had. A block pack got

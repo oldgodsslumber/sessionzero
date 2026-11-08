@@ -14,10 +14,14 @@
 //   - traits and tags are the same idea at a smaller size, because a tag is a line and
 //     a power is a paragraph.
 //
-// Nothing here edits anything: a character out of the book is read-only, and this is
-// the surface you read at the table. The same renderer draws three of them — the hero
-// sheet, an open card in the Official tab, and a copy on the table — so no piece may
-// assume the room it is given.
+// The same renderer draws three of them — the hero sheet, an open card in the Official
+// tab, and a copy on the table — so no piece may assume the room it is given.
+//
+// Two of those three are read-only: the book's row never changes under anybody (own.js
+// freezes it) and a table's copy is a synced roster row the shell's own builder edits.
+// The hero sheet is the one that is YOURS, and `opts.edit` is what turns its numbers
+// into fields. What it reads is never ch.sheet directly — always mmrEffective(ch), so
+// the armor you have on is the character you see.
 
 // ─── finding the rule for a printed name ─────────────────────────────────────
 // Chapter 8 prints a power with its own particulars attached — "Animal Communication
@@ -95,6 +99,45 @@ function mmrRulesBtnHTML() {
     + ' title="Show or hide the rules text under every power, trait and tag"></button>';
 }
 
+// ─── editing: fields that do not repaint themselves ─────────────────────────
+// Every one of these writes and saves and draws nothing. A handler that re-rendered its
+// own input would take the caret out of the box mid-word, which is what the shell's
+// `focus` suite exists to catch. Only a STRUCTURAL change — a power added, a loadout
+// switched — repaints, and those are buttons, not keystrokes.
+//
+// A name goes into a handler through data-n and `this.dataset.n`, never inlined into the
+// JS string: esc() leaves the apostrophe alone, and "Devil's Luck" would end the
+// argument early.
+function mmrIn(field, value, num, title) {
+  return `<input class="mmr-in"${num ? ' type="number"' : ''}`
+    + ` value="${esc(String(value === undefined || value === null ? '' : value))}"`
+    + (title ? ` title="${esc(title)}"` : '')
+    + ` oninput="mmrOwnSet('${field}',this.value)">`;
+}
+function mmrField(label, field, value, num, title) {
+  return `<div class="mmr-f"><label>${esc(label)}</label>${mmrIn(field, value, num, title)}</div>`;
+}
+function mmrRmBtn(kind, name) {
+  return `<button class="btn btn-secondary btn-xs mmr-rm" data-n="${esc(name)}"`
+    + ` onclick="mmrOwnRemove('${kind}',this.dataset.n)" title="Remove ${esc(name)}">✕</button>`;
+}
+// One datalist per catalogue, so adding is a search of the book rather than typing a
+// name from memory — but still a free text box, because a name the book does not have
+// is allowed and simply shows no rule under it.
+function mmrDataList(id, names) {
+  return `<datalist id="${id}">` + names.map(n => `<option value="${esc(n)}"></option>`).join('') + '</datalist>';
+}
+function mmrAddRowHTML(kind, listId, what) {
+  return `<div class="mmr-add"><input id="mmr-add-${kind}" list="${listId}" placeholder="Add a ${esc(what)}…"`
+    + ` onkeydown="if(event.key==='Enter'){event.preventDefault();mmrAddFrom('${kind}')}">`
+    + `<button class="btn btn-gold btn-xs" onclick="mmrAddFrom('${kind}')">Add</button></div>`;
+}
+function mmrAddFrom(kind) {
+  const el = document.getElementById('mmr-add-' + kind);
+  if (!el || !el.value.trim()) return;
+  mmrOwnAdd(kind, el.value.trim());   // repaints, so the box goes with it
+}
+
 // ─── the pieces ──────────────────────────────────────────────────────────────
 function mmrChip(label, value) {
   if (value === null || value === undefined || value === '') return '';
@@ -104,7 +147,27 @@ function mmrPage(n) { return n ? `<span class="mmr-page">p.&nbsp;${esc(String(n)
 
 // One tile per number you read every round. A grid of tiles rather than a column of
 // rows: four short facts do not need four full-width lines.
-function mmrVitalsHTML(p) {
+function mmrVitalsHTML(p, ed) {
+  if (ed) {
+    let h = '<div class="mmr-fgrid">';
+    h += mmrField('Rank', 'rank', p.rank, true);
+    h += mmrField('Health', 'health', p.health, true);
+    h += mmrField('Health DR', 'healthDR', p.healthDR, true);
+    h += mmrField('Focus', 'focus', p.focus, true);
+    h += mmrField('Focus DR', 'focusDR', p.focusDR, true);
+    h += mmrField('Karma', 'karma', p.karma, true);
+    h += mmrField('Initiative', 'init', p.init, true);
+    h += `<div class="mmr-f"><label>Edge</label><label class="mmr-chk">`
+      + `<input type="checkbox"${p.initEdge ? ' checked' : ''} onchange="mmrOwnSetBool('initEdge',this.checked)">`
+      + ` on initiative</label></div>`;
+    h += '</div>';
+    // Speeds as the line the sheet already prints, parsed back — which is what makes a
+    // speed addable and removable without a screen of its own.
+    h += `<div class="mmr-f"><label>Speed</label><input class="mmr-in" value="${esc(mmrSpeedText(p))}"`
+      + ` title="Name and number, comma separated: Run 6, Climb 3, Jump 30"`
+      + ` oninput="mmrOwnSpeedsSet(this.value)"></div>`;
+    return h;
+  }
   const dr = n => (n ? `<span class="mmr-tile-s">DR ${esc(String(n))}</span>` : '');
   const tile = (k, v, sub) => `<div class="mmr-tile"><div class="mmr-tile-k">${esc(k)}</div>`
     + `<div class="mmr-tile-v">${esc(String(v))}</div>${sub || ''}</div>`;
@@ -126,24 +189,41 @@ function mmrVitalsHTML(p) {
 // it is — it writes the roster rows a table syncs, and those are the book's own strings.
 function mmrMod(n) { return (n >= 0 ? '+' : '') + n; }
 
-function mmrAbilitiesHTML(p) {
-  let h = '<table class="mmr-abil"><thead><tr><th></th><th>Score</th><th>Def</th><th>Check</th><th>Damage</th></tr></thead><tbody>';
+function mmrAbilitiesHTML(p, ed) {
+  const num = (v, fn, a, k) => `<input class="mmr-in mmr-in-n" type="number" value="${esc(String(v === undefined || v === null ? '' : v))}"`
+    + ` oninput="${fn}('${a}','${k}',this.value)">`;
+  let h = `<table class="mmr-abil${ed ? ' is-edit' : ''}"><thead><tr><th></th><th>Score</th><th>Def</th><th>Check</th><th>Damage</th></tr></thead><tbody>`;
   MMR_ABILITY_ORDER.forEach(([k, n]) => {
-    const a = p.abilities[k], d = p.damage[k];
+    const a = (p.abilities || {})[k] || {}, d = (p.damage || {})[k];
+    if (ed) {
+      // Score, Defense and Check are three independent trained numbers (§2): nothing
+      // here derives anything, so all three are typeable and none of them argues.
+      h += `<tr><th scope="row">${esc(n)}</th>`
+        + `<td>${num(a.score, 'mmrOwnAbilitySet', k, 'score')}</td>`
+        + `<td>${num(a.def, 'mmrOwnAbilitySet', k, 'def')}</td>`
+        + `<td>${num(a.check, 'mmrOwnAbilitySet', k, 'check')}</td>`
+        + `<td class="mmr-dmg-c">${num(d ? d.mult : '', 'mmrOwnDamageSet', k, 'mult')}`
+        + `${num(d ? d.ability : '', 'mmrOwnDamageSet', k, 'ability')}</td></tr>`;
+      return;
+    }
     h += `<tr><th scope="row">${esc(n)}</th><td class="mmr-abil-s">${esc(String(a.score))}</td>`
       + `<td>${esc(String(a.def))}</td><td>${esc(mmrMod(a.check))}</td>`
       + `<td>${d ? esc('×' + d.mult + ' ' + mmrMod(d.ability)) : ''}</td></tr>`;
   });
-  return h + '</tbody></table>';
+  return h + '</tbody></table>'
+    + (ed ? '<div class="mmr-hint">Damage is the multiplier and then the flat bonus.</div>' : '');
 }
 
 // A power: name, the chips that decide whether you can use it this turn, then the rule.
-function mmrPowerCardHTML(printedName) {
+function mmrPowerCardHTML(printedName, ed) {
   const r = mmrPowerRule(printedName);
   if (!r) return '';          // an empty name in a hand-typed list
   const u = r.rule || {};
   let h = '<div class="mmr-pow">';
-  h += `<div class="mmr-pow-h"><span class="mmr-pow-n">${esc(r.name)}</span>${mmrPage(u.page)}</div>`;
+  h += `<div class="mmr-pow-h"><span class="mmr-pow-n">${esc(r.name)}</span>${mmrPage(u.page)}`
+    // The printed name, not the resolved one: removing is removing the row on the
+    // sheet, which may carry its own particulars — "Elemental Protection 3 (30 points)".
+    + (ed ? mmrRmBtn('powers', printedName) : '') + '</div>';
   if (r.note) h += `<div class="mmr-pow-note">${esc(r.note)}</div>`;
   const chips = mmrChip('', u.action) + mmrChip('', u.duration)
     + mmrChip('Cost', u.cost) + mmrChip('Range', u.range) + mmrChip('Rank', u.rank);
@@ -155,48 +235,167 @@ function mmrPowerCardHTML(printedName) {
   return h + '</div>';
 }
 
-function mmrPowersHTML(p) {
+function mmrPowersHTML(p, ed) {
   const groups = mmrPowerGroups(p);
-  if (!groups.length) return '';
+  if (!groups.length && !ed) return '';
   let h = '';
   groups.forEach(g => {
     h += `<div class="mmr-set"><div class="mmr-set-h"><span class="mmr-set-n">${esc(mmrSetLabel(g.set))}</span>`
       + `<span class="mmr-set-c">${g.names.length}</span></div><div class="mmr-pow-grid">`;
-    g.names.forEach(n => { h += mmrPowerCardHTML(n); });
+    g.names.forEach(n => { h += mmrPowerCardHTML(n, ed); });
     h += '</div></div>';
   });
+  if (ed) h += mmrAddRowHTML('powers', 'mmr-dl-powers', 'power');
   return h;
 }
 
 // Traits and tags: a name, the character's own particulars if the book prints any, and
 // the rule. Denser than a power card because most of them are two sentences.
-function mmrLabelListHTML(names, lookup) {
+function mmrLabelListHTML(names, lookup, ed, kind) {
   let h = '<div class="mmr-defs">';
   (names || []).forEach(raw => {
     const r = lookup(raw);
     if (!r) return;
     const u = r.rule || {};
     h += '<div class="mmr-def">';
-    h += `<div class="mmr-def-h"><span class="mmr-def-n">${esc(r.name)}</span>${mmrPage(u.page)}</div>`;
+    h += `<div class="mmr-def-h"><span class="mmr-def-n">${esc(r.name)}</span>${mmrPage(u.page)}`
+      + (ed && kind ? mmrRmBtn(kind, raw) : '') + '</div>';
     if (r.note) h += `<div class="mmr-pow-note">${esc(r.note)}</div>`;
     if (u.effect) h += `<div class="mmr-eff">${esc(u.effect)}</div>`;
+    else if (ed) h += `<div class="mmr-eff mmr-eff-none">Not a name the Core Rulebook describes, so there is no rule to show.</div>`;
     h += '</div>';
   });
-  return h + '</div>';
+  h += '</div>';
+  if (ed && kind) h += mmrAddRowHTML(kind, 'mmr-dl-' + kind, kind === 'traits' ? 'trait' : 'tag');
+  return h;
 }
 
-function mmrBackgroundHTML(p) {
+function mmrBackgroundHTML(p, ed) {
+  if (ed) {
+    return '<div class="mmr-fgrid is-wide">'
+      + mmrField('Real name', 'realName', p.realName)
+      + mmrField('Origin', 'origin', p.origin)
+      + mmrField('Occupation', 'occupation', p.occupation)
+      + mmrField('Size', 'size', p.size)
+      + mmrField('Teams', 'teams', p.teams)
+      + mmrField('Base', 'base', p.base)
+      + '</div>';
+  }
   const kv = (k, v) => (v === null || v === undefined || v === '') ? ''
     : `<div class="mmr-kv"><span class="mmr-kv-k">${esc(k)}</span>${esc(String(v))}</div>`;
   return kv('Real name', p.realName) + kv('Origin', p.origin) + kv('Occupation', p.occupation)
     + kv('Size', p.size) + kv('Teams', p.teams) + kv('Base', p.base);
 }
 
+// ─── the loadout switcher: Tony's armors ─────────────────────────────────────
+// The switcher lives in the head row, beside Rank and the book page, because it is the
+// one control you reach for mid-fight. "Base" is the sheet with no overlay on it.
+function mmrLoadoutBarHTML(ch) {
+  const list = mmrLoadouts(ch);
+  const active = ch.activeLoadout || 'base';
+  if (!list.length) {
+    return `<div class="mmr-lo-bar"><button class="btn btn-secondary btn-xs" onclick="mmrLoadoutNew()"`
+      + ` title="A second set of powers and numbers for the same character — a battle suit, a transformation, a form">`
+      + `+ Loadout</button><span class="mmr-hint">More than one armor, or a transformed state.</span></div>`;
+  }
+  let h = '<div class="mmr-lo-bar"><span class="mmr-kv-k">Loadout</span><div class="mmr-lo-tabs">';
+  const tab = (id, name) => `<button class="btn btn-xs ${active === id ? 'btn-gold' : 'btn-secondary'}"`
+    + ` data-n="${esc(id)}" onclick="mmrLoadoutActivate(this.dataset.n)">${esc(name)}</button>`;
+  h += tab('base', 'Base');
+  list.forEach(l => { h += tab(l.id, l.name || 'Unnamed'); });
+  h += '</div>';
+  h += `<button class="btn btn-secondary btn-xs" onclick="mmrLoadoutNew()" title="Add another loadout">+</button>`;
+  return h + '</div>';
+}
+
+// What each one changes, which is the screen the overlay exists for.
+function mmrLoadoutsCardHTML(ch) {
+  const list = mmrLoadouts(ch);
+  if (!list.length) return '';
+  const active = ch.activeLoadout || 'base';
+  const show = v => (v === true ? 'yes' : v === false ? 'no' : (v === '' || v === null || v === undefined) ? '—' : String(v));
+  let h = '';
+  list.forEach(l => {
+    const d = mmrLoadoutDelta(ch, l);
+    h += `<div class="mmr-lo${active === l.id ? ' is-on' : ''}">`;
+    h += `<div class="mmr-lo-h"><span class="mmr-lo-n">${esc(l.name || 'Unnamed')}</span>`
+      + (active === l.id ? '<span class="mmr-chip">on</span>' : '')
+      + `<span class="mmr-lo-acts">`
+      + (active === l.id
+        ? `<button class="btn btn-secondary btn-xs" onclick="mmrLoadoutActivate('base')">Take off</button>`
+        : `<button class="btn btn-gold btn-xs" data-n="${esc(l.id)}" onclick="mmrLoadoutActivate(this.dataset.n)">Wear</button>`)
+      + `<button class="btn btn-secondary btn-xs" data-n="${esc(l.id)}" onclick="mmrLoadoutRename(this.dataset.n)">Rename</button>`
+      + `<button class="btn btn-secondary btn-xs" data-n="${esc(l.id)}" onclick="mmrLoadoutDuplicate(this.dataset.n)">Duplicate</button>`
+      + `<button class="btn btn-secondary btn-xs" data-n="${esc(l.id)}" onclick="mmrLoadoutDelete(this.dataset.n)">Delete</button>`
+      + `</span></div>`;
+    h += `<input class="mmr-in" value="${esc(l.note || '')}" placeholder="A note — where it came from, when you wear it"`
+      + ` data-n="${esc(l.id)}" oninput="mmrLoadoutNote(this.dataset.n,this.value)">`;
+    if (!d.length) h += `<div class="mmr-hint">Changes nothing yet. Wear it, then edit — everything you change while it is on belongs to it.</div>`;
+    else {
+      h += '<ul class="mmr-delta">';
+      d.forEach(x => {
+        if (x.how === 'add') h += `<li class="is-add">+ ${esc(x.what)} <b>${esc(x.text)}</b></li>`;
+        else if (x.how === 'remove') h += `<li class="is-rm">− ${esc(x.what)} <b>${esc(x.text)}</b></li>`;
+        else h += `<li class="is-set">${esc(x.what)} <span class="mmr-was">${esc(show(x.from))}</span> → <b>${esc(show(x.to))}</b></li>`;
+      });
+      h += '</ul>';
+    }
+    h += '</div>';
+  });
+  return h;
+}
+
+// ─── the book changing under a copy ──────────────────────────────────────────
+function mmrDriftHTML(ch) {
+  const drift = mmrProfileDrift(ch);
+  if (!drift.length) return '';
+  let h = `<section class="card mmr-card mmr-wide mmr-drift"><div class="label mmr-card-t">The book's row has changed</div>`;
+  h += `<div class="mmr-hint">This ${esc(lex('hero'))} was copied from the Core Rulebook, and the pack's data for `
+    + `${esc(drift.length === 1 ? 'one field' : drift.length + ' fields')} has been corrected since. Yours is untouched — take across only what you want.</div>`;
+  h += '<div class="mmr-add">';
+  drift.forEach(f => {
+    h += `<button class="btn btn-secondary btn-xs" data-n="${esc(f.field)}" onclick="mmrTakeBookField(this.dataset.n)">`
+      + `Take the book's ${esc(f.label)}</button>`;
+  });
+  h += `<button class="btn btn-secondary btn-xs" onclick="mmrDismissDrift()" title="Keep yours and stop asking">Keep mine</button>`;
+  return h + '</div></section>';
+}
+
+// ─── the legality report ─────────────────────────────────────────────────────
+// Held in a variable rather than recomputed on every paint, so pressing the button is
+// what runs it and the sheet does not quietly audit you while you read it.
+let _mmrReport = null;
+function mmrRunReport() {
+  const ch = S && S.char;
+  _mmrReport = mmrLegalityReport(mmrEffective(ch)) || [];
+  renderHero();
+}
+function mmrClearReport() { _mmrReport = null; renderHero(); }
+function mmrReportHTML() {
+  if (!_mmrReport) return '';
+  let h = `<section class="card mmr-card mmr-wide mmr-report"><div class="label mmr-card-t">Against the rules`
+    + `<button class="btn btn-secondary btn-xs" onclick="mmrClearReport()">Close</button></div>`;
+  if (!_mmrReport.length) h += `<div class="mmr-hint">Nothing to flag: the vitals follow the formulas, every name is in the book, and every prerequisite is met.</div>`;
+  else {
+    h += '<ul class="mmr-delta">';
+    _mmrReport.forEach(r => { h += `<li><b>${esc(r.what)}</b> ${esc(r.text)}</li>`; });
+    h += '</ul>';
+  }
+  h += `<div class="mmr-hint">Nothing here is enforced, and the book's own characters trip it: Iron Man prints 75 Health `
+    + `on Resilience 3. Defense and non-combat Checks are not checked at all, because size and powers move them `
+    + `legitimately. The pick budget arrives with the creation wizard.</div>`;
+  return h + '</section>';
+}
+
 // ─── the whole block ─────────────────────────────────────────────────────────
 // `wide` is the hero sheet, which has the page to itself; the Official tab draws the
-// same block inside a 250px card and passes nothing.
+// same block inside a 250px card and passes nothing. `ch` means this is somebody's own
+// character — loadouts, drift and the report hang off it — and `edit` turns the numbers
+// into fields.
 function mmrStatBlockHTML(p, opts) {
   opts = opts || {};
+  const ed = !!opts.edit;
+  const ch = opts.ch || null;
   const card = (cls, title, body, extra) => body
     ? `<section class="card mmr-card ${cls || ''}"><div class="label mmr-card-t">${esc(title)}${extra || ''}</div>${body}</section>`
     : '';
@@ -204,35 +403,70 @@ function mmrStatBlockHTML(p, opts) {
   h += `<div class="mmr-head mmr-wide"><div class="mmr-head-m">`
     + `<span class="mmr-rank">Rank ${esc(String(p.rank))}</span>`
     + `<span class="mmr-kind">${esc(MMR_KIND_LABEL[p.kind] || '')}</span>`
-    + `<span class="mmr-page">Book p.&nbsp;${esc(String(p.page))}</span></div>`
+    + (ch && mmrLoadoutName(ch) ? `<span class="mmr-lo-now">${esc(mmrLoadoutName(ch))}</span>` : '')
+    + (p.page ? `<span class="mmr-page">Book p.&nbsp;${esc(String(p.page))}</span>` : '')
+    + '</div>'
     // The Official tab keeps one switch above the whole shelf, so a card inside it must
     // not add a second one of its own.
-    + (opts.toggle ? mmrRulesBtnHTML() : '') + '</div>';
-  h += card('is-vitals', 'Vitals', mmrVitalsHTML(p));
-  h += card('is-abil', 'Abilities', mmrAbilitiesHTML(p));
-  h += card('is-bg', 'Background', mmrBackgroundHTML(p));
-  if (p.formNote) h += card('mmr-wide', 'Note', `<div class="mmr-eff mmr-eff-on">${esc(p.formNote)}</div>`);
-  const powers = mmrPowersHTML(p);
+    + (opts.toggle ? mmrRulesBtnHTML() : '')
+    + (ch ? `<button class="btn btn-secondary btn-xs" onclick="mmrRunReport()" title="What a strict reading of the creation rules would say about this sheet">Check the rules</button>` : '')
+    + '</div>';
+  if (ch) h += `<div class="mmr-wide">${mmrLoadoutBarHTML(ch)}</div>`;
+  // Which of the two an edit lands on. Guessing wrong here is how somebody edits Tony
+  // and finds they have edited the suit, so the sheet says it outright.
+  if (ed && ch) {
+    const lo = mmrLoadoutName(ch);
+    h += `<div class="mmr-wide mmr-edit-note">${lo
+      ? 'Editing <b>' + esc(lo) + '</b> — what you change here belongs to this loadout, and the base sheet keeps its own values.'
+      : 'Editing the base sheet — what you change here is true of this ' + esc(lex('hero')) + ' in every loadout.'}</div>`;
+  }
+  h += card('is-vitals', 'Vitals', mmrVitalsHTML(p, ed));
+  h += card('is-abil' + (ed ? ' is-edit' : ''), 'Abilities', mmrAbilitiesHTML(p, ed));
+  h += card('is-bg' + (ed ? ' is-edit' : ''), 'Background', mmrBackgroundHTML(p, ed));
+  if (p.formNote || ed) h += card('mmr-wide', 'Note', ed
+    ? `<textarea class="mmr-in" rows="2" oninput="mmrOwnSet('formNote',this.value)" placeholder="A rules note — an alternate form, a condition">${esc(p.formNote || '')}</textarea>`
+    : `<div class="mmr-eff mmr-eff-on">${esc(p.formNote)}</div>`);
+  const powers = mmrPowersHTML(p, ed);
   if (powers) h += card('mmr-wide is-powers', 'Powers', powers);
-  if (p.traits && p.traits.length) h += card('mmr-wide', 'Traits', mmrLabelListHTML(p.traits, mmrTraitRule));
-  if (p.tags && p.tags.length) h += card('mmr-wide', 'Tags', mmrLabelListHTML(p.tags, mmrTagRule));
-  const story = t => `<div class="mmr-prose">${esc(t)}</div>`;
-  if (p.history) h += card('mmr-wide', 'History', story(p.history));
-  if (p.personality) h += card('mmr-wide', 'Personality', story(p.personality));
+  if ((p.traits && p.traits.length) || ed) h += card('mmr-wide', 'Traits', mmrLabelListHTML(p.traits, mmrTraitRule, ed, 'traits'));
+  if ((p.tags && p.tags.length) || ed) h += card('mmr-wide', 'Tags', mmrLabelListHTML(p.tags, mmrTagRule, ed, 'tags'));
+  if (ch) h += card('mmr-wide mmr-los', 'Loadouts', mmrLoadoutsCardHTML(ch));
+  const story = (field, t) => ed
+    ? `<textarea class="mmr-in" rows="6" oninput="mmrOwnSet('${field}',this.value)">${esc(t || '')}</textarea>`
+    : `<div class="mmr-prose">${esc(t)}</div>`;
+  if (p.history || ed) h += card('mmr-wide', 'History', story('history', p.history));
+  if (p.personality || ed) h += card('mmr-wide', 'Personality', story('personality', p.personality));
+  if (ch) h += mmrDriftHTML(ch) + mmrReportHTML();
+  if (ed) {
+    h += mmrDataList('mmr-dl-powers', Object.keys(MMR_POWER_RULES));
+    h += mmrDataList('mmr-dl-traits', Object.keys(MMR_TRAIT_RULES));
+    h += mmrDataList('mmr-dl-tags', Object.keys(MMR_TAG_RULES));
+  }
   return h + '</div>';
 }
 
-// What the sheet shows of a character out of the book. A hand-built one gets the
-// blocks in SYS.schema and, at M3, its own powers; until then it is pointed at the
+// What the sheet shows of a character a save OWNS — which, for one copied from the
+// book, is their own data now and not the book's row (own.js). A hand-built one gets
+// the blocks in SYS.schema and, at M4, the wizard; until then it is pointed at the
 // characters that do work.
 function mmrSheetExtra(ch) {
-  const p = ch && ch.profile ? mmrProfile(ch.profile) : null;
   mmrApplyRulesPref();
-  if (p) return mmrStatBlockHTML(p, { wide: true, toggle: true });
+  // The migration runs on the way past. It does not save itself — it is also called
+  // from the roster mirror, which runs inside save() — so this is where it gets
+  // written down.
+  const fresh = (ch && !ch.sheet && ch.profile) ? mmrMigrateChar(ch) : false;
+  const eff = mmrEffective(ch);
+  if (eff) {
+    if (fresh && typeof save === 'function') save();
+    return mmrStatBlockHTML(eff, {
+      wide: true, toggle: true, ch: ch,
+      edit: (typeof sysEditing === 'function') ? sysEditing() : false,
+    });
+  }
   if (ch && sysCharName(ch)) return '';
   return `<div class="card tac" style="padding:20px">`
     + `<div class="fw-700 mb-1">No ${esc(lex('hero'))} yet</div>`
-    + `<div class="text-muted mb-3" style="font-size:13px">Pick one of the ${MMR_PROFILES.length} official characters to play. Building your own comes with the full sheet.</div>`
+    + `<div class="text-muted mb-3" style="font-size:13px">Pick one of the ${MMR_PROFILES.length} official characters to play. Once they are yours, everything on the sheet is yours to change.</div>`
     + `<button class="btn btn-primary" onclick="showTab('npcs')">Browse the official characters</button></div>`;
 }
 
@@ -271,7 +505,9 @@ function mmrNpcRulesHTML(n) {
   h += sec('Powers', groups.map(g => `<div class="mmr-set"><div class="mmr-set-h">`
     + `<span class="mmr-set-n">${esc(mmrSetLabel(g.set))}</span>`
     + `<span class="mmr-set-c">${g.names.length}</span></div><div class="mmr-pow-grid">`
-    + g.names.map(mmrPowerCardHTML).join('') + '</div></div>').join(''));
+    // Not `.map(mmrPowerCardHTML)`: map would hand the index in as the edit flag and a
+    // Narrator's read-only card would sprout remove buttons from the second power on.
+    + g.names.map(n => mmrPowerCardHTML(n)).join('') + '</div></div>').join(''));
   h += sec('Traits', traits.length ? mmrLabelListHTML(traits, mmrTraitRule) : '');
   h += sec('Tags', tags.length ? mmrLabelListHTML(tags, mmrTagRule) : '');
   return h + '</div>';
@@ -283,15 +519,22 @@ function mmrNpcRulesHTML(n) {
 // print stylesheet's own blocks: two columns, powers under their sets, and the rule
 // under every name — the point of printing it is to not need the book beside you.
 function mmrSheetPrintHTML(ch) {
-  const p = ch && ch.profile ? mmrProfile(ch.profile) : null;
+  // The effective sheet, so the page you carry to the table is the armor you have on.
+  const p = mmrEffective(ch);
   if (!p) return '';
+  const lo = mmrLoadoutName(ch);
   const E = (typeof prE === 'function') ? prE : (s => esc(String(s)));
   const blk = (title, body, wide) => body
     ? `<div class="pr-blk${wide ? ' pr-wide' : ''}"><div class="pr-blk-t">${E(title)}</div>${body}</div>` : '';
   const rows = pairs => '<table class="pr-t"><tbody>' + pairs.filter(r => r[1] !== '' && r[1] !== null && r[1] !== undefined)
     .map(r => `<tr><td class="pr-nm">${E(r[0])}</td><td class="pr-n">${E(String(r[1]))}</td></tr>`).join('') + '</tbody></table>';
 
-  let h = `<div class="pr-note">Rank ${E(String(p.rank))} · ${E(MMR_KIND_LABEL[p.kind] || '')} · Core Rulebook p. ${E(String(p.page))}`
+  let h = `<div class="pr-note">Rank ${E(String(p.rank))} · ${E(MMR_KIND_LABEL[p.kind] || '')}`
+    + (lo ? ' · ' + E(lo) : '')
+    + (p.page ? ' · Core Rulebook p. ' + E(String(p.page)) : '')
+    + (mmrLoadouts(ch).length > 1 || (mmrLoadouts(ch).length === 1 && !lo)
+      ? '<br>Other loadouts: ' + E(mmrLoadouts(ch).filter(l => l.name !== lo).map(l => l.name || 'Unnamed').join(', '))
+      : '')
     + (p.formNote ? '<br>' + E(p.formNote) : '') + '</div>';
   h += '<div class="pr-cols">';
   h += blk('Vitals', rows([

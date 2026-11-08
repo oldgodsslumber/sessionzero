@@ -586,6 +586,274 @@ function check(name, fn) {
       && ev("(function(){var f=SYS.sheetPrint;SYS.sheetPrint=undefined;"
         + "try{return /pr-id/.test(prBlockSheetHTML(S.char,{}));}finally{SYS.sheetPrint=f;}})()") === true);
 
+  // ─── §5A: the pre-generated ones are not altered, and yours is yours ────────
+  // "The pre-generated characters should not be altered. However, once a hero is yours,
+  // they can be editable. Tony Stark wears more than one armor, for instance!"
+  //
+  // Every check below is about one of two things: that the catalogue cannot move, and
+  // that the sheet reads mmrEffective() rather than the data under it. A reader that
+  // reaches past mmrEffective() shows the base value while an armor is on, and that is
+  // the whole bug class this milestone can introduce.
+  check('[own] the book is frozen, and a write to it does not stick', () => {
+    const r = ev("(function(){var p=mmrProfile('iron-man-tony-stark');var was=[p.health,p.traits.length];"
+      + "try{p.health=1;}catch(e){}try{p.traits.push('Made Up');}catch(e){}"
+      + "try{p.abilities.melee.score=99;}catch(e){}"
+      + "return [p.health===was[0],p.traits.length===was[1],p.abilities.melee.score!==99,"
+      + "Object.isFrozen(MMR_PROFILES)];})()");
+    return r.every(Boolean) || 'health/traits/abilities/frozen = ' + JSON.stringify(r);
+  });
+
+  playFromOfficial('Iron Man (Tony Stark)');
+  check('[own] playing one copies it: the sheet is the save\'s own data', () => {
+    const r = ev("(function(){var c=S.char;var p=mmrProfile('iron-man-tony-stark');"
+      + "return [!!c.sheet,c.sheet!==p,c.sheet.health===p.health,c.sheet.abilities!==p.abilities,"
+      + "!!c.profileFields,c.activeLoadout==='base',c.profile==='iron-man-tony-stark'];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+  check('[own] an edit reaches the save and never the book', () => {
+    ev("mmrOwnSet('health',123);mmrOwnSet('realName','ZZBASE');mmrOwnAbilitySet('melee','score',4);"
+      + "mmrOwnDamageSet('melee','mult',9);mmrOwnSpeedsSet('Run 7, Fly 20');mmrOwnSet('history','ZZHIST')");
+    const r = ev("(function(){var c=S.char,p=mmrProfile('iron-man-tony-stark');return ["
+      + "c.sheet.health===123,c.sheet.realName==='ZZBASE',c.sheet.abilities.melee.score===4,"
+      + "c.sheet.damage.melee.mult===9,c.sheet.speeds.fly===20,c.sheet.history==='ZZHIST',"
+      + "p.health===75,p.realName==='Anthony \"Tony\" Stark',p.abilities.melee.score===3,"
+      + "c.blocks.abilities.melee===4];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+  check('[own] Defense and Check are trained, so changing a score does not move them', () => {
+    // §2: they cannot be derived. The legality report is what mentions the disagreement.
+    const r = ev("(function(){var a=S.char.sheet.abilities.melee,p=mmrProfile('iron-man-tony-stark');"
+      + "return [a.score===4,a.def===p.abilities.melee.def,a.check===p.abilities.melee.check];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+
+  const bootWith = async stored => {
+    const w = new JSDOM(loadAppHTML(ENTRY), {
+      runScripts: 'dangerously', pretendToBeVisual: true,
+      url: 'http://localhost/' + ENTRY, virtualConsole: new VirtualConsole(),
+      beforeParse(win) { Object.keys(stored).forEach(k => win.localStorage.setItem(k, stored[k])); },
+    });
+    await waitReady(w.window);
+    return w.window;
+  };
+  const back = await bootWith(storageNow());
+  check('[own] every field class comes back after a reload', () => {
+    const r = back.eval("(function(){var c=S.char;return [c.sheet.health===123,c.sheet.realName==='ZZBASE',"
+      + "c.sheet.abilities.melee.score===4,c.sheet.damage.melee.mult===9,c.sheet.speeds.fly===20,"
+      + "c.sheet.history==='ZZHIST'];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+  check('[own] and the book is still the book in a fresh window', () =>
+    (back.eval("mmrProfile('iron-man-tony-stark').health") === 75
+      && back.eval("mmrProfile('iron-man-tony-stark').realName") === 'Anthony "Tony" Stark')
+    || 'the saved edits came back as the catalogue');
+
+  // ─── the armor ─────────────────────────────────────────────────────────────
+  check('[own] an armor is an overlay: it changes the sheet and not the base', () => {
+    ev("mmrLoadoutNew('Hulkbuster');mmrOwnSet('health',100);mmrOwnSet('realName','ZZSUIT');"
+      + "mmrOwnAdd('traits','Immovable');mmrOwnRemove('powers','Accuracy 1')");
+    const r = ev("(function(){var c=S.char,e=mmrEffective(c);return ["
+      + "e.health===100,c.sheet.health===123,"
+      + "e.realName==='ZZSUIT',c.sheet.realName==='ZZBASE',"
+      + "e.traits.indexOf('Immovable')>=0,c.sheet.traits.indexOf('Immovable')<0,"
+      + "!e.powers.some(function(x){return x.name==='Accuracy 1'}),"
+      + "c.sheet.powers.some(function(x){return x.name==='Accuracy 1'})];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+  // Read the CARDS, not the whole tab: the Loadouts card is supposed to print both
+  // values — "Real name ZZBASE → ZZSUIT" is the delta, and it is the screen the overlay
+  // exists for. The cards are where a reader that went to ch.sheet instead of
+  // mmrEffective() would show itself. Strings rather than numbers, because any number
+  // is somewhere else on the page anyway.
+  const bgText = () => { ev("showTab('hero')"); const el = doc.querySelector('#hero-sheet .is-bg'); return el ? el.textContent : 'NO BACKGROUND CARD'; };
+  const powText = () => { const el = doc.querySelector('#hero-sheet .is-powers'); return el ? el.textContent : 'NO POWERS CARD'; };
+  check('[own] the drawn sheet shows the armor, not the value underneath it', () => {
+    const bg = bgText();
+    if (bg.indexOf('ZZSUIT') < 0) return 'the armor is not on the sheet: ' + bg.slice(0, 120);
+    if (bg.indexOf('ZZBASE') >= 0) return 'the base value is on the sheet while the armor is on';
+    return powText().indexOf('Accuracy 1') < 0 || 'a power the armor removes is still drawn';
+  });
+  check('[own] taking it off puts the base sheet back', () => {
+    ev("mmrLoadoutActivate('base')");
+    const bg = bgText();
+    return (bg.indexOf('ZZBASE') >= 0 && bg.indexOf('ZZSUIT') < 0 && powText().indexOf('Accuracy 1') >= 0)
+      || 'the base sheet did not come back: ' + bg.slice(0, 120);
+  });
+  check('[own] the delta names exactly what the armor changes', () => {
+    const d = ev("JSON.stringify(mmrLoadoutDelta(S.char,S.char.loadouts[0]))");
+    const list_ = JSON.parse(d);
+    const has = (how, text) => list_.some(x => x.how === how && String(x.text) === text);
+    const set = f => list_.filter(x => x.how === 'set' && x.what === f)[0];
+    if (!has('add', 'Immovable')) return 'the added trait is missing: ' + d;
+    if (!has('remove', 'Accuracy 1')) return 'the removed power is missing: ' + d;
+    const hp = set('Health');
+    if (!hp || hp.from !== 123 || hp.to !== 100) return 'Health reads ' + JSON.stringify(hp);
+    // Nothing it does NOT change may appear: that is what makes this screen readable.
+    return !list_.some(x => x.what === 'Karma') || 'it claims to change Karma';
+  });
+  check('[own] 40 of 75 into a suit that prints 100 is 65 of 100', () => {
+    const pure = ev("[mmrCarryPool(40,75,100),mmrCarryPool(40,100,75),mmrCarryPool(75,75,100),mmrCarryPool(100,100,75)]");
+    if (String(pure) !== '65,15,100,75') return 'pure: ' + pure;
+    // And wired, at the exact numbers: a base that prints 75, a suit that prints 100,
+    // standing at 40. Focus, which the suit does not change, does not move; nor does
+    // Karma, which is a resource and not a capacity.
+    const r = ev("(function(){var c=S.char;mmrOwnSet('health',75);"
+      + "c.blocks.pools={health:40,focus:10};var k=c.sheet.karma;"
+      + "mmrLoadoutActivate(c.loadouts[0].id);"
+      + "return [c.blocks.pools.health,c.blocks.pools.focus,c.sheet.karma===k,mmrEffective(c).health];})()");
+    return (r[0] === 65 && r[1] === 10 && r[2] === true && r[3] === 100) || 'wired: ' + JSON.stringify(r);
+  });
+  check('[own] deleting an armor you are wearing carries the pools back', () => {
+    const r = ev("(function(){var c=S.char;mmrLoadoutDelete(c.loadouts[0].id);"
+      + "return [c.activeLoadout,c.blocks.pools.health,c.sheet.health,c.loadouts.length];})()");
+    return (r[0] === 'base' && r[1] === 40 && r[2] === 75 && r[3] === 0) || JSON.stringify(r);
+  });
+
+  // ─── the migration, which matters more than any of the rest ────────────────
+  check('[own] an old pointer save adopts once, and keeps a score it had changed', () => {
+    const r = ev("(function(){"
+      + "var old={systemId:'marvel-multiverse',name:'Old Storm',profile:'storm',"
+      + "         blocks:{abilities:{melee:9,agility:3,resilience:3,vigilance:4,ego:4,logic:2}}};"
+      + "var first=mmrMigrateChar(old);var p=mmrProfile('storm');"
+      + "var again=mmrMigrateChar(old);"
+      + "return [first===true,again===false,!!old.sheet,old.sheet.abilities.melee.score===9,"
+      + "old.sheet.health===p.health,old.activeLoadout==='base',old.loadouts.length===0,"
+      + "old.sheet.traits.length===p.traits.length];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+  check('[own] a migrated save is stamped against the BOOK, not against its own edits', () => {
+    // Stamping the carried values would fire the drift notice on the player's own change
+    // the first time they opened it.
+    const r = ev("(function(){"
+      + "var old={systemId:'marvel-multiverse',name:'x',profile:'storm',blocks:{abilities:{melee:9}}};"
+      + "mmrMigrateChar(old);return mmrProfileDrift(old).length===0;})()");
+    return r === true || 'the drift notice fires on a fresh migration';
+  });
+
+  // ─── the book changing under a copy ────────────────────────────────────────
+  check('[own] a corrected book row offers itself and takes nothing by force', () => {
+    // "One at a time" is the whole promise: taking the book's Health must not quietly
+    // take the book's name and history back with it.
+    const r = ev("(function(){var c=S.char;mmrOwnSet('health',500);c.profileFields.health='stale';"
+      + "var d=mmrProfileDrift(c).map(function(x){return x.field});"
+      + "var kept=c.sheet.health;mmrTakeBookField('health');"
+      + "return [d.indexOf('health')>=0,kept===500,c.sheet.health===75,mmrProfileDrift(c).length===0,"
+      + "c.sheet.realName==='ZZBASE',c.sheet.history==='ZZHIST',"
+      + "c.sheet.abilities.melee.score===4];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+  check('[own] "keep mine" stops the notice without changing a value', () => {
+    const r = ev("(function(){var c=S.char;c.sheet.health=999;c.profileFields.focus='stale';"
+      + "mmrDismissDrift();return [c.sheet.health===999,mmrProfileDrift(c).length===0];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+
+  // ─── the report that reports and does not refuse ───────────────────────────
+  check('[own] the report flags what the book itself gets wrong', () => {
+    const r = ev("(function(){var e=mmrEffective(S.char);e.health=75;e.abilities.resilience.score=3;"
+      + "var out=mmrLegalityReport(e);"
+      + "return out.filter(function(x){return x.what==='Health'&&/90/.test(x.text)}).length;})()");
+    return r === 1 || 'Health items: ' + r;
+  });
+  check('[own] a tiered power is its own chain, so the report is signal and not noise', () => {
+    // Chapter 8 prints only the top tier. Without that rule this flagged 95 of the
+    // book's 128 characters — a report nobody would read twice.
+    const quiet = ev("mmrLegalityReport({rank:4,karma:0,health:10,focus:10,abilities:{},traits:[],tags:[],"
+      + "powers:[{set:'Basic',name:'Mighty 3'}]}).filter(function(x){return /Mighty/.test(x.what+x.text)}).length");
+    const loud = ev("mmrLegalityReport({rank:4,karma:0,health:10,focus:10,abilities:{},traits:[],tags:[],"
+      + "powers:[{set:'x',name:'Spider-Dodge'}]}).filter(function(x){return /Spider-Sense/.test(x.text)}).length");
+    return (quiet === 0 && loud === 1) || 'tiered ' + quiet + ', unmet ' + loud;
+  });
+  check('[own] a made-up name is reported rather than silently accepted', () => {
+    const r = ev("mmrLegalityReport({rank:1,karma:0,health:10,focus:10,abilities:{},"
+      + "traits:['Not A Trait'],tags:[],powers:[{set:'x',name:'Not A Power'}]})"
+      + ".map(function(x){return x.text}).join(' | ')");
+    return (/Not A Power/.test(r) && /Not A Trait/.test(r)) || r;
+  });
+  check('[own] nothing in the report changes the character', () => {
+    const before = ev("JSON.stringify(S.char.sheet)");
+    ev("mmrRunReport()");
+    return ev("JSON.stringify(S.char.sheet)") === before || 'the report edited the sheet';
+  });
+  check('[own] what a reader gets is a copy, so reading cannot write', () => {
+    // mmrEffective used to hand back the live sheet when no loadout was on, which made
+    // every reader an accidental writer: the report adjusts a value to answer a what-if
+    // and quietly rewrote the character it was reporting on.
+    const r = ev("(function(){var c=S.char,e=mmrEffective(c);var was=c.sheet.health;"
+      + "e.health=-1;e.traits.push('ZZALIAS');e.abilities.melee.score=-1;"
+      + "return [e!==c.sheet,c.sheet.health===was,c.sheet.traits.indexOf('ZZALIAS')<0,"
+      + "c.sheet.abilities.melee.score!==-1];})()");
+    return r.every(Boolean) || JSON.stringify(r);
+  });
+
+  // ─── the surfaces that must not have moved ─────────────────────────────────
+  check('[own] the Official tab still shows the book after a save has edited its copy', () => {
+    ev("mmrClearReport();showTab('npcs');renderNPCs();");
+    press(tab('Official'));
+    // Opened outright rather than by pressing: the card may already be open from Play
+    // as Hero, and a press would close it.
+    ev("_mmrOfficialQuery='Iron Man';_mmrOfficialKind='';_mmrOfficialOpen={'iron-man-tony-stark':true};mmrRepaintOfficial()");
+    const t = list().textContent;
+    if (t.indexOf('ZZBASE') >= 0 || t.indexOf('ZZSUIT') >= 0) return 'a save\'s edits leaked into the book';
+    return (t.indexOf('Tony Stark') >= 0 && /Accuracy 1/.test(t)) || t.slice(0, 160);
+  });
+  check('[own] the roster mirror carries the edits, with nothing undefined', () => {
+    ev("syncHeroToRoster();save()");
+    const row = ev("S.npcs.filter(function(n){return n.fromHero&&n.profile==='iron-man-tony-stark'})[0]");
+    if (!row) return 'no mirror';
+    if (row.health !== 999) return 'health ' + row.health + ' — the mirror read the book';
+    const bad = Object.keys(row).filter(k => row[k] === undefined);
+    return !bad.length || 'undefined: ' + bad.join(', ');
+  });
+  check('[own] speeds round-trip through the one line they are printed as', () => {
+    const r = ev("mmrSpeedText({speeds:mmrParseSpeeds('Run 6, Climb 3, Jump 30')})");
+    const empty = ev("JSON.stringify(mmrParseSpeeds('nonsense'))");
+    return (r === 'Run 6, Climb 3, Jump 30' && empty === '{}') || r + ' / ' + empty;
+  });
+  check('[own] the Edit switch is what opens the fields, and it is the shell\'s own', () => {
+    ev("showTab('hero')");
+    const read = doc.getElementById('hero-sheet').querySelectorAll('.mmr-in').length;
+    ev("sysToggleEdit()");
+    const open = doc.getElementById('hero-sheet').querySelectorAll('.mmr-in').length;
+    ev("sysToggleEdit()");
+    return (read === 0 && open > 20) || 'read-only ' + read + ' fields, editing ' + open;
+  });
+  check('[print] the printed sheet is the armor you have on', () => {
+    ev("mmrLoadoutNew('Mark L');mmrOwnSet('realName','ZZPRINT')");
+    const h = ev('(function(){try{return prBlockSheetHTML(S.char,{});}catch(e){return "THREW: "+e.message;}})()');
+    if (/^THREW/.test(h)) return h;
+    return (h.indexOf('Mark L') >= 0 && h.indexOf('ZZPRINT') >= 0) || 'the page is not the armor';
+  });
+  // The title used to be the same words as the nav tab you pressed to get here.
+  check('[title] the biggest line on the sheet is the hero, not the page', () => {
+    ev("_sysEdit=false;showTab('hero')");
+    const nm = ev("sysCharName(S.char)");
+    const t = doc.querySelector('#hero-sheet .pg-title');
+    if (!t) return 'no title at all';
+    return (t.textContent.trim() === nm) || 'title says "' + t.textContent.trim() + '", hero is ' + nm;
+  });
+  check('[title] the page does not announce itself as a sheet', () => {
+    const txt = doc.getElementById('hero-sheet').textContent;
+    return !/Hero Sheet/i.test(txt) || 'the sheet still calls itself a Hero Sheet';
+  });
+  check('[title] reading, the name is printed once; editing, there is a box for it', () => {
+    const nm = ev("sysCharName(S.char)");
+    const vals = [...doc.querySelectorAll('#hero-sheet .id-val')].map(e => e.textContent.trim());
+    if (vals.indexOf(nm) >= 0) return 'the name is printed twice while reading';
+    ev("sysToggleEdit()");
+    const boxes = [...doc.querySelectorAll('#hero-sheet .id-grid input')].map(e => e.value.trim());
+    ev("sysToggleEdit()");
+    return (boxes.indexOf(nm) >= 0) || 'editing, there is no field holding the name: ' + JSON.stringify(boxes);
+  });
+  check('[title] an unnamed hero gets a word, not an empty line', () => {
+    const keep = ev("S.char.name");
+    ev("S.char.name='';renderSysSheet()");
+    const t = doc.querySelector('#hero-sheet .pg-title').textContent.trim();
+    ev("S.char.name=" + JSON.stringify(keep) + ";renderSysSheet()");
+    return (t.length > 3 && /hero/i.test(t)) || 'the title went to "' + t + '"';
+  });
+  check('[own] nothing in §5A threw', () => !errs.length || JSON.stringify(errs));
+
   console.log('\nPASS ' + ok.length);
   if (fails.length) {
     console.log('FAIL ' + fails.length);

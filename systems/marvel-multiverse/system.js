@@ -100,12 +100,13 @@ registerSystem({
     blocks: [
       {
         id: 'abilities', type: 'traitGrid', label: 'Abilities', span: 'full',
-        // A character out of the book already prints its abilities in the stat
-        // block from `sheetExtra`, with the trained Defense and Check values
-        // beside each score. Those cannot be derived from the score, so a second
-        // editable copy here could only disagree with it. Your own character has
-        // no stat block, so the grid is its only abilities and it stays.
-        when: (ch) => !(ch && ch.profile),
+        // A character the save OWNS (own.js, §5A) already prints its abilities in
+        // the stat block from `sheetExtra`, with the trained Defense and Check
+        // values beside each score and all three editable there. Those cannot be
+        // derived from the score, so a second editable copy here could only
+        // disagree with it. A hand-built character has no stat block yet, so the
+        // grid is its only abilities and it stays until the wizard arrives.
+        when: (ch) => !(ch && (ch.sheet || ch.profile)),
         // Set at creation, not by a finger landing on the sheet you read every
         // round. The Edit switch opens it.
         locked: true,

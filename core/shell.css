@@ -619,6 +619,9 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
 /* A value that is shown rather than offered. Reads as the number it is, with
    none of an input's affordance to type into it. */
 .id-val{padding:6px 2px;font-weight:600;font-size:14px;color:var(--text);min-height:20px}
+/* A name is a name long. With one identity field the auto-fit grid gave it the
+   whole 1,100px card, which looks like somewhere to write a paragraph. */
+.id-grid input{max-width:34ch}
 .pw-icon{display:inline-block;vertical-align:-3px;background:currentColor;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain}
 .ic-btn{padding:3px 6px;min-width:26px}
 .ic-btn-empty{color:var(--muted);font-size:13px;line-height:1}
@@ -745,6 +748,80 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
 .mmr-no-rules .mmr-eff{display:none}
 .mmr-no-rules .mmr-eff-on{display:block}
 
+/* ─── YOURS TO CHANGE: the owned sheet, its loadouts, its reports ───
+   Once a character is a save's own (systems/marvel-multiverse/own.js), the same block
+   above becomes editable in place: the Edit switch the shell already has puts a field
+   where each number was, and nothing else about the layout moves. */
+.mmr-in{width:100%;min-width:0;font-family:inherit;font-size:13px;padding:5px 7px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-btn);color:var(--text)}
+textarea.mmr-in{line-height:1.5;resize:vertical}
+/* A measure, not a page width: the prose boxes you type into get the same cap the
+   prose you read does. */
+textarea.mmr-in{max-width:68ch}
+.mmr-in-n{text-align:right;font-variant-numeric:tabular-nums;padding:4px 5px}
+.mmr-fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:7px}
+.mmr-fgrid.is-wide{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.mmr-f{min-width:0}
+.mmr-f>label{display:block;font-family:var(--font-label);font-size:9px;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--muted);margin-bottom:2px}
+.mmr-chk{display:flex;align-items:center;gap:5px;font-size:12px;text-transform:none;
+  letter-spacing:0;color:var(--text);padding-top:4px}
+.mmr-chk input{width:auto;margin:0}
+/* Every line of running text on this sheet is held to a measure, including the ones
+   that explain it. A card is full width above 1100px, so anything inside it that is
+   prose and not a grid would otherwise be read by dragging a finger along the monitor
+   — which is the complaint this whole section exists to answer. */
+.mmr-hint{font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px;max-width:68ch}
+/* The abilities table in edit mode: five number boxes a row, and the Damage cell holds
+   two of them, so the cell is a flex pair rather than a third column that would push
+   the table past its measure. */
+.mmr-abil.is-edit td{padding:3px 2px}
+.mmr-abil.is-edit{max-width:470px}
+/* Five boxes a row left nothing for the row's name, and "Resilience" came out as three
+   letters per line down the side of the table. The name is what you read first. */
+.mmr-abil.is-edit tbody th{white-space:nowrap;padding-right:7px}
+.mmr-abil.is-edit .mmr-in-n{width:100%;min-width:46px;max-width:58px}
+/* The spinner arrows are worth about 16px of a 46px box, and they took it from the
+   number: a Defense of 13 was drawn as "1". These are typed, not stepped. */
+.mmr-in-n{-moz-appearance:textfield;appearance:textfield}
+.mmr-in-n::-webkit-outer-spin-button,.mmr-in-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.mmr-dmg-c{display:flex;gap:3px}
+/* Remove sits in the row's own header, so the control is next to the thing it removes
+   rather than in a column of its own. */
+.mmr-rm{flex:0 0 auto;padding:1px 6px;line-height:1.4;opacity:.75}
+.mmr-rm:hover{opacity:1;color:var(--red,#d9534f)}
+.mmr-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px}
+.mmr-add input{flex:0 1 300px;min-width:120px;font-size:12.5px}
+
+/* The loadout switcher: Tony's armors. In the head row because it is the control you
+   reach for mid-fight, and a row of buttons rather than a <select> because on a phone
+   a select is two taps and a scroll to see what you have. */
+.mmr-lo-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  padding:7px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-btn)}
+.mmr-lo-tabs{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
+.mmr-lo-bar .mmr-hint{margin:0}
+.mmr-lo-now{color:var(--gold,var(--accent));font-family:var(--font-label);font-size:11px;
+  text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.mmr-edit-note{font-size:12px;line-height:1.5;padding:7px 9px;color:var(--text);
+  background:rgba(122,138,158,.1);border:1px dashed var(--border);border-radius:var(--radius-btn)}
+.mmr-lo{border-top:1px solid var(--border);padding-top:8px;margin-bottom:10px;
+  break-inside:avoid;page-break-inside:avoid}
+.mmr-lo:first-child{border-top:none;padding-top:0}
+.mmr-lo.is-on{border-left:3px solid var(--accent);padding-left:9px;border-top:none}
+.mmr-lo-h{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
+.mmr-lo-n{font-weight:700;font-size:13.5px}
+.mmr-lo-acts{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+/* What an armor changes, which is the whole reason a loadout is an overlay and not a
+   second sheet. */
+.mmr-delta{list-style:none;margin:7px 0 0;padding:0;font-size:12.5px;line-height:1.55;max-width:68ch}
+.mmr-delta li{padding:2px 0;overflow-wrap:break-word}
+.mmr-delta .is-add{color:var(--green,#5a9e6f)}
+.mmr-delta .is-rm{color:var(--muted);text-decoration:line-through}
+.mmr-was{color:var(--muted);text-decoration:line-through}
+.mmr-drift{border-left:3px solid var(--blue)}
+.mmr-report{border-left:3px solid var(--gold,var(--accent))}
+.mmr-edit-note{max-width:68ch}
+
 /* ═══════════════════ DESKTOP: MULTI-COLUMN ═══════════════════
    Everything above this line describes one column of cards, which is the phone
    and is still the truth of the app: a page is a stack. This section takes that
@@ -839,6 +916,15 @@ html[data-theme="dark"] .pg-title,html[data-theme="street"] .pg-title,html[data-
      the line length is the card's and not the window's. */
   .mmr-sheet:not(.is-narrow){grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
   .mmr-wide{grid-column:1/-1}
+  /* Reading, the abilities are four numbers a row and fit a third of the sheet. Editing,
+     they are five boxes a row, and in a third of the sheet the row's own NAME is what
+     gets squeezed — "Resilience" came out three letters to a line down the side of the
+     table, which is the complaint this section answers, at the other end of the scale.
+     So the card takes two columns while it is being edited, and only then. */
+  .mmr-sheet:not(.is-narrow) .is-abil.is-edit{grid-column:span 2}
+  /* Which leaves Background alone on the next row with two thirds of it empty, so it
+     takes the row: six short text fields across read better than six down a column. */
+  .mmr-sheet:not(.is-narrow) .is-bg.is-edit{grid-column:1/-1}
   /* column-width, so the number of columns is whatever the room allows and the
      measure stays put: widening the window adds a column, never a longer line. */
   .mmr-pow-grid{column-width:290px}

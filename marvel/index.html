@@ -31,6 +31,9 @@
 <script src="../systems/marvel-multiverse/profiles.js"></script>
 <script src="../systems/marvel-multiverse/powers.js"></script>
 <script src="../systems/marvel-multiverse/traits.js"></script>
+<!-- own.js freezes MMR_PROFILES as it loads, so it comes after profiles.js and before
+     anything that could write to it. -->
+<script src="../systems/marvel-multiverse/own.js"></script>
 <script src="../systems/marvel-multiverse/sheet.js"></script>
 <script src="../systems/marvel-multiverse/roster.js"></script>
 <script src="../systems/marvel-multiverse/system.js"></script>

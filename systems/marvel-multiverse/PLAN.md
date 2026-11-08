@@ -497,6 +497,157 @@ that matters most.
 
 ---
 
+## 5A. Yours to change: adapting an official hero (2026-11-07)
+
+**The owner's note:** *"The pre-generated characters should not be altered. However, once a
+hero is yours, they can be editable. Tony Stark wears more than one armor, for instance!"*
+
+**Why this is not a UI job.** Today *Play as Hero* writes a **pointer**:
+`{systemId, name, profile:'iron-man-tony-stark', blocks:{abilities}}`, and `mmrSheetExtra`
+reads every number back out of `MMR_PROFILES` through `mmrProfile(ch.profile)`. There is
+nothing to edit, and the only thing an edit could reach is the catalogue every other save
+and the Official tab share. Both halves of the note are therefore the same change: **the
+book is read-only because the copy is real data.**
+
+### The two shapes, named apart
+
+| | What it is | Rules |
+|---|---|---|
+| `MMR_PROFILES` | the book's 128 rows, generated from the scan | **deep-frozen at load.** Never written at runtime, never migrated, never patched for a player. A correction goes to `tools/profile-overrides.json` and a regeneration, as §3's "The official characters" already says |
+| `ch.sheet` | the playable data a save **owns** | a deep copy, made once, at adoption. Every reader goes through it |
+| `ch.profile`, `ch.profileRev` | provenance only | "based on Iron Man, Book p. 196", and the hook for the diff below. **Never a source of numbers** |
+
+`ch.sheet` carries what the profile carries — `rank, kind, realName, origin, occupation,
+size, teams, base, abilities{score,def,check}, damage{}, speeds{}, health, healthDR, focus,
+focusDR, karma, init, initEdge, traits[], tags[], powers[], history, personality, formNote`
+— and nothing else. The *printed maxima* live here; the *current* Health, Focus and Karma
+stay where M3 puts them, in `ch.blocks`. Conflating those two is how a loadout switch would
+silently heal somebody.
+
+**One reader, and it is not `ch.sheet`:** `mmrEffective(ch)` returns the base sheet with the
+active loadout applied, and the stat block, the HUD, the dice, the printed page and the
+roster mirror all call it. A reader that reaches past it is the bug this section exists to
+prevent, and a test looks for one.
+
+### Editing, and what edits are not
+
+Everything on `ch.sheet` is editable: identity and prose, the six abilities and their trained
+Defense and Check (§2 — those are trained values, never derived), the vitals, and the
+powers, traits and tags as lists, with the rules text still resolving under each name through
+`mmrRuleFor()` — a hand-typed name that Chapter 5 does not define shows as a name with
+nothing under it, exactly as Doctor Strange's Prescription Pad does now.
+
+**Edits are not validated, and legality is a report rather than a gate.** The book's own
+pregens are illegal by its creation rules — Iron Man prints 75 Health on Resilience 3 — and
+§3A already settled that we keep what the book prints. A *Check against the rules* button
+says what is off (budget, ability cap, prerequisites, derived vitals) and changes nothing.
+The creation wizard (M4) is the place that refuses a pick, because there the player is
+spending a budget.
+
+### Loadouts: more than one armor
+
+A **loadout** is a named overlay on the owned sheet, not a second sheet:
+
+```js
+{ id, name:'Hulkbuster', note:'p. 196 Iconic Battle Suit',
+  add:{ powers:['Mighty 6'], traits:['Immovable'], tags:[] },
+  remove:{ powers:['Flight 3'] },
+  set:{ health:100, healthDR:-4, abilities:{ melee:{score:9} } } }
+```
+
+Overlay rather than a snapshot, deliberately: six armors as six full sheets is six places to
+fix a typo in Tony's history, and it makes the one screen that is actually worth having —
+**what this armor changes** — impossible to draw. *Duplicate as a loadout* computes the
+overlay from a free edit, so the simpler mental model is still available. `activeLoadout`
+names one, `'base'` means the overlay-free sheet, and the switcher sits in `.mmr-head`,
+the row that already holds Rank, kind and page.
+
+**Switching mid-fight carries the damage, not the pools.** If Hulkbuster sets Health 100 and
+Tony stands at 40 of 75, he is 35 down and stays 35 down: 65 of 100. Current values clamp to
+the new maximum; a bigger maximum is never healing. Karma, being a resource and not a
+capacity, does not move at all.
+
+### The book changing under a copy
+
+`profileRev` is stamped at adoption. When a regenerated `profiles.js` disagrees with the row
+a save was copied from, the sheet offers a diff — *the book's Iron Man changed: Focus 75 →
+90* — and the player pulls a field across one at a time. Nothing is ever overwritten for
+them. This is also the honest answer to a correction we make months from now.
+
+### Narrator copies get the same model, later
+
+*Add to table* still writes a flat text row, because flat text is what syncs, and
+`mmrRowPowerGroups` already reads a Narrator's own edited names rather than the profile's.
+Giving a roster copy the same `sheet`/loadouts shape is worth doing — a Narrator's Hulkbuster
+is the same want — but it touches the synced schema and `database.rules.json`, so it waits
+for M6 and is listed there.
+
+### Sequencing: M3a, before the wizard — **built 2026-11-07**
+
+| Step | Work | Done when |
+|---|---|---|
+| 1 | `own.js`: freeze the catalogue, `mmrAdopt`, `mmrEffective`, the save migration | the sheet renders identically from owned data; the Official tab is byte-identical after a save edits its copy |
+| 2 | Editing the owned sheet, and the legality report | rename Tony, drop a power, add a trait, reload — it holds |
+| 3 | Loadouts: create, name, edit, switch, delete, the delta view, print, roster mirror | two armors, switched, with the pools behaving as above |
+| 4 | The `profileRev` diff | a regenerated row offers its change and does not take it |
+
+**All four are in.** What the build settled, beyond the design above:
+
+- **`mmrEffective()` returns a copy even with no loadout on.** Handing back the live
+  sheet made every reader an accidental writer — the legality report adjusts a value to
+  answer a what-if, and that quietly rewrote the character it was reporting on. Found by
+  the mirror check failing three checks downstream, not by the check aimed at it.
+- **The editor is the shell's own Edit switch** (`sysEditing()`), not a second control:
+  `opts.edit` puts a field where each number was and nothing about the layout moves.
+  With an armor on, an edit lands on **that armor** — which is how `set` gets filled
+  without a second screen — and the sheet says so above the fields, because guessing
+  wrong is how somebody edits Tony and finds they edited the suit.
+- **Provenance is a hash per field (`profileFields`), not a second copy of the row.** It
+  answers "did the BOOK change?" in a few bytes where keeping the original would double
+  the prose in every save. What the player needs is the book's value *now* against
+  theirs, and both are in hand. It is stamped against the book's values, never against
+  the edits carried in by the migration, or the notice fires the first time they look.
+- **Speeds are edited as the line the sheet already prints** — `Run 6, Climb 3, Jump 30`
+  — parsed back by `mmrParseSpeeds()`, with `mmrSpeedText()` as its exact inverse and a
+  check holding them to it. That is what makes a speed addable without a screen of its own.
+- **The report checks four things and says what it does not check.** Derived vitals,
+  the Rank + 3 ability cap, prerequisites, and names the book does not print. Measured
+  against the book's own 128: Health flags 2, Focus 2, Karma 0, the cap 1, prerequisites
+  13. **Defense and the non-combat Check are deliberately left out** — score + 10 is the
+  rule, but size, Spider-Sense, Evasion and Integrity all move it, and checking it flags
+  32 of 128 characters and 165 Check values, which is a report nobody reads twice. The
+  **pick budget** waits for M2's `rules.js`.
+- **Prerequisites honour the book's own convention:** Chapter 8 prints only the TOP tier
+  of a tiered power, so owning Mighty 3 is owning the chain. Without that rule the check
+  flagged 95 of 128 characters; with it, 14 unmet prerequisites on 13 — which is the
+  book being illegal by its own rules, as §3A said it is.
+- **`mmrRosterRow` takes the profile id as an argument now.** An owned sheet has no
+  `id`, because it is nobody's catalogue row any more, and `profile: undefined` on a
+  mirrored row both lost the provenance the Official tab reads and handed Firebase an
+  `undefined`, which wedges every later save.
+
+**Tests:** 26 new checks in `test/marvel.js` (105 in the suite, 1254 across the ten),
+and 18 deliberate mutations, each caught by the check meant to catch it — a freeze that
+is only shallow, a loadout the sheet ignores, a mirror that reads the book again, a
+migration that runs twice, a bigger maximum that heals you, prerequisites without the
+tier convention, the Official tab drawing the player's sheet.
+
+**New file:** `systems/marvel-multiverse/own.js` — the owned-sheet model (adopt, effective,
+loadouts, migrations). `sheet.js` stays the renderer; `rules.js` stays reserved for M2.
+
+**The migration matters more than any of it.** An existing save is
+`{profile, blocks:{abilities}}` with no `sheet`. It adopts once, on load, stamped so it
+cannot adopt twice — and it must carry across whatever is already in `blocks.abilities`,
+because that is the one thing a player can have changed today.
+
+**Tests, each falsifiable per §11:** the catalogue is deep-frozen and a write does not stick;
+adopt → edit every field class → reload → the edits are there and the book's row is
+unchanged; a reader that bypasses `mmrEffective` is caught by rendering an armored hero and
+asserting the base value appears nowhere; switching a loadout at 40 of 75 gives 65 of 100;
+the migration is idempotent and keeps a changed ability score.
+
+---
+
 ## 6. Dice: d616
 
 ```js
@@ -557,6 +708,7 @@ systems/marvel-multiverse/
   powers.js      MMR_POWER_RULES     generated (the text; M1 adds the structured fields)
   traits.js      MMR_TRAIT_RULES, MMR_TAG_RULES, MMR_NOTE_HINTS   generated
   sheet.js       the stat block, the three reading surfaces, the printed sheet
+  own.js         the owned sheet: adopt a profile, loadouts, mmrEffective(), migrations (§5A)
   origins.js     MMR_ORIGINS, MMR_OCCUPATIONS
   maneuvers.js   MMR_MANEUVERS
   gear.js        items, suits, weapons, vehicles
@@ -593,6 +745,8 @@ Per PORTING §0, these are what "done" means. Files are not.
 10. Build an Iconic Item and carry it, with its powers appearing on the sheet.
 11. Print the sheet.
 12. All of it on a phone, from cold storage, in a shared game.
+13. ✓ Take an official character as your own, change anything on them, and keep more than
+    one loadout — Tony's armors — switching between them in play (§5A).
 
 ---
 
@@ -606,9 +760,10 @@ Each leaves a working app, in the DCC D-phase style.
 | **M1** | Two-reader importer (§3A), all catalogues, `page` and `source` on each row, integrity suite. **The text half is done (§3A, 2026-11-07): `powers.js`, `traits.js`.** | every power browsable in the Catalogue; no dangling reference; every core row cites a page |
 | **M2** | `rules.js`, d616, shell changes 1–5 and 9 | action 3 from the Dice tab, on a phone |
 | **M3** | Sheet blocks, `catalogItems`, extended `pool`, changes 6–8 and 11–13 | a hand-built hero reads correctly |
+| **M3a** ✓ | §5A: the copy becomes data (`own.js`), the catalogue freezes, the owned sheet is editable, loadouts | **Done 2026-11-07.** Tony Stark, yours, in two armors; the book's row untouched |
 | **M4** | Creation wizard: Identity, Rank, Origin, Occupation, Abilities, Powers, Traits & Tags, Review | actions 1, 2 |
 | **M5** | HUD: powers by Attack / Active / Reaction / Passive; one tap does action 4 | **action 4, the point of the pack** |
-| **M6** | `SYS.combat`, the rest of `SYS.npc`, conditions, TN helper (official characters already in, §3A) | actions 5–8 — **first playable** |
+| **M6** | `SYS.combat`, the rest of `SYS.npc`, conditions, TN helper (official characters already in, §3A); a Narrator copy gets §5A's owned shape, which touches the synced schema | actions 5–8 — **first playable** |
 | **M7** | Getting Schooled, rank-up, the §13 sheet through `SYS.printSheet` | actions 9, 11 |
 | **M8** | Iconic Items, Battle Suits, weapons, vehicles | action 10 |
 | **M9** | Headquarters tab, Team Maneuvers | HQ survives reload and syncs |
